@@ -34,6 +34,8 @@ pois todos os APKs são assinados com a mesma chave (`app/signing/loja-baterias.
 - **Relatórios**: diário, semanal e mensal (com navegação para períodos anteriores): faturamento, custo,
   lucro bruto, número de vendas, baterias vendidas, ticket médio, modelos mais vendidos, com maior
   faturamento e com maior lucro, e vendas por forma de pagamento.
+  O botão **Baixar PDF** gera o relatório do período selecionado (resumo, rankings,
+  formas de pagamento e lista de vendas) e salva onde você escolher.
 - **Backup**: exporta/importa todos os dados em um arquivo JSON (ícone de engrenagem na tela inicial).
 
 ### Regras de cálculo

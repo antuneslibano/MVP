@@ -37,4 +37,17 @@ class PeriodsTest {
         assertEquals("Agosto de 2026", Periods.label(PeriodType.MONTH, wednesday, -1))
         assertEquals("21/09/2026 a 27/09/2026", Periods.label(PeriodType.WEEK, wednesday, 0))
     }
+
+    @Test
+    fun reportLabelsAndFileNames() {
+        assertEquals("23/09/2026", Periods.formalLabel(PeriodType.DAY, wednesday, 0))
+        assertEquals("21/09/2026 a 27/09/2026", Periods.formalLabel(PeriodType.WEEK, wednesday, 0))
+        assertEquals("Setembro de 2026", Periods.formalLabel(PeriodType.MONTH, wednesday, 0))
+        assertEquals("relatorio-diario-2026-09-22.pdf", Periods.reportFileName(PeriodType.DAY, wednesday, -1))
+        assertEquals(
+            "relatorio-semanal-2026-09-21-a-2026-09-27.pdf",
+            Periods.reportFileName(PeriodType.WEEK, wednesday, 0),
+        )
+        assertEquals("relatorio-mensal-2026-08.pdf", Periods.reportFileName(PeriodType.MONTH, wednesday, -1))
+    }
 }

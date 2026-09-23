@@ -1,5 +1,7 @@
 package br.com.lojabaterias.ui.screens
 
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
@@ -13,6 +15,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.KeyboardArrowLeft
 import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -39,6 +42,7 @@ import br.com.lojabaterias.domain.Money
 import br.com.lojabaterias.domain.PeriodType
 import br.com.lojabaterias.ui.components.AppCard
 import br.com.lojabaterias.ui.components.SectionTitle
+import br.com.lojabaterias.ui.components.ToastEffect
 import br.com.lojabaterias.ui.theme.moneyResultColor
 import br.com.lojabaterias.ui.viewmodel.ReportsViewModel
 import br.com.lojabaterias.ui.viewmodel.appViewModel
@@ -46,14 +50,27 @@ import br.com.lojabaterias.ui.viewmodel.appViewModel
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun ReportsScreen() {
-    val vm = appViewModel { ReportsViewModel(it.repository) }
+    val vm = appViewModel { ReportsViewModel(it) }
     val state by vm.state.collectAsStateWithLifecycle()
+    val exporting by vm.exporting.collectAsStateWithLifecycle()
     val r = state.report
+    ToastEffect(vm.messages)
+
+    val pdfLauncher = rememberLauncherForActivityResult(ActivityResultContracts.CreateDocument("application/pdf")) { uri ->
+        if (uri != null) vm.exportPdf(uri)
+    }
 
     Scaffold(
         topBar = {
             TopAppBar(
                 title = { Text("Relatórios") },
+                actions = {
+                    FilledTonalButton(
+                        onClick = { pdfLauncher.launch(state.pdfFileName) },
+                        enabled = !state.loading && !exporting,
+                        modifier = Modifier.padding(end = 8.dp),
+                    ) { Text(if (exporting) "Gerando..." else "Baixar PDF") }
+                },
                 colors = TopAppBarDefaults.topAppBarColors(containerColor = MaterialTheme.colorScheme.background),
             )
         },

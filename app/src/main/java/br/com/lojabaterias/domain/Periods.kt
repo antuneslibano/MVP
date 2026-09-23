@@ -68,6 +68,27 @@ object Periods {
         }
     }
 
+    /** Rótulo formal (sem "Hoje"/"Ontem"), usado em documentos. Ex.: "23/09/2026". */
+    fun formalLabel(type: PeriodType, date: LocalDate, offset: Int): String {
+        val start = next(type, startOf(type, date), offset.toLong())
+        return when (type) {
+            PeriodType.DAY -> start.format(DATE)
+            PeriodType.WEEK -> "${start.format(DATE)} a ${start.plusDays(6).format(DATE)}"
+            PeriodType.MONTH -> "${MONTHS[start.monthValue - 1]} de ${start.year}"
+        }
+    }
+
+    /** Nome de arquivo do relatório. Ex.: "relatorio-diario-2026-09-23.pdf". */
+    fun reportFileName(type: PeriodType, date: LocalDate, offset: Int): String {
+        val start = next(type, startOf(type, date), offset.toLong())
+        val iso = DateTimeFormatter.ISO_LOCAL_DATE
+        return when (type) {
+            PeriodType.DAY -> "relatorio-diario-${start.format(iso)}.pdf"
+            PeriodType.WEEK -> "relatorio-semanal-${start.format(iso)}-a-${start.plusDays(6).format(iso)}.pdf"
+            PeriodType.MONTH -> "relatorio-mensal-${start.format(DateTimeFormatter.ofPattern("yyyy-MM"))}.pdf"
+        }
+    }
+
     fun toMillis(date: LocalDate, zone: ZoneId = ZoneId.systemDefault()): Long =
         date.atStartOfDay(zone).toInstant().toEpochMilli()
 
