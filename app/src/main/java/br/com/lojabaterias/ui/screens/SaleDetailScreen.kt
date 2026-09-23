@@ -1,0 +1,143 @@
+package br.com.lojabaterias.ui.screens
+
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.HorizontalDivider
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.Text
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.unit.dp
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import br.com.lojabaterias.domain.Money
+import br.com.lojabaterias.domain.Periods
+import br.com.lojabaterias.ui.components.AppCard
+import br.com.lojabaterias.ui.components.ConfirmDialog
+import br.com.lojabaterias.ui.components.EmptyState
+import br.com.lojabaterias.ui.components.InfoRow
+import br.com.lojabaterias.ui.components.SectionTitle
+import br.com.lojabaterias.ui.components.ToastEffect
+import br.com.lojabaterias.ui.theme.dangerColor
+import br.com.lojabaterias.ui.theme.moneyResultColor
+import br.com.lojabaterias.ui.viewmodel.SaleDetailViewModel
+import br.com.lojabaterias.ui.viewmodel.appViewModel
+
+@Composable
+fun SaleDetailScreen(saleId: Long, onEdit: () -> Unit, onBack: () -> Unit) {
+    val vm = appViewModel(key = "sale-$saleId") { SaleDetailViewModel(it.repository, saleId) }
+    val loaded by vm.sale.collectAsStateWithLifecycle()
+    ToastEffect(vm.messages)
+    var confirmCancel by remember { mutableStateOf(false) }
+
+    SubScreen(title = "Venda #$saleId", onBack = onBack) { inner ->
+        val data = loaded
+        when {
+            data == null -> Box(Modifier.fillMaxSize().padding(inner), contentAlignment = Alignment.Center) {
+                CircularProgressIndicator()
+            }
+            data.value == null -> Box(Modifier.padding(inner)) { EmptyState("Venda não encontrada.") }
+            else -> {
+                val sw = requireNotNull(data.value)
+                val s = sw.sale
+                Column(
+                    Modifier
+                        .fillMaxSize()
+                        .padding(inner)
+                        .verticalScroll(rememberScrollState())
+                        .padding(horizontal = 16.dp),
+                ) {
+                    if (s.isCanceled) {
+                        AppCard(containerColor = dangerColor().copy(alpha = 0.12f)) {
+                            Text(
+                                "Venda cancelada" + (s.canceledAt?.let { " em ${Periods.formatDateTime(it)}" } ?: "") +
+                                    ". Não entra nos relatórios e o estoque foi devolvido.",
+                                color = dangerColor(),
+                                modifier = Modifier.padding(16.dp),
+                            )
+                        }
+                        Spacer(Modifier.height(8.dp))
+                    }
+                    AppCard {
+                        Column(Modifier.padding(16.dp)) {
+                            InfoRow("Data/hora", Periods.formatDateTime(s.dateTime))
+                            InfoRow("Pagamento", s.payment.label)
+                        }
+                    }
+
+                    SectionTitle("Itens")
+                    sw.items.forEach { item ->
+                        AppCard {
+                            Column(Modifier.padding(16.dp)) {
+                                Text(item.modelSnapshot, style = MaterialTheme.typography.titleLarge)
+                                InfoRow("Quantidade", item.quantity.toString())
+                                InfoRow("Preço unitário", Money.format(item.unitPrice))
+                                InfoRow("Custo unitário (na venda)", Money.format(item.unitCost))
+                                InfoRow("Subtotal", Money.format(item.subtotal))
+                            }
+                        }
+                        Spacer(Modifier.height(8.dp))
+                    }
+
+                    SectionTitle("Valores")
+                    AppCard {
+                        Column(Modifier.padding(16.dp)) {
+                            InfoRow("Valor bruto", Money.format(s.grossAmount))
+                            InfoRow("Desconto", Money.format(s.discount))
+                            HorizontalDivider(Modifier.padding(vertical = 6.dp))
+                            InfoRow("Valor final", Money.format(s.finalAmount), bold = true)
+                            InfoRow("Custo", Money.format(s.totalCost))
+                            InfoRow("Lucro bruto", Money.format(s.grossProfit), valueColor = moneyResultColor(s.grossProfit))
+                        }
+                    }
+
+                    if (!s.isCanceled) {
+                        Spacer(Modifier.height(20.dp))
+                        PrimaryActionButton(text = "Editar venda", onClick = onEdit)
+                        Spacer(Modifier.height(10.dp))
+                        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.Center) {
+                            OutlinedButton(
+                                onClick = { confirmCancel = true },
+                                colors = ButtonDefaults.outlinedButtonColors(contentColor = dangerColor()),
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .height(52.dp),
+                            ) { Text("Cancelar venda") }
+                        }
+                    }
+                    Spacer(Modifier.height(32.dp))
+                }
+            }
+        }
+    }
+
+    if (confirmCancel) {
+        ConfirmDialog(
+            title = "Cancelar venda?",
+            text = "O produto volta para o estoque e a venda deixa de contar no faturamento, custo e lucro.",
+            confirmLabel = "Cancelar venda",
+            destructive = true,
+            onConfirm = {
+                confirmCancel = false
+                vm.cancel()
+            },
+            onDismiss = { confirmCancel = false },
+        )
+    }
+}

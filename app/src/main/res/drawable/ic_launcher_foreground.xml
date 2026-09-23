@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Bateria automotiva estilizada com raio. Área segura do ícone adaptativo: 66dp centrais. -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+    <!-- Polos -->
+    <path android:fillColor="#FFFFFFFF" android:pathData="M36,36h10v6h-10z" />
+    <path android:fillColor="#FFFFFFFF" android:pathData="M62,36h10v6h-10z" />
+    <!-- Corpo -->
+    <path android:fillColor="#FFFFFFFF"
+        android:pathData="M32,42h44a4,4 0,0 1,4 4v22a4,4 0,0 1,-4 4h-44a4,4 0,0 1,-4 -4v-22a4,4 0,0 1,4 -4z" />
+    <!-- Raio -->
+    <path android:fillColor="#FFF59E0B" android:pathData="M57,46l-10,13h6l-4,10l11,-14h-6z" />
+</vector>
