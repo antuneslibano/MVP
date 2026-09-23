@@ -38,6 +38,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import br.com.lojabaterias.domain.ModelStats
+import br.com.lojabaterias.domain.Labels
 import br.com.lojabaterias.domain.Money
 import br.com.lojabaterias.domain.PeriodType
 import br.com.lojabaterias.ui.components.AppCard
@@ -168,7 +169,7 @@ fun ReportsScreen() {
                                 Column(Modifier.weight(1f)) {
                                     Text(p.method.label, style = MaterialTheme.typography.titleSmall)
                                     Text(
-                                        "${p.salesCount} ${if (p.salesCount == 1) "venda" else "vendas"}" +
+                                        Labels.salesAndBatteries(p.salesCount, p.units) +
                                             if (r.revenue > 0) " • ${p.revenue * 100 / r.revenue}%" else "",
                                         style = MaterialTheme.typography.bodySmall,
                                         color = MaterialTheme.colorScheme.onSurfaceVariant,

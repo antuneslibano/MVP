@@ -232,13 +232,13 @@ object ReportPdfWriter {
         fun payments(r: Report) {
             sectionTitle("Vendas por forma de pagamento")
             if (r.byPayment.isEmpty()) return emptyLine()
-            val cols = listOf(Col(2f), Col(1f, true), Col(1.6f, true), Col(1f, true))
+            val cols = listOf(Col(2f), Col(1f, true), Col(1f, true), Col(1.6f, true), Col(1f, true))
             table(
                 cols,
-                listOf("Forma de pagamento", "Vendas", "Faturamento", "% do total"),
+                listOf("Forma de pagamento", "Vendas", "Baterias", "Faturamento", "% do total"),
                 r.byPayment.map { p ->
                     val pct = if (r.revenue > 0) "${p.revenue * 100 / r.revenue}%" else "-"
-                    listOf(p.method.label, p.salesCount.toString(), Money.format(p.revenue), pct)
+                    listOf(p.method.label, p.salesCount.toString(), p.units.toString(), Money.format(p.revenue), pct)
                 },
             )
         }

@@ -38,6 +38,9 @@ class ReportCalculatorTest {
         assertEquals(154_000L - 105_000L, top.profit)
 
         assertEquals(PaymentMethod.CREDITO, r.byPayment.first().method)
+        // 1 venda de crédito com 2 baterias: vendas e baterias são contadas separadamente
+        assertEquals(1, r.byPayment.first().salesCount)
+        assertEquals(2, r.byPayment.first().units)
         assertEquals(3, r.byPayment.size)
     }
 

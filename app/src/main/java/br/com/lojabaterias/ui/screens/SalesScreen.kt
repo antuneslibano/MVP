@@ -138,12 +138,13 @@ fun SalesScreen(onNewSale: () -> Unit, onOpenSale: (Long) -> Unit) {
             item {
                 AppCard(containerColor = MaterialTheme.colorScheme.surfaceContainerHigh) {
                     Row(Modifier.padding(16.dp)) {
-                        SummaryCell("Vendas", state.count.toString(), Modifier.weight(0.7f))
-                        SummaryCell("Faturamento", Money.format(state.revenue), Modifier.weight(1.2f))
+                        SummaryCell("Vendas", state.count.toString(), Modifier.weight(0.75f))
+                        SummaryCell("Baterias", state.units.toString(), Modifier.weight(0.8f))
+                        SummaryCell("Faturamento", Money.format(state.revenue), Modifier.weight(1.25f))
                         SummaryCell(
                             "Lucro",
                             Money.format(state.profit),
-                            Modifier.weight(1.1f),
+                            Modifier.weight(1.2f),
                             color = moneyResultColor(state.profit),
                         )
                     }

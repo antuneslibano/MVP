@@ -27,6 +27,7 @@ data class ModelStats(
 data class PaymentStats(
     val method: PaymentMethod,
     val salesCount: Int,
+    val units: Int,
     val revenue: Long,
 )
 
@@ -76,7 +77,12 @@ object ReportCalculator {
         val models = perModel.values.map { ModelStats(it.model, it.quantity, it.revenue, it.revenue - it.cost) }
 
         val byPayment = sales.groupBy { it.paymentMethod }
-            .map { (method, list) -> PaymentStats(method, list.size, list.sumOf { it.finalAmount }) }
+            .map { (method, list) -> PaymentStats(
+                    method = method,
+                    salesCount = list.size,
+                    units = list.sumOf { s -> s.items.sumOf { it.quantity } },
+                    revenue = list.sumOf { it.finalAmount },
+                ) }
             .sortedByDescending { it.revenue }
 
         return Report(

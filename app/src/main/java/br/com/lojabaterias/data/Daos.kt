@@ -89,8 +89,10 @@ interface SaleDao {
 
     @Query(
         "SELECT COUNT(*) AS count, COALESCE(SUM(final_amount), 0) AS revenue, " +
-            "COALESCE(SUM(gross_profit), 0) AS profit FROM sales " +
-            "WHERE status = 'ACTIVE' AND date_time >= :start AND date_time < :end"
+            "COALESCE(SUM(gross_profit), 0) AS profit, " +
+            "COALESCE((SELECT SUM(i.quantity) FROM sale_items i INNER JOIN sales s2 ON s2.id = i.sale_id " +
+            "WHERE s2.status = 'ACTIVE' AND s2.date_time >= :start AND s2.date_time < :end), 0) AS units " +
+            "FROM sales WHERE status = 'ACTIVE' AND date_time >= :start AND date_time < :end"
     )
     fun observeSummary(start: Long, end: Long): Flow<PeriodSummary>
 

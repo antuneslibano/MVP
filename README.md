@@ -21,7 +21,7 @@ pois todos os APKs são assinados com a mesma chave (`app/signing/loja-baterias.
 
 ## Funcionalidades
 
-- **Início**: faturamento, lucro e quantidade de vendas de hoje, da semana e do mês,
+- **Início**: faturamento, lucro, quantidade de vendas e de baterias vendidas de hoje, da semana e do mês,
   além das vendas recentes e do botão **+ Nova Venda**.
 - **Nova venda**: buscar modelo → escolher a bateria → forma de pagamento (preço automático)
   → conferir quantidade, preço e desconto → confirmar. Dá baixa automática no estoque.

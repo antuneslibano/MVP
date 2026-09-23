@@ -34,6 +34,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import br.com.lojabaterias.data.PeriodSummary
+import br.com.lojabaterias.domain.Labels
 import br.com.lojabaterias.domain.Money
 import br.com.lojabaterias.domain.Periods
 import br.com.lojabaterias.ui.components.AppCard
@@ -143,7 +144,7 @@ private fun TodayCard(summary: PeriodSummary) {
             )
             Spacer(Modifier.height(12.dp))
             Row {
-                Column(Modifier.weight(1f)) {
+                Column(Modifier.weight(1.3f)) {
                     Text("Lucro", style = MaterialTheme.typography.bodyMedium, color = onPrimary.copy(alpha = 0.8f))
                     Text(
                         Money.format(summary.profit),
@@ -151,9 +152,13 @@ private fun TodayCard(summary: PeriodSummary) {
                         color = onPrimary,
                     )
                 }
-                Column(Modifier.weight(1f)) {
+                Column(Modifier.weight(0.7f)) {
                     Text("Vendas", style = MaterialTheme.typography.bodyMedium, color = onPrimary.copy(alpha = 0.8f))
                     Text(summary.count.toString(), style = MaterialTheme.typography.titleLarge, color = onPrimary)
+                }
+                Column(Modifier.weight(0.8f)) {
+                    Text("Baterias", style = MaterialTheme.typography.bodyMedium, color = onPrimary.copy(alpha = 0.8f))
+                    Text(summary.units.toString(), style = MaterialTheme.typography.titleLarge, color = onPrimary)
                 }
             }
         }
@@ -177,7 +182,12 @@ private fun PeriodCard(title: String, summary: PeriodSummary, modifier: Modifier
             )
             Spacer(Modifier.height(6.dp))
             Text(
-                "${summary.count} ${if (summary.count == 1) "venda" else "vendas"}",
+                Labels.sales(summary.count),
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+            Text(
+                Labels.batteries(summary.units),
                 style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )

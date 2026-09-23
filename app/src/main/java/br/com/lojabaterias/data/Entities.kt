@@ -134,7 +134,10 @@ data class StockMovement(
 
 /** Totais agregados para o dashboard. */
 data class PeriodSummary(
+    /** Quantidade de vendas (atendimentos). */
     val count: Int = 0,
+    /** Quantidade de baterias vendidas (soma das quantidades dos itens). */
+    val units: Int = 0,
     val revenue: Long = 0,
     val profit: Long = 0,
 )
