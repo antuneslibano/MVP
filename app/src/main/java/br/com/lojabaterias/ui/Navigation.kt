@@ -98,7 +98,7 @@ private val menuEntries = listOf(
     MenuEntry("Relatórios", AppIcons.BarChart, Routes.REPORTS, true),
     MenuEntry("Movimentações de estoque", Icons.AutoMirrored.Filled.List, Routes.MOVEMENTS, false),
     MenuEntry("Tabela de sucatas", Icons.Filled.Edit, Routes.SCRAP_PRICES, false),
-    MenuEntry("Backup dos dados", Icons.Filled.Settings, Routes.BACKUP, false),
+    MenuEntry("Backup e sincronização", Icons.Filled.Settings, Routes.BACKUP, false),
 )
 
 @OptIn(ExperimentalMaterial3Api::class)

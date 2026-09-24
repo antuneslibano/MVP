@@ -6,6 +6,7 @@ import androidx.room.Insert
 import androidx.room.Query
 import androidx.room.Transaction
 import androidx.room.Update
+import androidx.room.Upsert
 import kotlinx.coroutines.flow.Flow
 
 @Dao
@@ -240,4 +241,107 @@ interface ScrapDao {
 
     @Query("DELETE FROM scrap_movements")
     suspend fun deleteAllMovements()
+}
+
+/** Consultas usadas pela sincronização com a nuvem. */
+@Dao
+interface SyncDao {
+    // ----- Pendências (alterações locais ainda não enviadas)
+    @Query("SELECT * FROM products WHERE dirty = 1") suspend fun dirtyProducts(): List<Product>
+    @Query("SELECT * FROM sales WHERE dirty = 1") suspend fun dirtySales(): List<Sale>
+    @Query("SELECT * FROM sale_items WHERE dirty = 1") suspend fun dirtySaleItems(): List<SaleItem>
+    @Query("SELECT * FROM stock_movements WHERE dirty = 1") suspend fun dirtyStockMovements(): List<StockMovement>
+    @Query("SELECT * FROM scrap_prices WHERE dirty = 1") suspend fun dirtyScrapPrices(): List<ScrapPrice>
+    @Query("SELECT * FROM scrap_movements WHERE dirty = 1") suspend fun dirtyScrapMovements(): List<ScrapMovement>
+
+    @Query(
+        "SELECT (SELECT COUNT(*) FROM products WHERE dirty = 1) + (SELECT COUNT(*) FROM sales WHERE dirty = 1) + " +
+            "(SELECT COUNT(*) FROM sale_items WHERE dirty = 1) + (SELECT COUNT(*) FROM stock_movements WHERE dirty = 1) + " +
+            "(SELECT COUNT(*) FROM scrap_prices WHERE dirty = 1) + (SELECT COUNT(*) FROM scrap_movements WHERE dirty = 1) + " +
+            "(SELECT COUNT(*) FROM tombstones)"
+    )
+    suspend fun pendingCount(): Int
+
+    /** Dados criados antes da sincronização (IDs pequenos) que ainda não foram enviados. */
+    @Query(
+        "SELECT (SELECT COUNT(*) FROM products WHERE dirty = 1 AND id < 1000000000) + " +
+            "(SELECT COUNT(*) FROM sales WHERE dirty = 1 AND id < 1000000000)"
+    )
+    suspend fun legacyDirtyCount(): Int
+
+    @Query("SELECT (SELECT COUNT(*) FROM products) + (SELECT COUNT(*) FROM sales) + (SELECT COUNT(*) FROM scrap_movements)")
+    suspend fun localDataCount(): Int
+
+    // ----- Marcar como enviado (só se não mudou durante o envio)
+    @Query("UPDATE products SET dirty = 0 WHERE id = :id AND updated_at = :updatedAt")
+    suspend fun cleanProduct(id: Long, updatedAt: Long)
+    @Query("UPDATE sales SET dirty = 0 WHERE id = :id AND updated_at = :updatedAt")
+    suspend fun cleanSale(id: Long, updatedAt: Long)
+    @Query("UPDATE sale_items SET dirty = 0 WHERE id = :id AND updated_at = :updatedAt")
+    suspend fun cleanSaleItem(id: Long, updatedAt: Long)
+    @Query("UPDATE stock_movements SET dirty = 0 WHERE id = :id AND updated_at = :updatedAt")
+    suspend fun cleanStockMovement(id: Long, updatedAt: Long)
+    @Query("UPDATE scrap_prices SET dirty = 0 WHERE id = :id AND updated_at = :updatedAt")
+    suspend fun cleanScrapPrice(id: Long, updatedAt: Long)
+    @Query("UPDATE scrap_movements SET dirty = 0 WHERE id = :id AND updated_at = :updatedAt")
+    suspend fun cleanScrapMovement(id: Long, updatedAt: Long)
+
+    // ----- Leitura por ID (para decidir se aplica a versão da nuvem)
+    @Query("SELECT * FROM products WHERE id = :id") suspend fun product(id: Long): Product?
+    @Query("SELECT * FROM products WHERE model = :model COLLATE NOCASE LIMIT 1") suspend fun productByModel(model: String): Product?
+    @Query("SELECT * FROM sales WHERE id = :id") suspend fun sale(id: Long): Sale?
+    @Query("SELECT * FROM sale_items WHERE id = :id") suspend fun saleItem(id: Long): SaleItem?
+    @Query("SELECT * FROM stock_movements WHERE id = :id") suspend fun stockMovement(id: Long): StockMovement?
+    @Query("SELECT * FROM scrap_prices WHERE id = :id") suspend fun scrapPrice(id: Long): ScrapPrice?
+    @Query("SELECT * FROM scrap_prices WHERE amperage = :amperage LIMIT 1") suspend fun scrapPriceByAmperage(amperage: Int): ScrapPrice?
+    @Query("SELECT * FROM scrap_movements WHERE id = :id") suspend fun scrapMovement(id: Long): ScrapMovement?
+
+    // ----- Gravar a versão da nuvem
+    @Upsert suspend fun upsertProduct(p: Product)
+    @Upsert suspend fun upsertSale(s: Sale)
+    @Upsert suspend fun upsertSaleItem(i: SaleItem)
+    @Upsert suspend fun upsertStockMovement(m: StockMovement)
+    @Upsert suspend fun upsertScrapPrice(p: ScrapPrice)
+    @Upsert suspend fun upsertScrapMovement(m: ScrapMovement)
+
+    @Query("DELETE FROM products WHERE id = :id") suspend fun deleteProduct(id: Long)
+    @Query("DELETE FROM sales WHERE id = :id") suspend fun deleteSale(id: Long)
+    @Query("DELETE FROM sale_items WHERE id = :id") suspend fun deleteSaleItem(id: Long)
+    @Query("DELETE FROM stock_movements WHERE id = :id") suspend fun deleteStockMovement(id: Long)
+    @Query("DELETE FROM scrap_prices WHERE id = :id") suspend fun deleteScrapPrice(id: Long)
+    @Query("DELETE FROM scrap_movements WHERE id = :id") suspend fun deleteScrapMovement(id: Long)
+
+    @Query("SELECT COALESCE(SUM(quantity), 0) FROM stock_movements WHERE product_id = :productId")
+    suspend fun movementSum(productId: Long): Int
+
+    /** Estoque = soma das movimentações (evita conflito quando dois celulares vendem ao mesmo tempo). */
+    @Query("UPDATE products SET stock = (SELECT COALESCE(SUM(m.quantity), 0) FROM stock_movements m WHERE m.product_id = products.id)")
+    suspend fun recomputeStock()
+
+    // ----- Exclusões pendentes
+    @Insert suspend fun insertTombstone(t: Tombstone)
+    @Insert suspend fun insertTombstones(t: List<Tombstone>)
+    @Query("SELECT * FROM tombstones ORDER BY id") suspend fun tombstones(): List<Tombstone>
+    @Query("DELETE FROM tombstones WHERE id <= :maxId") suspend fun clearTombstones(maxId: Long)
+    @Query("DELETE FROM tombstones") suspend fun deleteAllTombstones()
+
+    // ----- IDs para registrar exclusões em cascata
+    @Query("SELECT id FROM sale_items WHERE sale_id = :saleId") suspend fun saleItemIds(saleId: Long): List<Long>
+    @Query("SELECT id FROM stock_movements WHERE sale_id = :saleId") suspend fun stockMovementIdsForSale(saleId: Long): List<Long>
+    @Query("SELECT id FROM scrap_movements WHERE sale_id = :saleId") suspend fun scrapMovementIdsForSale(saleId: Long): List<Long>
+    @Query("SELECT id FROM stock_movements WHERE product_id = :productId") suspend fun stockMovementIdsForProduct(productId: Long): List<Long>
+    @Query("SELECT id FROM products") suspend fun allProductIds(): List<Long>
+    @Query("SELECT id FROM sales") suspend fun allSaleIds(): List<Long>
+    @Query("SELECT id FROM sale_items") suspend fun allSaleItemIds(): List<Long>
+    @Query("SELECT id FROM stock_movements") suspend fun allStockMovementIds(): List<Long>
+    @Query("SELECT id FROM scrap_prices") suspend fun allScrapPriceIds(): List<Long>
+    @Query("SELECT id FROM scrap_movements") suspend fun allScrapMovementIds(): List<Long>
+
+    /** Apaga todos os dados locais (usado para baixar tudo da nuvem num celular novo). */
+    @Query("DELETE FROM scrap_movements") suspend fun wipeScrapMovements()
+    @Query("DELETE FROM scrap_prices") suspend fun wipeScrapPrices()
+    @Query("DELETE FROM stock_movements") suspend fun wipeStockMovements()
+    @Query("DELETE FROM sale_items") suspend fun wipeSaleItems()
+    @Query("DELETE FROM sales") suspend fun wipeSales()
+    @Query("DELETE FROM products") suspend fun wipeProducts()
 }

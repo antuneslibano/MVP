@@ -1,0 +1,61 @@
+name: Verificar Supabase
+
+# Execução manual: Actions > "Verificar Supabase" > Run workflow.
+# Confere (sem senhas) se o banco na nuvem está configurado e protegido.
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    env:
+      URL: https://ogodqrhtbbwdnsnuqqfq.supabase.co
+      KEY: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im9nb2Rxcmh0YmJ3ZG5zbnVxcWZxIiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTAyNTgzODIsImV4cCI6MjEwNTgzNDM4Mn0.KZ8bPSzNwTul6qnSF0U_kPpSZxUiqYZO4PFgZ-UNd2k
+    steps:
+      - name: Verificações
+        run: |
+          set -u
+          ok=1
+          echo "== Serviço de autenticação =="
+          curl -sS -o /dev/null -w "HTTP %{http_code}\n" "$URL/auth/v1/health" -H "apikey: $KEY"
+
+          echo "== Tabelas (acesso anônimo deve ser BLOQUEADO) =="
+          for t in products sales sale_items stock_movements scrap_prices scrap_movements deletions; do
+            body=$(curl -sS "$URL/rest/v1/$t?select=id&limit=1" -H "apikey: $KEY" -H "Authorization: Bearer $KEY" -w "\n%{http_code}")
+            code=$(echo "$body" | tail -n1); text=$(echo "$body" | head -n -1)
+            if echo "$text" | grep -qiE "does not exist|Could not find the table"; then
+              echo "FALTANDO: tabela $t não existe (rode supabase/schema.sql)"; ok=0
+            elif [ "$code" = "401" ] || [ "$code" = "403" ] || echo "$text" | grep -qi "permission denied"; then
+              echo "OK: $t existe e está protegida ($code)"
+            else
+              echo "ATENÇÃO: $t respondeu $code ao acesso anônimo: $text"; ok=0
+            fi
+          done
+
+          echo "== Função de sincronização =="
+          body=$(curl -sS -X POST "$URL/rest/v1/rpc/pull_changes" -H "apikey: $KEY" -H "Authorization: Bearer $KEY" -H "Content-Type: application/json" -d '{"since":null}' -w "\n%{http_code}")
+          code=$(echo "$body" | tail -n1); text=$(echo "$body" | head -n -1)
+          if echo "$text" | grep -qi "Could not find the function"; then
+            echo "FALTANDO: função pull_changes (rode supabase/schema.sql)"; ok=0
+          elif [ "$code" = "401" ] || [ "$code" = "403" ] || echo "$text" | grep -qi "permission denied"; then
+            echo "OK: pull_changes existe e está protegida ($code)"
+          else
+            echo "ATENÇÃO: pull_changes respondeu $code ao acesso anônimo: $text"; ok=0
+          fi
+
+          echo "== Novos cadastros devem estar DESATIVADOS =="
+          body=$(curl -sS -X POST "$URL/auth/v1/signup" -H "apikey: $KEY" -H "Content-Type: application/json" \
+            -d "{\"email\":\"verificacao-$(date +%s)@example.com\",\"password\":\"Teste-$(date +%s)-xyz\"}" -w "\n%{http_code}")
+          code=$(echo "$body" | tail -n1); text=$(echo "$body" | head -n -1)
+          if echo "$text" | grep -qiE "signups not allowed|signup.*disabled"; then
+            echo "OK: cadastros desativados"
+          else
+            echo "ATENÇÃO: cadastro público parece ATIVO ($code). Desative em Authentication > Sign In / Providers."
+            echo "$text" | head -c 300; echo
+            ok=0
+          fi
+
+          if [ "$ok" = "1" ]; then echo "TUDO CERTO ✅"; else echo "HÁ PENDÊNCIAS ❌"; exit 1; fi

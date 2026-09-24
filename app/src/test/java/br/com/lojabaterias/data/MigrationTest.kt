@@ -56,7 +56,7 @@ class MigrationTest {
     )
 
     @Test
-    fun migrate1To2_keepsAllData() {
+    fun migrate1To3_keepsAllData() {
         context.deleteDatabase(dbName)
         val file = context.getDatabasePath(dbName)
         file.parentFile?.mkdirs()
@@ -103,9 +103,20 @@ class MigrationTest {
                 assertNull(sale.sale.scrapAmperage)
                 assertEquals(2, sale.quantity)
 
-                assertEquals(1, db.movementDao().getAll().size)
+                // v3: tudo marcado para envio à nuvem
+                assertTrue(product.dirty)
+                assertTrue(sale.sale.dirty)
+                // v3: estoque conciliado com as movimentações (7 em estoque, só havia a venda de -2)
+                val moves = db.movementDao().getAll()
+                assertEquals(2, moves.size)
+                assertEquals(7, moves.sumOf { it.quantity })
+                assertEquals(MovementType.ADJUSTMENT, moves.last().type)
                 assertTrue(db.scrapDao().getPrices().isEmpty())
                 assertTrue(db.scrapDao().getAllMovements().isEmpty())
+                assertTrue(db.syncDao().tombstones().isEmpty())
+                // o recálculo pela soma das movimentações mantém o estoque
+                db.syncDao().recomputeStock()
+                assertEquals(7, db.productDao().getById(1)!!.stock)
             }
         } finally {
             db.close()

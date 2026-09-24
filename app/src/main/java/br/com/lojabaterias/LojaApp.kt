@@ -4,6 +4,8 @@ import android.app.Application
 import br.com.lojabaterias.data.AppDatabase
 import br.com.lojabaterias.data.BackupManager
 import br.com.lojabaterias.data.StoreRepository
+import br.com.lojabaterias.data.sync.SupabaseApi
+import br.com.lojabaterias.data.sync.SyncManager
 
 class LojaApp : Application() {
     lateinit var container: AppContainer
@@ -18,6 +20,17 @@ class LojaApp : Application() {
 /** Injeção de dependências manual (simples e sem bibliotecas extras). */
 class AppContainer(val app: Application) {
     val database: AppDatabase by lazy { AppDatabase.build(app) }
-    val repository: StoreRepository by lazy { StoreRepository(database) }
-    val backupManager: BackupManager by lazy { BackupManager(database) }
+
+    val syncManager: SyncManager by lazy {
+        val remote = if (BuildConfig.SUPABASE_URL.isNotBlank() && BuildConfig.SUPABASE_ANON_KEY.isNotBlank()) {
+            SupabaseApi(BuildConfig.SUPABASE_URL, BuildConfig.SUPABASE_ANON_KEY)
+        } else {
+            null
+        }
+        SyncManager(app, database, remote)
+    }
+
+    /** Toda alteração local dispara a sincronização. */
+    val repository: StoreRepository by lazy { StoreRepository(database) { syncManager.requestSync() } }
+    val backupManager: BackupManager by lazy { BackupManager(database) { syncManager.requestSync() } }
 }

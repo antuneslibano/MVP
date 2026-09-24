@@ -70,6 +70,20 @@ as vendas antigas continuam com o custo e o lucro originais.
 
 A semana vai de segunda a domingo.
 
+## Sincronização entre celulares (Supabase)
+
+Vários celulares da mesma loja compartilham os dados por um banco na nuvem (Supabase, plano gratuito).
+O app funciona **offline primeiro**: cada celular tem seu banco local e sincroniza a cada 30 s,
+logo após cada alteração e ao abrir. Sem internet, as alterações ficam pendentes e são enviadas depois.
+
+- Não há login: a senha do app libera o acesso a uma conta interna da loja na nuvem.
+- O estoque é a soma das movimentações, então vendas simultâneas em celulares diferentes são somadas corretamente.
+- Exclusões também são sincronizadas. Em edições simultâneas do mesmo registro, vale a mais recente.
+- Um celular que já tem dados próprios não mistura com a nuvem: o app avisa e oferece baixar os dados da nuvem.
+
+Configuração (uma vez): rode `supabase/schema.sql` no SQL Editor do Supabase, crie o usuário interno
+da loja e desative novos cadastros. O workflow **Verificar Supabase** (Actions) confere a configuração.
+
 ## Arquitetura
 
 - **Kotlin + Jetpack Compose (Material 3)**: app nativo, leve e rápido.

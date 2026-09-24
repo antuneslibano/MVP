@@ -40,6 +40,7 @@ import br.com.lojabaterias.domain.Periods
 import br.com.lojabaterias.ui.components.AppCard
 import br.com.lojabaterias.ui.components.EmptyState
 import br.com.lojabaterias.ui.components.SaleRow
+import br.com.lojabaterias.ui.components.SyncIndicator
 import br.com.lojabaterias.ui.theme.moneyResultColor
 import br.com.lojabaterias.ui.viewmodel.HomeViewModel
 import br.com.lojabaterias.ui.viewmodel.appViewModel
@@ -66,11 +67,12 @@ fun HomeScreen(
                             style = MaterialTheme.typography.bodyMedium,
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                         )
+                        SyncIndicator()
                     }
                 },
                 actions = {
                     IconButton(onClick = onBackup) {
-                        Icon(Icons.Filled.Settings, contentDescription = "Backup")
+                        Icon(Icons.Filled.Settings, contentDescription = "Backup e sincronização")
                     }
                 },
                 colors = TopAppBarDefaults.topAppBarColors(containerColor = MaterialTheme.colorScheme.background),

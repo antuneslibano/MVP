@@ -7,6 +7,7 @@ import androidx.room.ForeignKey
 import androidx.room.Index
 import androidx.room.PrimaryKey
 import androidx.room.Relation
+import br.com.lojabaterias.data.sync.IdGenerator
 import br.com.lojabaterias.domain.PaymentMethod
 import br.com.lojabaterias.domain.PriceTable
 
@@ -16,7 +17,7 @@ import br.com.lojabaterias.domain.PriceTable
     indices = [Index(value = ["model"], unique = true)],
 )
 data class Product(
-    @PrimaryKey(autoGenerate = true) val id: Long = 0,
+    @PrimaryKey(autoGenerate = true) val id: Long = IdGenerator.next(),
     val model: String,
     @ColumnInfo(name = "cost") val cost: Long,
     @ColumnInfo(name = "price_pix") val pricePix: Long,
@@ -27,6 +28,10 @@ data class Product(
     @ColumnInfo(name = "created_at") val createdAt: Long = System.currentTimeMillis(),
     /** Amperagem (Ah). 0 = não informada. */
     @ColumnInfo(name = "amperage", defaultValue = "0") val amperage: Int = 0,
+    /** Controle de sincronização: momento da última alteração local. */
+    @ColumnInfo(name = "updated_at", defaultValue = "0") val updatedAt: Long = System.currentTimeMillis(),
+    /** Controle de sincronização: alteração ainda não enviada para a nuvem. */
+    @ColumnInfo(name = "dirty", defaultValue = "1") val dirty: Boolean = true,
 ) {
     val prices: PriceTable get() = PriceTable(pricePix, priceDebit, priceCredit)
     val isOutOfStock: Boolean get() = stock <= 0
@@ -47,7 +52,7 @@ object SaleStatus {
     indices = [Index("date_time"), Index("status")],
 )
 data class Sale(
-    @PrimaryKey(autoGenerate = true) val id: Long = 0,
+    @PrimaryKey(autoGenerate = true) val id: Long = IdGenerator.next(),
     @ColumnInfo(name = "date_time") val dateTime: Long,
     @ColumnInfo(name = "payment_method") val paymentMethod: String,
     @ColumnInfo(name = "gross_amount") val grossAmount: Long,
@@ -65,6 +70,10 @@ data class Sale(
     @ColumnInfo(name = "scrap_missing", defaultValue = "0") val scrapMissing: Int = 0,
     /** Valor cobrado pelas sucatas faltantes (já incluído no valor final). */
     @ColumnInfo(name = "scrap_charge", defaultValue = "0") val scrapCharge: Long = 0,
+    /** Controle de sincronização: momento da última alteração local. */
+    @ColumnInfo(name = "updated_at", defaultValue = "0") val updatedAt: Long = System.currentTimeMillis(),
+    /** Controle de sincronização: alteração ainda não enviada para a nuvem. */
+    @ColumnInfo(name = "dirty", defaultValue = "1") val dirty: Boolean = true,
 ) {
     val payment: PaymentMethod get() = PaymentMethod.fromName(paymentMethod)
     val isCanceled: Boolean get() = status == SaleStatus.CANCELED
@@ -86,7 +95,7 @@ data class Sale(
     indices = [Index("sale_id"), Index("product_id")],
 )
 data class SaleItem(
-    @PrimaryKey(autoGenerate = true) val id: Long = 0,
+    @PrimaryKey(autoGenerate = true) val id: Long = IdGenerator.next(),
     @ColumnInfo(name = "sale_id") val saleId: Long,
     /** Sem FK para permitir manter o histórico mesmo que o produto seja excluído. */
     @ColumnInfo(name = "product_id") val productId: Long,
@@ -97,6 +106,10 @@ data class SaleItem(
     /** Custo unitário no momento da venda (custo histórico). */
     @ColumnInfo(name = "unit_cost") val unitCost: Long,
     val subtotal: Long,
+    /** Controle de sincronização: momento da última alteração local. */
+    @ColumnInfo(name = "updated_at", defaultValue = "0") val updatedAt: Long = System.currentTimeMillis(),
+    /** Controle de sincronização: alteração ainda não enviada para a nuvem. */
+    @ColumnInfo(name = "dirty", defaultValue = "1") val dirty: Boolean = true,
 )
 
 data class SaleWithItems(
@@ -135,7 +148,7 @@ object MovementType {
     indices = [Index("product_id"), Index("date_time")],
 )
 data class StockMovement(
-    @PrimaryKey(autoGenerate = true) val id: Long = 0,
+    @PrimaryKey(autoGenerate = true) val id: Long = IdGenerator.next(),
     @ColumnInfo(name = "product_id") val productId: Long,
     @ColumnInfo(name = "date_time") val dateTime: Long,
     val type: String,
@@ -146,6 +159,10 @@ data class StockMovement(
     val note: String? = null,
     /** Custo unitário informado na entrada (opcional). */
     @ColumnInfo(name = "unit_cost") val unitCost: Long? = null,
+    /** Controle de sincronização: momento da última alteração local. */
+    @ColumnInfo(name = "updated_at", defaultValue = "0") val updatedAt: Long = System.currentTimeMillis(),
+    /** Controle de sincronização: alteração ainda não enviada para a nuvem. */
+    @ColumnInfo(name = "dirty", defaultValue = "1") val dirty: Boolean = true,
 )
 
 /** Valor de referência da sucata por amperagem. */
@@ -154,10 +171,14 @@ data class StockMovement(
     indices = [Index(value = ["amperage"], unique = true)],
 )
 data class ScrapPrice(
-    @PrimaryKey(autoGenerate = true) val id: Long = 0,
+    @PrimaryKey(autoGenerate = true) val id: Long = IdGenerator.next(),
     val amperage: Int,
     /** Valor da sucata em centavos. */
     val value: Long,
+    /** Controle de sincronização: momento da última alteração local. */
+    @ColumnInfo(name = "updated_at", defaultValue = "0") val updatedAt: Long = System.currentTimeMillis(),
+    /** Controle de sincronização: alteração ainda não enviada para a nuvem. */
+    @ColumnInfo(name = "dirty", defaultValue = "1") val dirty: Boolean = true,
 )
 
 object ScrapMovementType {
@@ -190,7 +211,7 @@ object ScrapMovementType {
     indices = [Index("date_time"), Index("amperage"), Index("sale_id")],
 )
 data class ScrapMovement(
-    @PrimaryKey(autoGenerate = true) val id: Long = 0,
+    @PrimaryKey(autoGenerate = true) val id: Long = IdGenerator.next(),
     @ColumnInfo(name = "date_time") val dateTime: Long,
     val type: String,
     val amperage: Int,
@@ -200,6 +221,10 @@ data class ScrapMovement(
     val amount: Long = 0,
     @ColumnInfo(name = "sale_id") val saleId: Long? = null,
     val note: String? = null,
+    /** Controle de sincronização: momento da última alteração local. */
+    @ColumnInfo(name = "updated_at", defaultValue = "0") val updatedAt: Long = System.currentTimeMillis(),
+    /** Controle de sincronização: alteração ainda não enviada para a nuvem. */
+    @ColumnInfo(name = "dirty", defaultValue = "1") val dirty: Boolean = true,
 )
 
 /** Estoque de sucatas de uma amperagem. */
@@ -212,6 +237,15 @@ data class ScrapStock(
 data class ScrapSoldSummary(
     val quantity: Int = 0,
     val amount: Long = 0,
+)
+
+/** Registro de exclusão local, ainda não enviado para a nuvem. */
+@Entity(tableName = "tombstones")
+data class Tombstone(
+    @PrimaryKey(autoGenerate = true) val id: Long = 0,
+    @ColumnInfo(name = "table_name") val tableName: String,
+    @ColumnInfo(name = "record_id") val recordId: Long,
+    @ColumnInfo(name = "deleted_at") val deletedAt: Long = System.currentTimeMillis(),
 )
 
 /** Totais agregados para o dashboard. */

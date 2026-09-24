@@ -10,7 +10,7 @@ import java.io.OutputStream
  * Backup completo dos dados em JSON (produtos, vendas, itens e movimentações).
  * A restauração substitui todos os dados atuais.
  */
-class BackupManager(private val db: AppDatabase) {
+class BackupManager(private val db: AppDatabase, private val onChange: () -> Unit = {}) {
 
     suspend fun export(output: OutputStream) {
         val root = JSONObject()
@@ -197,6 +197,20 @@ class BackupManager(private val db: AppDatabase) {
         }
 
         db.withTransaction {
+            // Para a sincronização: o que existia e não está no backup vira exclusão na nuvem;
+            // tudo o que está no backup é marcado para envio (dirty).
+            val sync = db.syncDao()
+            val removed = mutableListOf<Tombstone>()
+            fun gone(table: String, before: List<Long>, after: Set<Long>) {
+                before.filter { it !in after }.forEach { removed += Tombstone(tableName = table, recordId = it) }
+            }
+            gone(SyncTables.PRODUCTS, sync.allProductIds(), products.map { it.id }.toSet())
+            gone(SyncTables.SALES, sync.allSaleIds(), sales.map { it.id }.toSet())
+            gone(SyncTables.SALE_ITEMS, sync.allSaleItemIds(), items.map { it.id }.toSet())
+            gone(SyncTables.STOCK_MOVEMENTS, sync.allStockMovementIds(), movements.map { it.id }.toSet())
+            gone(SyncTables.SCRAP_PRICES, sync.allScrapPriceIds(), scrapPrices.map { it.id }.toSet())
+            gone(SyncTables.SCRAP_MOVEMENTS, sync.allScrapMovementIds(), scrapMovements.map { it.id }.toSet())
+
             db.scrapDao().deleteAllMovements()
             db.scrapDao().deleteAllPrices()
             db.saleDao().deleteAllItems()
@@ -209,7 +223,26 @@ class BackupManager(private val db: AppDatabase) {
             db.movementDao().insertAll(movements)
             db.scrapDao().insertPrices(scrapPrices)
             db.scrapDao().insertMovements(scrapMovements)
+            sync.insertTombstones(removed)
+            // O estoque é a soma das movimentações: se o backup tiver diferença, registra um ajuste de conciliação.
+            val now = System.currentTimeMillis()
+            products.forEach { p ->
+                val diff = p.stock - sync.movementSum(p.id)
+                if (diff != 0) {
+                    db.movementDao().insert(
+                        StockMovement(
+                            productId = p.id,
+                            dateTime = now,
+                            type = MovementType.ADJUSTMENT,
+                            quantity = diff,
+                            stockAfter = p.stock,
+                            note = "Conciliação automática (restauração de backup)",
+                        )
+                    )
+                }
+            }
         }
+        onChange()
         return products.size to sales.size
     }
 

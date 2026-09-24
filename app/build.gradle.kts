@@ -16,6 +16,15 @@ android {
         targetSdk = 35
         versionCode = (System.getenv("VERSION_CODE") ?: "1").toInt()
         versionName = "1.0.${System.getenv("VERSION_CODE") ?: "0"}"
+
+        // Nuvem (Supabase). A chave "anon" é pública por natureza: o acesso aos dados é protegido
+        // pelas regras de segurança (RLS) e pela conta interna da loja. Pode ser trocada por secrets do GitHub.
+        val supabaseUrl = System.getenv("SUPABASE_URL")?.takeIf { it.isNotBlank() }
+            ?: "https://ogodqrhtbbwdnsnuqqfq.supabase.co"
+        val supabaseKey = System.getenv("SUPABASE_ANON_KEY")?.takeIf { it.isNotBlank() }
+            ?: "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im9nb2Rxcmh0YmJ3ZG5zbnVxcWZxIiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTAyNTgzODIsImV4cCI6MjEwNTgzNDM4Mn0.KZ8bPSzNwTul6qnSF0U_kPpSZxUiqYZO4PFgZ-UNd2k"
+        buildConfigField("String", "SUPABASE_URL", "\"$supabaseUrl\"")
+        buildConfigField("String", "SUPABASE_ANON_KEY", "\"$supabaseKey\"")
     }
 
     // Assinatura fixa: mantém a mesma chave entre builds para que o app possa ser
@@ -62,7 +71,7 @@ android {
     }
     buildFeatures {
         compose = true
-        buildConfig = false
+        buildConfig = true
     }
     packaging {
         resources {

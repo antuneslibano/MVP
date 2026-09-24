@@ -51,7 +51,7 @@ private const val MAX_PIN = 12
 
 /** Tela de senha exibida ao abrir o app (e ao voltar depois de um tempo em segundo plano). */
 @Composable
-fun LockScreen(onUnlock: () -> Unit) {
+fun LockScreen(onUnlock: (pin: String) -> Unit) {
     var recovering by rememberSaveable { mutableStateOf(false) }
     val activity = LocalContext.current as? Activity
     // Com o app bloqueado, "voltar" apenas minimiza o app.
@@ -92,15 +92,16 @@ private fun Header(subtitle: String) {
 }
 
 @Composable
-private fun PinEntry(onUnlock: () -> Unit, onForgot: () -> Unit) {
+private fun PinEntry(onUnlock: (String) -> Unit, onForgot: () -> Unit) {
     var pin by rememberSaveable { mutableStateOf("") }
     var error by rememberSaveable { mutableStateOf(false) }
 
     fun submit() {
         if (AccessControl.checkPin(pin)) {
+            val ok = pin
             pin = ""
             error = false
-            onUnlock()
+            onUnlock(ok)
         } else {
             error = true
             pin = ""

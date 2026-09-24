@@ -28,6 +28,12 @@ object AccessControl {
         return plain.takeIf { checkPin(it) }
     }
 
+    /** Conta interna da loja na nuvem (sem cadastro de usuários: acesso liberado pela senha do app). */
+    const val CLOUD_EMAIL = "loja@artdasbaterias.app"
+
+    /** Senha da conta na nuvem, derivada da senha do app (não fica gravada no aparelho). */
+    fun cloudPassword(pin: String): String = sha256Hex("artdasbaterias:supabase:$pin").take(32)
+
     private fun normalize(text: String): String =
         Normalizer.normalize(text.trim().lowercase(), Normalizer.Form.NFD).replace(Regex("\\p{Mn}+"), "")
 

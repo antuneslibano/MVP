@@ -30,7 +30,12 @@ class MainActivity : ComponentActivity() {
                 Box {
                     // A navegação continua por baixo, preservando a tela onde o usuário estava.
                     LojaNavHost()
-                    if (locked) LockScreen(onUnlock = { locked = false })
+                    if (locked) {
+                        LockScreen(onUnlock = { pin ->
+                            locked = false
+                            (application as LojaApp).container.syncManager.onUnlocked(pin)
+                        })
+                    }
                 }
             }
         }
@@ -40,11 +45,13 @@ class MainActivity : ComponentActivity() {
         super.onStart()
         if (stoppedAt > 0 && SystemClock.elapsedRealtime() - stoppedAt > LOCK_AFTER_MS) locked = true
         stoppedAt = 0L
+        (application as LojaApp).container.syncManager.onForeground()
     }
 
     override fun onStop() {
         super.onStop()
         stoppedAt = SystemClock.elapsedRealtime()
+        (application as LojaApp).container.syncManager.onBackground()
     }
 
     override fun onSaveInstanceState(outState: Bundle) {

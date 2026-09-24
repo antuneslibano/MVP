@@ -28,6 +28,18 @@ class BackupViewModel(private val container: AppContainer) : MessageViewModel() 
         message("Backup restaurado: $products baterias e $sales vendas")
     }
 
+    /** Sincroniza agora (botão). */
+    fun syncNow() = runTask(null) {
+        val ok = container.syncManager.syncNow()
+        message(if (ok) "Sincronizado com a nuvem" else "Não foi possível sincronizar agora")
+    }
+
+    /** Apaga os dados deste celular e baixa tudo da nuvem. */
+    fun wipeAndDownload() = runTask(null) {
+        val ok = container.syncManager.wipeLocalAndDownload()
+        message(if (ok) "Dados baixados da nuvem" else "Dados locais apagados. Aguardando conexão para baixar da nuvem.")
+    }
+
     private fun runTask(successMessage: String?, block: suspend () -> Unit) {
         if (_busy.value) return
         _busy.value = true
