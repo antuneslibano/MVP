@@ -189,6 +189,7 @@ object ReportPdfWriter {
                     "Descontos concedidos" to Money.format(f.discountTotal),
                     "Cobrado por sucata faltante" to Money.format(f.scrap.charged),
                     "Faturamento (valor final)" to Money.format(f.sales.revenue),
+                    "Taxas das maquininhas (descontadas do lucro)" to Money.format(f.sales.fees),
                     "Vendas canceladas no período" to "${f.canceledSales.size} • ${Money.format(f.canceledAmount)}",
                 ),
             )

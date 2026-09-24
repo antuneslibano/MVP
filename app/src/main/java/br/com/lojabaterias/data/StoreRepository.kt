@@ -2,6 +2,7 @@ package br.com.lojabaterias.data
 
 import androidx.room.withTransaction
 import br.com.lojabaterias.data.sync.IdGenerator
+import br.com.lojabaterias.domain.CardFees
 import br.com.lojabaterias.domain.DateRange
 import br.com.lojabaterias.domain.PaymentMethod
 import br.com.lojabaterias.domain.ReportItem
@@ -45,7 +46,14 @@ object SyncTables {
 /**
  * @param onChange chamado após cada alteração local (dispara a sincronização).
  */
-class StoreRepository(private val db: AppDatabase, private val onChange: () -> Unit = {}) {
+class StoreRepository(
+    private val db: AppDatabase,
+    private val onChange: () -> Unit = {},
+    private val feeRates: () -> CardFees = { CardFees.DEFAULT },
+) {
+
+    /** Taxas das maquininhas em vigor (configuráveis). */
+    val cardFees: CardFees get() = feeRates()
 
     private val products = db.productDao()
     private val sales = db.saleDao()
@@ -254,7 +262,7 @@ class StoreRepository(private val db: AppDatabase, private val onChange: () -> U
         val product = products.getById(productId) ?: throw BusinessException("Produto não encontrado")
         SaleCalculator.validate(unitPrice, quantity, discount, product.stock)?.let { throw BusinessException(it) }
         validateScrap(quantity, scrap)
-        val totals = SaleCalculator.compute(unitPrice, quantity, discount, product.cost, scrap.charge)
+        val totals = SaleCalculator.compute(unitPrice, quantity, discount, product.cost, scrap.charge, cardFees.rateFor(method))
         val saleId = sales.insertSale(
             Sale(
                 dateTime = dateTime,
@@ -268,6 +276,7 @@ class StoreRepository(private val db: AppDatabase, private val onChange: () -> U
                 scrapAmperage = scrap.amperageOrNull,
                 scrapMissing = scrap.missing,
                 scrapCharge = scrap.charge,
+                cardFee = totals.cardFee,
             )
         )
         sales.insertItem(
@@ -331,7 +340,7 @@ class StoreRepository(private val db: AppDatabase, private val onChange: () -> U
         }
         SaleCalculator.validate(unitPrice, quantity, discount, available)?.let { throw BusinessException(it) }
         validateScrap(quantity, scrap)
-        val totals = SaleCalculator.compute(unitPrice, quantity, discount, item.unitCost, scrap.charge)
+        val totals = SaleCalculator.compute(unitPrice, quantity, discount, item.unitCost, scrap.charge, cardFees.rateFor(method))
         val now = System.currentTimeMillis()
 
         sales.updateItem(
@@ -350,6 +359,7 @@ class StoreRepository(private val db: AppDatabase, private val onChange: () -> U
                 scrapAmperage = scrap.amperageOrNull,
                 scrapMissing = scrap.missing,
                 scrapCharge = scrap.charge,
+                cardFee = totals.cardFee,
                 updatedAt = now,
                 dirty = true,
             )
@@ -860,6 +870,7 @@ class StoreRepository(private val db: AppDatabase, private val onChange: () -> U
             discount = s.sale.discount,
             finalAmount = s.sale.finalAmount,
             totalCost = s.sale.totalCost,
+            cardFee = s.sale.cardFee,
             items = s.items.map {
                 ReportItem(it.modelSnapshot, it.quantity, it.subtotal, it.unitCost * it.quantity)
             },

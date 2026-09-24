@@ -56,7 +56,7 @@ class MigrationTest {
     )
 
     @Test
-    fun migrate1To4_keepsAllData() {
+    fun migrate1To5_keepsAllData() {
         context.deleteDatabase(dbName)
         val file = context.getDatabasePath(dbName)
         file.parentFile?.mkdirs()
@@ -73,6 +73,11 @@ class MigrationTest {
             raw.execSQL(
                 "INSERT INTO sale_items (id, sale_id, product_id, model_snapshot, quantity, unit_price, unit_cost, subtotal) " +
                     "VALUES (1, 1, 1, 'BEP60D', 2, 25000, 18990, 50000)"
+            )
+            // venda no crédito (antes das taxas): R$ 280,00, custo R$ 189,90, lucro R$ 90,10
+            raw.execSQL(
+                "INSERT INTO sales (id, date_time, payment_method, gross_amount, discount, final_amount, total_cost, " +
+                    "gross_profit, status, canceled_at) VALUES (2, 3000, 'CREDITO', 28000, 0, 28000, 18990, 9010, 'ACTIVE', NULL)"
             )
             raw.execSQL(
                 "INSERT INTO stock_movements (id, product_id, date_time, type, quantity, stock_after, sale_id, note, unit_cost) " +
@@ -102,6 +107,13 @@ class MigrationTest {
                 assertEquals(0L, sale.sale.scrapCharge)
                 assertNull(sale.sale.scrapAmperage)
                 assertEquals(2, sale.quantity)
+
+                // v5: taxa de 7% aplicada à venda antiga no crédito, lucro recalculado; PIX sem taxa
+                assertEquals(0L, sale.sale.cardFee)
+                val credit = db.saleDao().getWithItems(2)!!.sale
+                assertEquals(1_960L, credit.cardFee)
+                assertEquals(28_000L - 18_990L - 1_960L, credit.grossProfit)
+                assertTrue(credit.dirty)
 
                 // v3: tudo marcado para envio à nuvem
                 assertTrue(product.dirty)

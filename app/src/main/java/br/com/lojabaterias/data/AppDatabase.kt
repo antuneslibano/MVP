@@ -19,7 +19,7 @@ import androidx.sqlite.db.SupportSQLiteDatabase
         ChargeService::class,
         WarrantyClaim::class,
     ],
-    version = 4,
+    version = 5,
     exportSchema = true,
 )
 abstract class AppDatabase : RoomDatabase() {
@@ -145,7 +145,32 @@ abstract class AppDatabase : RoomDatabase() {
             }
         }
 
-        val ALL_MIGRATIONS = arrayOf(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4)
+        /**
+         * v4 → v5: taxa da maquininha em cada venda.
+         * Aplica as taxas padrão (crédito 7%, débito 2%) às vendas já registradas e recalcula o lucro.
+         * As vendas alteradas são marcadas para sincronizar.
+         */
+        val MIGRATION_4_5 = object : Migration(4, 5) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("ALTER TABLE `sales` ADD COLUMN `card_fee` INTEGER NOT NULL DEFAULT 0")
+                val now = System.currentTimeMillis()
+                val credit = br.com.lojabaterias.domain.CardFees.DEFAULT_CREDIT_BPS
+                val debit = br.com.lojabaterias.domain.CardFees.DEFAULT_DEBIT_BPS
+                // Mesmo arredondamento do app: (valor × pontos-base + 5000) / 10000
+                db.execSQL(
+                    "UPDATE sales SET card_fee = (final_amount * $credit + 5000) / 10000, " +
+                        "gross_profit = final_amount - total_cost - (final_amount * $credit + 5000) / 10000, " +
+                        "updated_at = $now, dirty = 1 WHERE payment_method = 'CREDITO' AND final_amount > 0"
+                )
+                db.execSQL(
+                    "UPDATE sales SET card_fee = (final_amount * $debit + 5000) / 10000, " +
+                        "gross_profit = final_amount - total_cost - (final_amount * $debit + 5000) / 10000, " +
+                        "updated_at = $now, dirty = 1 WHERE payment_method = 'DEBITO' AND final_amount > 0"
+                )
+            }
+        }
+
+        val ALL_MIGRATIONS = arrayOf(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5)
 
         fun build(context: Context): AppDatabase =
             Room.databaseBuilder(context.applicationContext, AppDatabase::class.java, NAME)

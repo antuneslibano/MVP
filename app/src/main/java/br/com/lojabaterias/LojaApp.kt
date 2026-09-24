@@ -3,6 +3,7 @@ package br.com.lojabaterias
 import android.app.Application
 import br.com.lojabaterias.data.AppDatabase
 import br.com.lojabaterias.data.BackupManager
+import br.com.lojabaterias.data.FeeSettings
 import br.com.lojabaterias.data.StoreRepository
 import br.com.lojabaterias.data.sync.SupabaseApi
 import br.com.lojabaterias.data.sync.SyncManager
@@ -31,8 +32,13 @@ class AppContainer(val app: Application) {
         SyncManager(app, database, remote)
     }
 
+    /** Taxas das maquininhas (crédito/débito). */
+    val feeSettings: FeeSettings by lazy { FeeSettings(app) }
+
     /** Toda alteração local dispara a sincronização. */
-    val repository: StoreRepository by lazy { StoreRepository(database) { syncManager.requestSync() } }
+    val repository: StoreRepository by lazy {
+        StoreRepository(database, onChange = { syncManager.requestSync() }, feeRates = { feeSettings.current })
+    }
     val updater: AppUpdater by lazy { AppUpdater(app) }
     val backupManager: BackupManager by lazy { BackupManager(database) { syncManager.requestSync() } }
 }

@@ -3,6 +3,7 @@ package br.com.lojabaterias.ui.viewmodel
 import android.net.Uri
 import androidx.lifecycle.viewModelScope
 import br.com.lojabaterias.AppContainer
+import br.com.lojabaterias.domain.CardFees
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -38,6 +39,20 @@ class BackupViewModel(private val container: AppContainer) : MessageViewModel() 
     fun wipeAndDownload() = runTask(null) {
         val ok = container.syncManager.wipeLocalAndDownload()
         message(if (ok) "Dados baixados da nuvem" else "Dados locais apagados. Aguardando conexão para baixar da nuvem.")
+    }
+
+    /** Taxas atuais das maquininhas. */
+    val fees = container.feeSettings.fees
+
+    fun saveFees(creditText: String, debitText: String) {
+        val credit = CardFees.parsePercent(creditText)
+        val debit = CardFees.parsePercent(debitText)
+        if (credit == null || debit == null) {
+            message("Informe porcentagens válidas (ex.: 7 ou 2,5)")
+            return
+        }
+        container.feeSettings.save(CardFees(credit, debit))
+        message("Taxas salvas: crédito ${CardFees.formatPercent(credit)}, débito ${CardFees.formatPercent(debit)}")
     }
 
     private fun runTask(successMessage: String?, block: suspend () -> Unit) {

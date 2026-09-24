@@ -334,4 +334,27 @@ class StoreRepositoryTest {
         val id = newProduct(stock = 0)
         expectBusinessError { repo.createWarranty(null, "", id, "BEP60D", true, id, 0, null, null) }
     }
+
+    @Test
+    fun cardFees_areDiscountedFromProfit() = runBlocking {
+        val id = newProduct()
+        val credit = repo.registerSale(id, 1, PaymentMethod.CREDITO, 28_000, 0, 1_000, ScrapInput(1, 0, 60, 0))
+        val debit = repo.registerSale(id, 1, PaymentMethod.DEBITO, 26_000, 0, 1_000, ScrapInput(1, 0, 60, 0))
+        val pix = repo.registerSale(id, 1, PaymentMethod.PIX, 25_000, 0, 1_000, ScrapInput(1, 0, 60, 0))
+        repo.getSale(credit)!!.sale.let {
+            assertEquals(1_960L, it.cardFee)
+            assertEquals(28_000L - 18_990L - 1_960L, it.grossProfit)
+        }
+        repo.getSale(debit)!!.sale.let {
+            assertEquals(520L, it.cardFee)
+            assertEquals(26_000L - 18_990L - 520L, it.grossProfit)
+        }
+        assertEquals(0L, repo.getSale(pix)!!.sale.cardFee)
+        // Editar para PIX remove a taxa
+        repo.updateSale(credit, 1, PaymentMethod.PIX, 25_000, 0, 1_000, ScrapInput(1, 0, 60, 0))
+        repo.getSale(credit)!!.sale.let {
+            assertEquals(0L, it.cardFee)
+            assertEquals(25_000L - 18_990L, it.grossProfit)
+        }
+    }
 }

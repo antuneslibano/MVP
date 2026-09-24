@@ -46,7 +46,7 @@ object RemoteMapper {
         put("total_cost", s.totalCost); put("gross_profit", s.grossProfit); put("status", s.status)
         put("canceled_at", s.canceledAt.orNull()); put("scrap_returned", s.scrapReturned)
         put("scrap_amperage", s.scrapAmperage.orNull()); put("scrap_missing", s.scrapMissing)
-        put("scrap_charge", s.scrapCharge); put("updated_at", s.updatedAt)
+        put("scrap_charge", s.scrapCharge); put("card_fee", s.cardFee); put("updated_at", s.updatedAt)
     }
 
     fun sale(o: JSONObject) = Sale(
@@ -64,6 +64,7 @@ object RemoteMapper {
         scrapAmperage = o.intOrNull("scrap_amperage"),
         scrapMissing = o.optInt("scrap_missing", 0),
         scrapCharge = o.optLong("scrap_charge", 0),
+        cardFee = o.optLong("card_fee", 0),
         updatedAt = o.optLong("updated_at", 0),
         dirty = false,
     )

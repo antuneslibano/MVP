@@ -70,6 +70,8 @@ data class Sale(
     @ColumnInfo(name = "scrap_missing", defaultValue = "0") val scrapMissing: Int = 0,
     /** Valor cobrado pelas sucatas faltantes (já incluído no valor final). */
     @ColumnInfo(name = "scrap_charge", defaultValue = "0") val scrapCharge: Long = 0,
+    /** Taxa da maquininha (crédito/débito), já descontada do lucro bruto. */
+    @ColumnInfo(name = "card_fee", defaultValue = "0") val cardFee: Long = 0,
     /** Controle de sincronização: momento da última alteração local. */
     @ColumnInfo(name = "updated_at", defaultValue = "0") val updatedAt: Long = System.currentTimeMillis(),
     /** Controle de sincronização: alteração ainda não enviada para a nuvem. */

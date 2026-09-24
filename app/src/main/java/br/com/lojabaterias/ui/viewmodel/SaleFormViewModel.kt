@@ -5,6 +5,7 @@ import br.com.lojabaterias.data.BusinessException
 import br.com.lojabaterias.data.Product
 import br.com.lojabaterias.data.ScrapInput
 import br.com.lojabaterias.data.StoreRepository
+import br.com.lojabaterias.domain.CardFees
 import br.com.lojabaterias.domain.PaymentMethod
 import br.com.lojabaterias.domain.SaleCalculator
 import br.com.lojabaterias.domain.Scrap
@@ -50,6 +51,8 @@ data class SaleFormState(
     val scrapChargeEdited: Boolean = false,
     /** Amperagem da bateria vendida (usada para sugerir sucata e valor). */
     val batteryAmperage: Int = 0,
+    /** Taxas das maquininhas em vigor. */
+    val fees: CardFees = CardFees.DEFAULT,
 ) {
     val hasSelection: Boolean get() = model.isNotEmpty()
 
@@ -69,7 +72,7 @@ data class SaleFormState(
 
     val totals: SaleTotals?
         get() = if (quantity > 0 && discount <= unitPrice * quantity) {
-            SaleCalculator.compute(unitPrice, quantity, discount, unitCost, scrapInput.charge)
+            SaleCalculator.compute(unitPrice, quantity, discount, unitCost, scrapInput.charge, fees.rateFor(method))
         } else {
             null
         }
@@ -85,7 +88,9 @@ class SaleFormViewModel(
     initialProductId: Long?,
 ) : MessageViewModel() {
 
-    private val _form = MutableStateFlow(SaleFormState(isEdit = saleId != null, loading = saleId != null))
+    private val _form = MutableStateFlow(
+        SaleFormState(isEdit = saleId != null, loading = saleId != null, fees = repo.cardFees)
+    )
     val form: StateFlow<SaleFormState> = _form.asStateFlow()
 
     /** Tabela de valores de sucata (amperagem → valor). */
@@ -141,6 +146,7 @@ class SaleFormViewModel(
             scrapCharge = sale.sale.scrapCharge,
             scrapChargeEdited = true,
             batteryAmperage = batteryAmperage(product, item?.modelSnapshot ?: ""),
+            fees = repo.cardFees,
         )
     }
 
@@ -184,7 +190,7 @@ class SaleFormViewModel(
 
     fun clearProduct() {
         if (_form.value.isEdit) return
-        _form.update { SaleFormState(method = it.method) }
+        _form.update { SaleFormState(method = it.method, fees = it.fees) }
     }
 
     /** Ao trocar a forma de pagamento, aplica automaticamente o preço de tabela correspondente. */

@@ -118,6 +118,7 @@ fun SaleDetailScreen(
                             HorizontalDivider(Modifier.padding(vertical = 6.dp))
                             InfoRow("Valor final", Money.format(s.finalAmount), bold = true)
                             InfoRow("Custo", Money.format(s.totalCost))
+                            if (s.cardFee > 0) InfoRow("Taxa da maquininha", "-" + Money.format(s.cardFee))
                             InfoRow("Lucro bruto", Money.format(s.grossProfit), valueColor = moneyResultColor(s.grossProfit))
                         }
                     }

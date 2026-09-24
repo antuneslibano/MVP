@@ -45,6 +45,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import br.com.lojabaterias.data.Product
+import br.com.lojabaterias.domain.CardFees
 import br.com.lojabaterias.domain.Money
 import br.com.lojabaterias.domain.PaymentMethod
 import br.com.lojabaterias.domain.Scrap
@@ -283,6 +284,12 @@ private fun SaleDetailsForm(
                         HorizontalDivider(Modifier.padding(vertical = 6.dp))
                         InfoRow("Total", Money.format(totals.finalAmount), bold = true)
                         InfoRow("Custo", Money.format(totals.totalCost))
+                        if (totals.cardFee > 0) {
+                            InfoRow(
+                                "Taxa da maquininha (${CardFees.formatPercent(form.fees.rateFor(form.method))})",
+                                "-" + Money.format(totals.cardFee),
+                            )
+                        }
                         InfoRow("Lucro bruto", Money.format(totals.grossProfit), valueColor = moneyResultColor(totals.grossProfit))
                     } else {
                         Text("Confira quantidade, preço e desconto.")

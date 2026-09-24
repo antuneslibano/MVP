@@ -153,6 +153,7 @@ fun ReportsScreen() {
                     Column(Modifier.padding(horizontal = 16.dp, vertical = 8.dp)) {
                         InfoRow("Valor bruto", Money.format(f.grossTotal))
                         InfoRow("Descontos concedidos", Money.format(f.discountTotal))
+                        InfoRow("Taxas das maquininhas", Money.format(r.fees))
                         InfoRow("Cobrado por sucata faltante", Money.format(f.scrap.charged))
                         InfoRow("Vendas canceladas", "${f.canceledSales.size} • ${Money.format(f.canceledAmount)}")
                     }

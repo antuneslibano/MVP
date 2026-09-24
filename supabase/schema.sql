@@ -147,6 +147,9 @@ create table if not exists public.deletions (
   primary key (table_name, record_id)
 );
 
+-- Atualizações de colunas (seguro rodar de novo)
+alter table public.sales add column if not exists card_fee bigint not null default 0;
+
 -- ---------- Índices para buscar só o que mudou ----------
 create index if not exists products_sua on public.products (server_updated_at);
 create index if not exists sales_sua on public.sales (server_updated_at);

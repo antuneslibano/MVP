@@ -2,6 +2,7 @@ package br.com.lojabaterias.data
 
 import androidx.room.withTransaction
 import br.com.lojabaterias.data.sync.RemoteMapper
+import br.com.lojabaterias.domain.CardFees
 import org.json.JSONArray
 import org.json.JSONObject
 import java.io.InputStream
@@ -52,6 +53,7 @@ class BackupManager(private val db: AppDatabase, private val onChange: () -> Uni
                     s.scrapAmperage?.let { put("scrapAmperage", it) }
                     put("scrapMissing", s.scrapMissing)
                     put("scrapCharge", s.scrapCharge)
+                    put("cardFee", s.cardFee)
                 })
             }
         })
@@ -159,7 +161,14 @@ class BackupManager(private val db: AppDatabase, private val onChange: () -> Uni
                 scrapAmperage = if (o.has("scrapAmperage")) o.getInt("scrapAmperage") else null,
                 scrapMissing = o.optInt("scrapMissing", 0),
                 scrapCharge = o.optLong("scrapCharge", 0),
-            )
+                cardFee = o.optLong("cardFee", 0),
+            ).let { sale ->
+                // Backups anteriores às taxas: aplica a taxa padrão das maquininhas e recalcula o lucro.
+                if (o.has("cardFee")) sale else {
+                    val fee = CardFees.DEFAULT.feeFor(sale.payment, sale.finalAmount)
+                    sale.copy(cardFee = fee, grossProfit = sale.finalAmount - sale.totalCost - fee)
+                }
+            }
         }
         val items = root.getJSONArray("saleItems").objects().map { o ->
             SaleItem(

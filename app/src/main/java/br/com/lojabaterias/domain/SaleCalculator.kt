@@ -5,6 +5,8 @@ data class SaleTotals(
     val discount: Long,
     /** Valor cobrado pelas sucatas que o cliente não deixou. */
     val scrapCharge: Long,
+    /** Taxa da maquininha (crédito/débito) sobre o valor final. */
+    val cardFee: Long,
     val finalAmount: Long,
     val totalCost: Long,
     val grossProfit: Long,
@@ -16,9 +18,17 @@ object SaleCalculator {
      * Valor bruto = preço unitário × quantidade
      * Valor final = valor bruto − desconto + cobrança de sucata faltante
      * Custo total = custo unitário (histórico) × quantidade
-     * Lucro bruto = valor final − custo total
+     * Taxa da maquininha = valor final × taxa da forma de pagamento
+     * Lucro bruto = valor final − custo total − taxa da maquininha
      */
-    fun compute(unitPrice: Long, quantity: Int, discount: Long, unitCost: Long, scrapCharge: Long = 0): SaleTotals {
+    fun compute(
+        unitPrice: Long,
+        quantity: Int,
+        discount: Long,
+        unitCost: Long,
+        scrapCharge: Long = 0,
+        feeBps: Int = 0,
+    ): SaleTotals {
         require(quantity > 0) { "Quantidade deve ser maior que zero" }
         require(unitPrice >= 0) { "Preço inválido" }
         require(discount >= 0) { "Desconto inválido" }
@@ -27,13 +37,15 @@ object SaleCalculator {
         require(discount <= gross) { "Desconto maior que o valor da venda" }
         val final = gross - discount + scrapCharge
         val cost = unitCost * quantity
+        val fee = CardFees.feeOf(final, feeBps)
         return SaleTotals(
             grossAmount = gross,
             discount = discount,
             scrapCharge = scrapCharge,
+            cardFee = fee,
             finalAmount = final,
             totalCost = cost,
-            grossProfit = final - cost,
+            grossProfit = final - cost - fee,
         )
     }
 

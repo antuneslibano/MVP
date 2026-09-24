@@ -8,6 +8,8 @@ data class ReportSale(
     val finalAmount: Long,
     val totalCost: Long,
     val items: List<ReportItem>,
+    /** Taxa da maquininha da venda. */
+    val cardFee: Long = 0,
 )
 
 data class ReportItem(
@@ -35,6 +37,8 @@ data class Report(
     val revenue: Long,
     val cost: Long,
     val profit: Long,
+    /** Taxas das maquininhas (já descontadas do lucro). */
+    val fees: Long = 0,
     val salesCount: Int,
     val unitsSold: Int,
     val averageTicket: Long,
@@ -44,7 +48,10 @@ data class Report(
     val byPayment: List<PaymentStats>,
 ) {
     companion object {
-        val EMPTY = Report(0, 0, 0, 0, 0, 0, emptyList(), emptyList(), emptyList(), emptyList())
+        val EMPTY = Report(
+            revenue = 0, cost = 0, profit = 0, fees = 0, salesCount = 0, unitsSold = 0, averageTicket = 0,
+            topByQuantity = emptyList(), topByRevenue = emptyList(), topByProfit = emptyList(), byPayment = emptyList(),
+        )
     }
 }
 
@@ -53,7 +60,8 @@ object ReportCalculator {
     /**
      * Faturamento = soma das vendas válidas (valor final)
      * Custo = soma do custo histórico dos itens vendidos
-     * Lucro bruto = faturamento − custo
+     * Taxas = soma das taxas das maquininhas (crédito/débito)
+     * Lucro bruto = faturamento − custo − taxas
      * Ticket médio = faturamento / quantidade de vendas
      */
     fun build(sales: List<ReportSale>, topLimit: Int = 5): Report {
@@ -61,6 +69,7 @@ object ReportCalculator {
 
         val revenue = sales.sumOf { it.finalAmount }
         val cost = sales.sumOf { it.totalCost }
+        val fees = sales.sumOf { it.cardFee }
         val count = sales.size
         val units = sales.sumOf { s -> s.items.sumOf { it.quantity } }
 
@@ -72,6 +81,8 @@ object ReportCalculator {
                 m.quantity += item.quantity
                 m.revenue += allocated[index]
                 m.cost += item.totalCost
+                // taxa proporcional ao valor do item
+                m.cost += if (sale.finalAmount > 0) sale.cardFee * allocated[index] / sale.finalAmount else 0
             }
         }
         val models = perModel.values.map { ModelStats(it.model, it.quantity, it.revenue, it.revenue - it.cost) }
@@ -88,7 +99,8 @@ object ReportCalculator {
         return Report(
             revenue = revenue,
             cost = cost,
-            profit = revenue - cost,
+            profit = revenue - cost - fees,
+            fees = fees,
             salesCount = count,
             unitsSold = units,
             averageTicket = revenue / count,
