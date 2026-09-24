@@ -28,6 +28,7 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import br.com.lojabaterias.domain.Money
 import br.com.lojabaterias.domain.Periods
+import br.com.lojabaterias.domain.Scrap
 import br.com.lojabaterias.ui.components.AppCard
 import br.com.lojabaterias.ui.components.ConfirmDialog
 import br.com.lojabaterias.ui.components.EmptyState
@@ -100,10 +101,31 @@ fun SaleDetailScreen(saleId: Long, onEdit: () -> Unit, onBack: () -> Unit) {
                         Column(Modifier.padding(16.dp)) {
                             InfoRow("Valor bruto", Money.format(s.grossAmount))
                             InfoRow("Desconto", Money.format(s.discount))
+                            if (s.scrapCharge > 0) InfoRow("Sucata faltante", Money.format(s.scrapCharge))
                             HorizontalDivider(Modifier.padding(vertical = 6.dp))
                             InfoRow("Valor final", Money.format(s.finalAmount), bold = true)
                             InfoRow("Custo", Money.format(s.totalCost))
                             InfoRow("Lucro bruto", Money.format(s.grossProfit), valueColor = moneyResultColor(s.grossProfit))
+                        }
+                    }
+
+                    SectionTitle("Sucata")
+                    AppCard {
+                        Column(Modifier.padding(16.dp)) {
+                            if (!s.hasScrapInfo) {
+                                Text(
+                                    "Não informada (venda anterior ao controle de sucatas).",
+                                    style = MaterialTheme.typography.bodyMedium,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                )
+                            } else {
+                                InfoRow(
+                                    "Deixadas pelo cliente",
+                                    if (s.scrapReturned > 0) "${s.scrapReturned} • ${Scrap.format(s.scrapAmperage)}" else "0",
+                                )
+                                InfoRow("Não deixadas", s.scrapMissing.toString())
+                                if (s.scrapMissing > 0) InfoRow("Valor cobrado", Money.format(s.scrapCharge))
+                            }
                         }
                     }
 
@@ -130,7 +152,8 @@ fun SaleDetailScreen(saleId: Long, onEdit: () -> Unit, onBack: () -> Unit) {
     if (confirmCancel) {
         ConfirmDialog(
             title = "Cancelar venda?",
-            text = "O produto volta para o estoque e a venda deixa de contar no faturamento, custo e lucro.",
+            text = "O produto volta para o estoque e a venda deixa de contar no faturamento, custo e lucro. " +
+                "Se o cliente deixou sucata, ela sai do estoque de sucatas (devolvida ao cliente).",
             confirmLabel = "Cancelar venda",
             destructive = true,
             onConfirm = {

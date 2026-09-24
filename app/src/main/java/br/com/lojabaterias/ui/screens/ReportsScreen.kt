@@ -42,6 +42,7 @@ import br.com.lojabaterias.domain.Labels
 import br.com.lojabaterias.domain.Money
 import br.com.lojabaterias.domain.PeriodType
 import br.com.lojabaterias.ui.components.AppCard
+import br.com.lojabaterias.ui.components.InfoRow
 import br.com.lojabaterias.ui.components.SectionTitle
 import br.com.lojabaterias.ui.components.ToastEffect
 import br.com.lojabaterias.ui.theme.moneyResultColor
@@ -178,6 +179,18 @@ fun ReportsScreen() {
                                 Text(Money.format(p.revenue), style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold)
                             }
                         }
+                    }
+                }
+            }
+            item { SectionTitle("Sucatas") }
+            item {
+                AppCard {
+                    Column(Modifier.padding(horizontal = 16.dp, vertical = 8.dp)) {
+                        InfoRow("Recebidas nas vendas", state.scrap.returnedInSales.toString())
+                        InfoRow("Clientes sem sucata", state.scrap.missingInSales.toString())
+                        InfoRow("Cobrado por sucata faltante", Money.format(state.scrap.charged))
+                        InfoRow("Sucatas vendidas", state.scrap.soldQuantity.toString())
+                        InfoRow("Recebido na venda de sucatas", Money.format(state.scrap.soldAmount))
                     }
                 }
             }

@@ -15,6 +15,7 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
@@ -23,6 +24,11 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.FilterChip
+import androidx.compose.material3.SegmentedButton
+import androidx.compose.material3.SegmentedButtonDefaults
+import androidx.compose.material3.SingleChoiceSegmentedButtonRow
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
@@ -41,10 +47,12 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import br.com.lojabaterias.data.Product
 import br.com.lojabaterias.domain.Money
 import br.com.lojabaterias.domain.PaymentMethod
+import br.com.lojabaterias.domain.Scrap
 import br.com.lojabaterias.ui.components.AppCard
 import br.com.lojabaterias.ui.components.DateTimeSelector
 import br.com.lojabaterias.ui.components.EmptyState
 import br.com.lojabaterias.ui.components.InfoRow
+import br.com.lojabaterias.ui.components.IntField
 import br.com.lojabaterias.ui.components.MoneyField
 import br.com.lojabaterias.ui.components.QuantityStepper
 import br.com.lojabaterias.ui.components.SearchField
@@ -138,7 +146,8 @@ private fun ProductPickRow(product: Product, onClick: () -> Unit) {
             Column(Modifier.weight(1f)) {
                 Text(product.model, style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
                 Text(
-                    "PIX ${Money.format(product.pricePix)} • Créd. ${Money.format(product.priceCredit)}",
+                    (if (product.amperage > 0) "${product.amperage}Ah • " else "") +
+                        "PIX ${Money.format(product.pricePix)} • Créd. ${Money.format(product.priceCredit)}",
                     style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
@@ -236,6 +245,8 @@ private fun SaleDetailsForm(
                 max = maxOf(1, form.available),
             )
 
+            ScrapSection(vm, form)
+
             SectionTitle("Valores")
             val tablePrice = form.product?.prices?.priceFor(form.method)
             MoneyField(
@@ -268,6 +279,7 @@ private fun SaleDetailsForm(
                     if (totals != null) {
                         InfoRow("Valor bruto", Money.format(totals.grossAmount))
                         if (totals.discount > 0) InfoRow("Desconto", "-" + Money.format(totals.discount))
+                        if (totals.scrapCharge > 0) InfoRow("Sucata faltante", "+" + Money.format(totals.scrapCharge))
                         HorizontalDivider(Modifier.padding(vertical = 6.dp))
                         InfoRow("Total", Money.format(totals.finalAmount), bold = true)
                         InfoRow("Custo", Money.format(totals.totalCost))
@@ -310,6 +322,92 @@ private fun PaymentOption(
             if (price != null) {
                 Text(Money.format(price), style = MaterialTheme.typography.bodyMedium)
             }
+        }
+    }
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun ScrapSection(vm: SaleFormViewModel, form: SaleFormState) {
+    val prices by vm.scrapPrices.collectAsStateWithLifecycle()
+    SectionTitle("Sucata")
+    if (form.scrapLegacy) {
+        Text(
+            "Venda registrada antes do controle de sucatas.",
+            style = MaterialTheme.typography.bodyMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+        return
+    }
+    val left = form.scrapReturned > 0
+    SingleChoiceSegmentedButtonRow(Modifier.fillMaxWidth()) {
+        SegmentedButton(
+            selected = left,
+            onClick = { vm.setScrapLeft(true) },
+            shape = SegmentedButtonDefaults.itemShape(0, 2),
+        ) { Text("Deixou sucata") }
+        SegmentedButton(
+            selected = !left,
+            onClick = { vm.setScrapLeft(false) },
+            shape = SegmentedButtonDefaults.itemShape(1, 2),
+        ) { Text("Sem sucata") }
+    }
+    Spacer(Modifier.height(8.dp))
+
+    if (left) {
+        if (form.quantity > 1) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text("Quantas deixou?", style = MaterialTheme.typography.bodyLarge, modifier = Modifier.weight(1f))
+                QuantityStepper(
+                    value = form.scrapReturned,
+                    onValueChange = vm::setScrapReturned,
+                    min = 1,
+                    max = form.quantity,
+                )
+            }
+            Spacer(Modifier.height(8.dp))
+        }
+        IntField(
+            value = form.scrapAmperage,
+            onValueChange = vm::setScrapAmperage,
+            label = "Amperagem da sucata deixada (Ah)",
+            supportingText = form.scrapAmperage.toIntOrNull()?.let { a ->
+                prices[a]?.let { "Valor de tabela da sucata ${a}Ah: ${Money.format(it)}" }
+            } ?: "Confira a amperagem escrita na sucata",
+        )
+        val options = (prices.keys + listOfNotNull(form.batteryAmperage.takeIf { it > 0 })).toSortedSet()
+        if (options.isNotEmpty()) {
+            Row(
+                modifier = Modifier.horizontalScroll(rememberScrollState()),
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
+                options.forEach { a ->
+                    FilterChip(
+                        selected = form.scrapAmperage == a.toString(),
+                        onClick = { vm.setScrapAmperage(a.toString()) },
+                        label = { Text("${a}Ah") },
+                    )
+                }
+            }
+        }
+    }
+
+    if (form.scrapMissing > 0) {
+        Spacer(Modifier.height(8.dp))
+        val suggested = vm.suggestedScrapCharge(form)
+        MoneyField(
+            value = form.scrapCharge,
+            onValueChange = vm::setScrapCharge,
+            label = "Cobrar pela sucata (${Scrap.units(form.scrapMissing)} faltando)",
+            supportingText = when {
+                form.batteryAmperage <= 0 -> "Informe a amperagem no cadastro da bateria para sugerir o valor"
+                prices[form.batteryAmperage] == null ->
+                    "Sem valor para ${form.batteryAmperage}Ah na tabela de sucatas (menu > Tabela de sucatas)"
+                else -> "Tabela ${form.batteryAmperage}Ah: ${Money.format(prices[form.batteryAmperage] ?: 0)} por sucata"
+            },
+        )
+        if (form.scrapChargeEdited && form.scrapCharge != suggested && suggested > 0) {
+            TextButton(onClick = vm::resetScrapCharge) { Text("Usar valor da tabela (${Money.format(suggested)})") }
         }
     }
 }

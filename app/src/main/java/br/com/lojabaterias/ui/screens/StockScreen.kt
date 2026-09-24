@@ -124,7 +124,11 @@ private fun StockRow(product: Product, onClick: () -> Unit) {
             verticalAlignment = Alignment.CenterVertically,
         ) {
             Column(Modifier.weight(1f)) {
-                Text(product.model, style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
+                Text(
+                    product.model + if (product.amperage > 0) "  •  ${product.amperage}Ah" else "",
+                    style = MaterialTheme.typography.titleLarge,
+                    fontWeight = FontWeight.Bold,
+                )
                 Text(
                     "Custo ${Money.format(product.cost)} • PIX ${Money.format(product.pricePix)}",
                     style = MaterialTheme.typography.bodySmall,

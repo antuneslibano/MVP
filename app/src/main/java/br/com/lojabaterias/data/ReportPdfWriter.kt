@@ -19,6 +19,7 @@ data class ReportDocument(
     val report: Report,
     /** Vendas válidas (não canceladas) do período, mais recentes primeiro. */
     val sales: List<SaleWithItems>,
+    val scrap: ScrapPeriodSummary = ScrapPeriodSummary(),
     val generatedAt: Long = System.currentTimeMillis(),
 )
 
@@ -59,6 +60,7 @@ object ReportPdfWriter {
                 ranking("Modelos com maior faturamento", doc.report.topByRevenue)
                 ranking("Modelos com maior lucro", doc.report.topByProfit)
                 payments(doc.report)
+                scraps(doc.scrap)
                 salesList(doc.sales)
                 finish()
             }
@@ -108,7 +110,7 @@ object ReportPdfWriter {
         private fun closePage() {
             val footerY = PAGE_HEIGHT - MARGIN / 2
             canvas.drawLine(MARGIN, footerY - 12f, PAGE_WIDTH - MARGIN, footerY - 12f, stroke)
-            canvas.drawText("Loja de Baterias • $footerTitle", MARGIN, footerY, small)
+            canvas.drawText("Art das Baterias • $footerTitle", MARGIN, footerY, small)
             val pageLabel = "Página $pageNumber"
             canvas.drawText(pageLabel, PAGE_WIDTH - MARGIN - small.measureText(pageLabel), footerY, small)
             pdf.finishPage(page)
@@ -133,7 +135,7 @@ object ReportPdfWriter {
         }
 
         fun header(doc: ReportDocument) {
-            canvas.drawText("Loja de Baterias", MARGIN, y + 18f, title)
+            canvas.drawText("Art das Baterias", MARGIN, y + 18f, title)
             y += 38f
             canvas.drawText("${typeTitle(doc.type)} — ${doc.periodLabel}", MARGIN, y, subtitle)
             y += 16f
@@ -240,6 +242,22 @@ object ReportPdfWriter {
                     val pct = if (r.revenue > 0) "${p.revenue * 100 / r.revenue}%" else "-"
                     listOf(p.method.label, p.salesCount.toString(), p.units.toString(), Money.format(p.revenue), pct)
                 },
+            )
+        }
+
+        fun scraps(s: ScrapPeriodSummary) {
+            sectionTitle("Sucatas")
+            val cols = listOf(Col(3f), Col(1.6f, true))
+            table(
+                cols,
+                listOf("Item", "Valor"),
+                listOf(
+                    listOf("Sucatas recebidas nas vendas", s.returnedInSales.toString()),
+                    listOf("Sucatas não deixadas pelos clientes", s.missingInSales.toString()),
+                    listOf("Cobrado por sucata faltante (incluso no faturamento)", Money.format(s.charged)),
+                    listOf("Sucatas vendidas", s.soldQuantity.toString()),
+                    listOf("Recebido na venda de sucatas", Money.format(s.soldAmount)),
+                ),
             )
         }
 

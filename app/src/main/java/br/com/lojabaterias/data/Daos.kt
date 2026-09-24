@@ -145,3 +145,62 @@ interface MovementDao {
     @Query("DELETE FROM stock_movements")
     suspend fun deleteAll()
 }
+
+@Dao
+interface ScrapDao {
+    // ----- Tabela de valores
+    @Query("SELECT * FROM scrap_prices ORDER BY amperage")
+    fun observePrices(): Flow<List<ScrapPrice>>
+
+    @Query("SELECT * FROM scrap_prices ORDER BY amperage")
+    suspend fun getPrices(): List<ScrapPrice>
+
+    @Query("SELECT * FROM scrap_prices WHERE amperage = :amperage LIMIT 1")
+    suspend fun findPrice(amperage: Int): ScrapPrice?
+
+    @Insert
+    suspend fun insertPrice(price: ScrapPrice): Long
+
+    @Insert
+    suspend fun insertPrices(prices: List<ScrapPrice>)
+
+    @Update
+    suspend fun updatePrice(price: ScrapPrice)
+
+    @Query("DELETE FROM scrap_prices WHERE id = :id")
+    suspend fun deletePrice(id: Long)
+
+    @Query("DELETE FROM scrap_prices")
+    suspend fun deleteAllPrices()
+
+    // ----- Movimentações / estoque
+    @Insert
+    suspend fun insertMovement(movement: ScrapMovement): Long
+
+    @Insert
+    suspend fun insertMovements(movements: List<ScrapMovement>)
+
+    @Query(
+        "SELECT amperage, SUM(quantity) AS quantity FROM scrap_movements " +
+            "GROUP BY amperage HAVING SUM(quantity) != 0 ORDER BY amperage"
+    )
+    fun observeStock(): Flow<List<ScrapStock>>
+
+    @Query("SELECT COALESCE(SUM(quantity), 0) FROM scrap_movements WHERE amperage = :amperage")
+    suspend fun stockOf(amperage: Int): Int
+
+    @Query("SELECT * FROM scrap_movements ORDER BY date_time DESC, id DESC LIMIT :limit")
+    fun observeRecent(limit: Int): Flow<List<ScrapMovement>>
+
+    @Query(
+        "SELECT COALESCE(-SUM(quantity), 0) AS quantity, COALESCE(SUM(amount), 0) AS amount " +
+            "FROM scrap_movements WHERE type = 'SOLD' AND date_time >= :start AND date_time < :end"
+    )
+    fun observeSold(start: Long, end: Long): Flow<ScrapSoldSummary>
+
+    @Query("SELECT * FROM scrap_movements ORDER BY id")
+    suspend fun getAllMovements(): List<ScrapMovement>
+
+    @Query("DELETE FROM scrap_movements")
+    suspend fun deleteAllMovements()
+}

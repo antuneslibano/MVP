@@ -139,7 +139,8 @@ private fun ProductHeader(product: Product) {
                 Column(Modifier.weight(1f)) {
                     Text(product.model, style = MaterialTheme.typography.headlineMedium)
                     Text(
-                        "Estoque mínimo: ${product.minStock}",
+                        (if (product.amperage > 0) "${product.amperage}Ah • " else "") +
+                            "Estoque mínimo: ${product.minStock}",
                         style = MaterialTheme.typography.bodyMedium,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )

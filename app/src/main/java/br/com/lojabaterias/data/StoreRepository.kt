@@ -11,11 +11,30 @@ import kotlinx.coroutines.flow.Flow
 /** Erro de regra de negócio com mensagem pronta para o usuário. */
 class BusinessException(message: String) : Exception(message)
 
+/**
+ * Sucatas informadas na venda.
+ * [returned] deixadas pelo cliente (na amperagem [amperage]); [missing] não deixadas, cobradas por [charge].
+ */
+data class ScrapInput(
+    val returned: Int,
+    val missing: Int,
+    val amperage: Int,
+    val charge: Long,
+) {
+    val amperageOrNull: Int? get() = if (returned > 0 && amperage > 0) amperage else null
+
+    companion object {
+        /** Sucata não informada. */
+        val NONE = ScrapInput(0, 0, 0, 0)
+    }
+}
+
 class StoreRepository(private val db: AppDatabase) {
 
     private val products = db.productDao()
     private val sales = db.saleDao()
     private val movements = db.movementDao()
+    private val scraps = db.scrapDao()
 
     // ---------------------------------------------------------------- Produtos
 
@@ -118,7 +137,8 @@ class StoreRepository(private val db: AppDatabase) {
 
     /**
      * Registra a venda em uma única transação:
-     * grava venda + item (com custo histórico), dá baixa no estoque e registra a movimentação.
+     * grava venda + item (com custo histórico), dá baixa no estoque, registra a movimentação
+     * e, se o cliente deixou sucata, dá entrada no estoque de sucatas.
      */
     suspend fun registerSale(
         productId: Long,
@@ -127,10 +147,12 @@ class StoreRepository(private val db: AppDatabase) {
         unitPrice: Long,
         discount: Long,
         dateTime: Long,
+        scrap: ScrapInput = ScrapInput.NONE,
     ): Long = db.withTransaction {
         val product = products.getById(productId) ?: throw BusinessException("Produto não encontrado")
         SaleCalculator.validate(unitPrice, quantity, discount, product.stock)?.let { throw BusinessException(it) }
-        val totals = SaleCalculator.compute(unitPrice, quantity, discount, product.cost)
+        validateScrap(quantity, scrap)
+        val totals = SaleCalculator.compute(unitPrice, quantity, discount, product.cost, scrap.charge)
         val saleId = sales.insertSale(
             Sale(
                 dateTime = dateTime,
@@ -140,6 +162,10 @@ class StoreRepository(private val db: AppDatabase) {
                 finalAmount = totals.finalAmount,
                 totalCost = totals.totalCost,
                 grossProfit = totals.grossProfit,
+                scrapReturned = scrap.returned,
+                scrapAmperage = scrap.amperageOrNull,
+                scrapMissing = scrap.missing,
+                scrapCharge = scrap.charge,
             )
         )
         sales.insertItem(
@@ -165,12 +191,23 @@ class StoreRepository(private val db: AppDatabase) {
                 saleId = saleId,
             )
         )
+        if (scrap.returned > 0) {
+            scraps.insertMovement(
+                ScrapMovement(
+                    dateTime = dateTime,
+                    type = ScrapMovementType.SALE_IN,
+                    amperage = scrap.amperage,
+                    quantity = scrap.returned,
+                    saleId = saleId,
+                )
+            )
+        }
         saleId
     }
 
     /**
      * Edita uma venda. O custo unitário histórico é preservado.
-     * A diferença de quantidade é refletida no estoque.
+     * A diferença de quantidade é refletida no estoque, e a diferença de sucatas no estoque de sucatas.
      */
     suspend fun updateSale(
         saleId: Long,
@@ -179,6 +216,7 @@ class StoreRepository(private val db: AppDatabase) {
         unitPrice: Long,
         discount: Long,
         dateTime: Long,
+        scrap: ScrapInput = ScrapInput.NONE,
     ): Unit = db.withTransaction {
         val current = sales.getWithItems(saleId) ?: throw BusinessException("Venda não encontrada")
         if (current.sale.isCanceled) throw BusinessException("Venda cancelada não pode ser editada")
@@ -190,7 +228,9 @@ class StoreRepository(private val db: AppDatabase) {
             throw BusinessException("O produto desta venda foi excluído; a quantidade não pode ser alterada")
         }
         SaleCalculator.validate(unitPrice, quantity, discount, available)?.let { throw BusinessException(it) }
-        val totals = SaleCalculator.compute(unitPrice, quantity, discount, item.unitCost)
+        validateScrap(quantity, scrap)
+        val totals = SaleCalculator.compute(unitPrice, quantity, discount, item.unitCost, scrap.charge)
+        val now = System.currentTimeMillis()
 
         sales.updateItem(item.copy(quantity = quantity, unitPrice = unitPrice, subtotal = totals.grossAmount))
         sales.updateSale(
@@ -202,6 +242,10 @@ class StoreRepository(private val db: AppDatabase) {
                 finalAmount = totals.finalAmount,
                 totalCost = totals.totalCost,
                 grossProfit = totals.grossProfit,
+                scrapReturned = scrap.returned,
+                scrapAmperage = scrap.amperageOrNull,
+                scrapMissing = scrap.missing,
+                scrapCharge = scrap.charge,
             )
         )
         if (product != null && delta != 0) {
@@ -210,7 +254,7 @@ class StoreRepository(private val db: AppDatabase) {
             movements.insert(
                 StockMovement(
                     productId = product.id,
-                    dateTime = System.currentTimeMillis(),
+                    dateTime = now,
                     type = MovementType.SALE_EDIT,
                     quantity = -delta,
                     stockAfter = newStock,
@@ -218,9 +262,31 @@ class StoreRepository(private val db: AppDatabase) {
                 )
             )
         }
+        // Sucatas: desfaz a entrada anterior e registra a nova, se algo mudou.
+        val old = current.sale
+        val oldAmperage = old.scrapAmperage ?: 0
+        if (old.scrapReturned != scrap.returned || (scrap.returned > 0 && oldAmperage != scrap.amperage)) {
+            if (old.scrapReturned > 0 && oldAmperage > 0) {
+                removeScrap(oldAmperage, old.scrapReturned, ScrapMovementType.SALE_EDIT, saleId, now)
+            }
+            if (scrap.returned > 0) {
+                scraps.insertMovement(
+                    ScrapMovement(
+                        dateTime = now,
+                        type = ScrapMovementType.SALE_EDIT,
+                        amperage = scrap.amperage,
+                        quantity = scrap.returned,
+                        saleId = saleId,
+                    )
+                )
+            }
+        }
     }
 
-    /** Cancela a venda: devolve o estoque e a retira dos relatórios (status CANCELED). */
+    /**
+     * Cancela a venda: devolve o estoque, retira a venda dos relatórios (status CANCELED)
+     * e retira do estoque de sucatas as sucatas que vieram com ela (devolvidas ao cliente).
+     */
     suspend fun cancelSale(saleId: Long): Unit = db.withTransaction {
         val current = sales.getWithItems(saleId) ?: throw BusinessException("Venda não encontrada")
         if (current.sale.isCanceled) return@withTransaction
@@ -240,7 +306,97 @@ class StoreRepository(private val db: AppDatabase) {
                 )
             )
         }
-        sales.updateSale(current.sale.copy(status = SaleStatus.CANCELED, canceledAt = now))
+        val s = current.sale
+        if (s.scrapReturned > 0 && (s.scrapAmperage ?: 0) > 0) {
+            removeScrap(s.scrapAmperage ?: 0, s.scrapReturned, ScrapMovementType.SALE_CANCEL, saleId, now)
+        }
+        sales.updateSale(s.copy(status = SaleStatus.CANCELED, canceledAt = now))
+    }
+
+    private fun validateScrap(quantity: Int, scrap: ScrapInput) {
+        SaleCalculator.validateScrap(quantity, scrap.returned, scrap.missing, scrap.amperageOrNull, scrap.charge)
+            ?.let { throw BusinessException(it) }
+    }
+
+    /** Retira sucatas do estoque sem deixá-lo negativo (se já foram vendidas, retira o que houver). */
+    private suspend fun removeScrap(amperage: Int, quantity: Int, type: String, saleId: Long?, now: Long) {
+        val available = scraps.stockOf(amperage)
+        val toRemove = minOf(quantity, available)
+        if (toRemove > 0) {
+            scraps.insertMovement(
+                ScrapMovement(dateTime = now, type = type, amperage = amperage, quantity = -toRemove, saleId = saleId)
+            )
+        }
+    }
+
+    // ----------------------------------------------------------------- Sucatas
+
+    fun observeScrapPrices(): Flow<List<ScrapPrice>> = scraps.observePrices()
+    fun observeScrapStock(): Flow<List<ScrapStock>> = scraps.observeStock()
+    fun observeScrapMovements(limit: Int = 200): Flow<List<ScrapMovement>> = scraps.observeRecent(limit)
+    fun observeScrapSold(range: DateRange): Flow<ScrapSoldSummary> = scraps.observeSold(range.start, range.end)
+
+    /** Cadastra ou altera o valor de uma amperagem na tabela de sucatas. */
+    suspend fun saveScrapPrice(id: Long, amperage: Int, value: Long): Unit = db.withTransaction {
+        if (amperage <= 0) throw BusinessException("Informe a amperagem")
+        if (value < 0) throw BusinessException("Valor inválido")
+        val existing = scraps.findPrice(amperage)
+        if (existing != null && existing.id != id) throw BusinessException("A amperagem ${amperage}Ah já está na tabela")
+        if (id == 0L) scraps.insertPrice(ScrapPrice(amperage = amperage, value = value))
+        else scraps.updatePrice(ScrapPrice(id = id, amperage = amperage, value = value))
+    }
+
+    suspend fun deleteScrapPrice(id: Long) = scraps.deletePrice(id)
+
+    /** Entrada manual de sucatas (ex.: recebidas fora de uma venda). */
+    suspend fun addScrap(amperage: Int, quantity: Int, note: String?): Unit = db.withTransaction {
+        if (amperage <= 0) throw BusinessException("Informe a amperagem")
+        if (quantity <= 0) throw BusinessException("Informe a quantidade")
+        scraps.insertMovement(
+            ScrapMovement(
+                dateTime = System.currentTimeMillis(),
+                type = ScrapMovementType.MANUAL_IN,
+                amperage = amperage,
+                quantity = quantity,
+                note = note?.trim()?.ifEmpty { null },
+            )
+        )
+    }
+
+    /** Venda de sucatas (ex.: para o reciclador), com o valor recebido. */
+    suspend fun sellScrap(amperage: Int, quantity: Int, amountReceived: Long, note: String?): Unit = db.withTransaction {
+        if (amperage <= 0) throw BusinessException("Escolha a amperagem")
+        if (quantity <= 0) throw BusinessException("Informe a quantidade")
+        if (amountReceived < 0) throw BusinessException("Valor inválido")
+        val available = scraps.stockOf(amperage)
+        if (quantity > available) throw BusinessException("Estoque insuficiente de sucatas ${amperage}Ah (disponível: $available)")
+        scraps.insertMovement(
+            ScrapMovement(
+                dateTime = System.currentTimeMillis(),
+                type = ScrapMovementType.SOLD,
+                amperage = amperage,
+                quantity = -quantity,
+                amount = amountReceived,
+                note = note?.trim()?.ifEmpty { null },
+            )
+        )
+    }
+
+    /** Ajuste: define a quantidade real de sucatas de uma amperagem. */
+    suspend fun adjustScrap(amperage: Int, newQuantity: Int, note: String?): Unit = db.withTransaction {
+        if (amperage <= 0) throw BusinessException("Informe a amperagem")
+        if (newQuantity < 0) throw BusinessException("Quantidade inválida")
+        val delta = newQuantity - scraps.stockOf(amperage)
+        if (delta == 0) return@withTransaction
+        scraps.insertMovement(
+            ScrapMovement(
+                dateTime = System.currentTimeMillis(),
+                type = ScrapMovementType.ADJUSTMENT,
+                amperage = amperage,
+                quantity = delta,
+                note = note?.trim()?.ifEmpty { null },
+            )
+        )
     }
 
     companion object {

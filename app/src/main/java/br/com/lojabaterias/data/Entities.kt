@@ -25,6 +25,8 @@ data class Product(
     val stock: Int,
     @ColumnInfo(name = "min_stock") val minStock: Int = DEFAULT_MIN_STOCK,
     @ColumnInfo(name = "created_at") val createdAt: Long = System.currentTimeMillis(),
+    /** Amperagem (Ah). 0 = não informada. */
+    @ColumnInfo(name = "amperage", defaultValue = "0") val amperage: Int = 0,
 ) {
     val prices: PriceTable get() = PriceTable(pricePix, priceDebit, priceCredit)
     val isOutOfStock: Boolean get() = stock <= 0
@@ -55,9 +57,20 @@ data class Sale(
     @ColumnInfo(name = "gross_profit") val grossProfit: Long,
     val status: String = SaleStatus.ACTIVE,
     @ColumnInfo(name = "canceled_at") val canceledAt: Long? = null,
+    /** Sucatas deixadas pelo cliente nesta venda. */
+    @ColumnInfo(name = "scrap_returned", defaultValue = "0") val scrapReturned: Int = 0,
+    /** Amperagem das sucatas deixadas. */
+    @ColumnInfo(name = "scrap_amperage") val scrapAmperage: Int? = null,
+    /** Sucatas que o cliente não deixou. */
+    @ColumnInfo(name = "scrap_missing", defaultValue = "0") val scrapMissing: Int = 0,
+    /** Valor cobrado pelas sucatas faltantes (já incluído no valor final). */
+    @ColumnInfo(name = "scrap_charge", defaultValue = "0") val scrapCharge: Long = 0,
 ) {
     val payment: PaymentMethod get() = PaymentMethod.fromName(paymentMethod)
     val isCanceled: Boolean get() = status == SaleStatus.CANCELED
+
+    /** false para vendas registradas antes do controle de sucatas. */
+    val hasScrapInfo: Boolean get() = scrapReturned > 0 || scrapMissing > 0
 }
 
 @Entity(
@@ -130,6 +143,67 @@ data class StockMovement(
     val note: String? = null,
     /** Custo unitário informado na entrada (opcional). */
     @ColumnInfo(name = "unit_cost") val unitCost: Long? = null,
+)
+
+/** Valor de referência da sucata por amperagem. */
+@Entity(
+    tableName = "scrap_prices",
+    indices = [Index(value = ["amperage"], unique = true)],
+)
+data class ScrapPrice(
+    @PrimaryKey(autoGenerate = true) val id: Long = 0,
+    val amperage: Int,
+    /** Valor da sucata em centavos. */
+    val value: Long,
+)
+
+object ScrapMovementType {
+    const val SALE_IN = "SALE_IN"
+    const val MANUAL_IN = "MANUAL_IN"
+    const val SOLD = "SOLD"
+    const val ADJUSTMENT = "ADJUSTMENT"
+    const val SALE_EDIT = "SALE_EDIT"
+    const val SALE_CANCEL = "SALE_CANCEL"
+
+    fun label(type: String): String = when (type) {
+        SALE_IN -> "Recebida na venda"
+        MANUAL_IN -> "Entrada manual"
+        SOLD -> "Venda de sucatas"
+        ADJUSTMENT -> "Ajuste"
+        SALE_EDIT -> "Edição de venda"
+        SALE_CANCEL -> "Cancelamento de venda"
+        else -> type
+    }
+}
+
+/** Movimentação do estoque de sucatas. O estoque é a soma das quantidades por amperagem. */
+@Entity(
+    tableName = "scrap_movements",
+    indices = [Index("date_time"), Index("amperage"), Index("sale_id")],
+)
+data class ScrapMovement(
+    @PrimaryKey(autoGenerate = true) val id: Long = 0,
+    @ColumnInfo(name = "date_time") val dateTime: Long,
+    val type: String,
+    val amperage: Int,
+    /** Variação (+ entrada, − saída). */
+    val quantity: Int,
+    /** Valor recebido (venda de sucatas ao reciclador), em centavos. */
+    val amount: Long = 0,
+    @ColumnInfo(name = "sale_id") val saleId: Long? = null,
+    val note: String? = null,
+)
+
+/** Estoque de sucatas de uma amperagem. */
+data class ScrapStock(
+    val amperage: Int,
+    val quantity: Int,
+)
+
+/** Sucatas vendidas (ao reciclador) em um período. */
+data class ScrapSoldSummary(
+    val quantity: Int = 0,
+    val amount: Long = 0,
 )
 
 /** Totais agregados para o dashboard. */

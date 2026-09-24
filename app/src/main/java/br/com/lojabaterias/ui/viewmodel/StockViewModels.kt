@@ -6,6 +6,7 @@ import br.com.lojabaterias.data.BusinessException
 import br.com.lojabaterias.data.MovementWithModel
 import br.com.lojabaterias.data.Product
 import br.com.lojabaterias.data.StoreRepository
+import br.com.lojabaterias.domain.Scrap
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
@@ -92,6 +93,9 @@ data class ProductFormState(
     val priceCredit: Long = 0,
     val stock: String = "",
     val minStock: String = Product.DEFAULT_MIN_STOCK.toString(),
+    val amperage: String = "",
+    /** Se o usuário digitou a amperagem (senão ela é sugerida a partir do modelo). */
+    val amperageEdited: Boolean = false,
     val createdAt: Long = 0,
     val loading: Boolean = false,
     val saving: Boolean = false,
@@ -123,6 +127,8 @@ class ProductFormViewModel(private val repo: StoreRepository, productId: Long?) 
                         priceCredit = p.priceCredit,
                         stock = p.stock.toString(),
                         minStock = p.minStock.toString(),
+                        amperage = if (p.amperage > 0) p.amperage.toString() else "",
+                        amperageEdited = p.amperage > 0,
                         createdAt = p.createdAt,
                     )
                 }
@@ -131,6 +137,18 @@ class ProductFormViewModel(private val repo: StoreRepository, productId: Long?) 
     }
 
     fun update(transform: (ProductFormState) -> ProductFormState) = _state.update(transform)
+
+    /** Ao digitar o modelo, sugere a amperagem (ex.: BEP60D → 60), se ainda não foi informada. */
+    fun setModel(model: String) = _state.update { s ->
+        val m = model.uppercase().take(40)
+        if (s.amperageEdited) s.copy(model = m)
+        else s.copy(model = m, amperage = Scrap.guessAmperage(m)?.toString() ?: "")
+    }
+
+    fun setAmperage(text: String) = _state.update {
+        val digits = text.filter { c -> c.isDigit() }.take(3)
+        it.copy(amperage = digits, amperageEdited = digits.isNotEmpty())
+    }
 
     fun save() {
         val s = _state.value
@@ -152,6 +170,7 @@ class ProductFormViewModel(private val repo: StoreRepository, productId: Long?) 
                     priceCredit = s.priceCredit,
                     stock = s.stock.toIntOrNull() ?: 0,
                     minStock = s.minStock.toIntOrNull() ?: Product.DEFAULT_MIN_STOCK,
+                    amperage = s.amperage.toIntOrNull() ?: 0,
                     createdAt = if (s.isEdit) s.createdAt else System.currentTimeMillis(),
                 )
                 repo.saveProduct(product)

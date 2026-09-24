@@ -30,6 +30,7 @@ class BackupManager(private val db: AppDatabase) {
                     put("stock", p.stock)
                     put("minStock", p.minStock)
                     put("createdAt", p.createdAt)
+                    put("amperage", p.amperage)
                 })
             }
         })
@@ -46,6 +47,10 @@ class BackupManager(private val db: AppDatabase) {
                     put("grossProfit", s.grossProfit)
                     put("status", s.status)
                     s.canceledAt?.let { put("canceledAt", it) }
+                    put("scrapReturned", s.scrapReturned)
+                    s.scrapAmperage?.let { put("scrapAmperage", it) }
+                    put("scrapMissing", s.scrapMissing)
+                    put("scrapCharge", s.scrapCharge)
                 })
             }
         })
@@ -79,6 +84,30 @@ class BackupManager(private val db: AppDatabase) {
             }
         })
 
+        root.put("scrapPrices", JSONArray().apply {
+            db.scrapDao().getPrices().forEach { p ->
+                put(JSONObject().apply {
+                    put("id", p.id)
+                    put("amperage", p.amperage)
+                    put("value", p.value)
+                })
+            }
+        })
+        root.put("scrapMovements", JSONArray().apply {
+            db.scrapDao().getAllMovements().forEach { m ->
+                put(JSONObject().apply {
+                    put("id", m.id)
+                    put("dateTime", m.dateTime)
+                    put("type", m.type)
+                    put("amperage", m.amperage)
+                    put("quantity", m.quantity)
+                    put("amount", m.amount)
+                    m.saleId?.let { put("saleId", it) }
+                    m.note?.let { put("note", it) }
+                })
+            }
+        })
+
         output.bufferedWriter(Charsets.UTF_8).use { it.write(root.toString()) }
     }
 
@@ -103,6 +132,7 @@ class BackupManager(private val db: AppDatabase) {
                 stock = o.getInt("stock"),
                 minStock = o.optInt("minStock", Product.DEFAULT_MIN_STOCK),
                 createdAt = o.optLong("createdAt", System.currentTimeMillis()),
+                amperage = o.optInt("amperage", 0),
             )
         }
         val sales = root.getJSONArray("sales").objects().map { o ->
@@ -117,6 +147,10 @@ class BackupManager(private val db: AppDatabase) {
                 grossProfit = o.getLong("grossProfit"),
                 status = o.getString("status"),
                 canceledAt = if (o.has("canceledAt")) o.getLong("canceledAt") else null,
+                scrapReturned = o.optInt("scrapReturned", 0),
+                scrapAmperage = if (o.has("scrapAmperage")) o.getInt("scrapAmperage") else null,
+                scrapMissing = o.optInt("scrapMissing", 0),
+                scrapCharge = o.optLong("scrapCharge", 0),
             )
         }
         val items = root.getJSONArray("saleItems").objects().map { o ->
@@ -145,7 +179,26 @@ class BackupManager(private val db: AppDatabase) {
             )
         }
 
+        // Backups da versão 1 não têm sucatas: as listas ficam vazias.
+        val scrapPrices = root.optJSONArray("scrapPrices")?.objects().orEmpty().map { o ->
+            ScrapPrice(id = o.getLong("id"), amperage = o.getInt("amperage"), value = o.getLong("value"))
+        }
+        val scrapMovements = root.optJSONArray("scrapMovements")?.objects().orEmpty().map { o ->
+            ScrapMovement(
+                id = o.getLong("id"),
+                dateTime = o.getLong("dateTime"),
+                type = o.getString("type"),
+                amperage = o.getInt("amperage"),
+                quantity = o.getInt("quantity"),
+                amount = o.optLong("amount", 0),
+                saleId = if (o.has("saleId")) o.getLong("saleId") else null,
+                note = if (o.has("note")) o.getString("note") else null,
+            )
+        }
+
         db.withTransaction {
+            db.scrapDao().deleteAllMovements()
+            db.scrapDao().deleteAllPrices()
             db.saleDao().deleteAllItems()
             db.saleDao().deleteAllSales()
             db.movementDao().deleteAll()
@@ -154,6 +207,8 @@ class BackupManager(private val db: AppDatabase) {
             db.saleDao().insertSales(sales)
             db.saleDao().insertItems(items)
             db.movementDao().insertAll(movements)
+            db.scrapDao().insertPrices(scrapPrices)
+            db.scrapDao().insertMovements(scrapMovements)
         }
         return products.size to sales.size
     }
@@ -161,6 +216,6 @@ class BackupManager(private val db: AppDatabase) {
     private fun JSONArray.objects(): List<JSONObject> = (0 until length()).map { getJSONObject(it) }
 
     companion object {
-        const val FORMAT_VERSION = 1
+        const val FORMAT_VERSION = 2
     }
 }

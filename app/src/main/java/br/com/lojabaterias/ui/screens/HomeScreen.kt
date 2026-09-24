@@ -60,7 +60,7 @@ fun HomeScreen(
             TopAppBar(
                 title = {
                     Column {
-                        Text("Loja de Baterias")
+                        Text("Art das Baterias")
                         Text(
                             state.date.format(Periods.DATE),
                             style = MaterialTheme.typography.bodyMedium,

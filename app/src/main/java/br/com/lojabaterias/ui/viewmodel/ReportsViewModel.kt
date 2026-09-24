@@ -6,6 +6,7 @@ import br.com.lojabaterias.AppContainer
 import br.com.lojabaterias.data.ReportDocument
 import br.com.lojabaterias.data.ReportPdfWriter
 import br.com.lojabaterias.data.SaleWithItems
+import br.com.lojabaterias.data.ScrapPeriodSummary
 import br.com.lojabaterias.data.StoreRepository
 import br.com.lojabaterias.domain.PeriodType
 import br.com.lojabaterias.domain.Periods
@@ -36,6 +37,7 @@ data class ReportsState(
     val report: Report = Report.EMPTY,
     /** Vendas válidas do período (usadas no PDF). */
     val sales: List<SaleWithItems> = emptyList(),
+    val scrap: ScrapPeriodSummary = ScrapPeriodSummary(),
     val loading: Boolean = true,
 ) {
     val pdfFileName: String get() = Periods.reportFileName(selection.type, today, selection.offset)
@@ -52,14 +54,16 @@ class ReportsViewModel(private val container: AppContainer) : MessageViewModel()
 
     val state: StateFlow<ReportsState> = combine(selection, currentDateFlow()) { sel, today -> sel to today }
         .flatMapLatest { (sel, today) ->
-            repo.observeActiveSales(Periods.range(sel.type, today, sel.offset))
-                .map { sales ->
+            val range = Periods.range(sel.type, today, sel.offset)
+            combine(repo.observeActiveSales(range), repo.observeScrapSold(range)) { sales, sold -> sales to sold }
+                .map { (sales, sold) ->
                     ReportsState(
                         selection = sel,
                         today = today,
                         label = Periods.label(sel.type, today, sel.offset),
                         report = ReportCalculator.build(sales.map { StoreRepository.toReportSale(it) }),
                         sales = sales,
+                        scrap = ScrapPeriodSummary.from(sales, sold),
                         loading = false,
                     )
                 }
@@ -84,6 +88,7 @@ class ReportsViewModel(private val container: AppContainer) : MessageViewModel()
                     periodLabel = Periods.formalLabel(s.selection.type, s.today, s.selection.offset),
                     report = s.report,
                     sales = s.sales,
+                    scrap = s.scrap,
                 )
                 withContext(Dispatchers.IO) {
                     val out = container.app.contentResolver.openOutputStream(uri, "wt")

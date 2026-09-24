@@ -82,14 +82,14 @@ jobs:
           APK=$(find app/build/outputs/apk/release -name "*.apk" | head -n 1)
           if [ -z "$APK" ]; then echo "APK não encontrado"; exit 1; fi
           mkdir -p dist
-          cp "$APK" dist/loja-baterias.apk
+          cp "$APK" dist/art-das-baterias.apk
           ls -lh dist/
 
       - name: Publicar APK como Artifact
         uses: actions/upload-artifact@v4
         with:
-          name: loja-baterias
-          path: dist/loja-baterias.apk
+          name: art-das-baterias
+          path: dist/art-das-baterias.apk
           if-no-files-found: error
           retention-days: 30
 

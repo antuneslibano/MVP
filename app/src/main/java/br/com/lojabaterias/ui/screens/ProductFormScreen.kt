@@ -82,7 +82,7 @@ fun ProductFormScreen(productId: Long?, onDone: () -> Unit, onDeleted: () -> Uni
         ) {
             OutlinedTextField(
                 value = s.model,
-                onValueChange = { v -> vm.update { it.copy(model = v.uppercase().take(40)) } },
+                onValueChange = vm::setModel,
                 label = { Text("Modelo (ex.: M60GD)") },
                 singleLine = true,
                 keyboardOptions = KeyboardOptions(
@@ -90,6 +90,13 @@ fun ProductFormScreen(productId: Long?, onDone: () -> Unit, onDeleted: () -> Uni
                     imeAction = ImeAction.Next,
                 ),
                 modifier = Modifier.fillMaxWidth(),
+            )
+
+            IntField(
+                value = s.amperage,
+                onValueChange = vm::setAmperage,
+                label = "Amperagem (Ah)",
+                supportingText = "Usada para sugerir a sucata e o valor cobrado quando o cliente não deixa sucata",
             )
 
             SectionTitle("Custo e preços")

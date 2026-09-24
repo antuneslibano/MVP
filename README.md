@@ -1,4 +1,4 @@
-# Loja de Baterias
+# Art das Baterias
 
 Aplicativo Android simples, rápido e offline para gestão de uma loja de baterias automotivas:
 vendas, estoque, faturamento, custo e lucro por dia, semana e mês.
@@ -9,8 +9,8 @@ vendas, estoque, faturamento, custo e lucro por dia, semana e mês.
 2. Selecione o workflow **Build APK**.
 3. Clique em **Run workflow** (ou apenas faça um push na branch `main`).
 4. Aguarde a execução terminar (em torno de 5 a 8 minutos).
-5. Abra a execução concluída e, em **Artifacts**, baixe **loja-baterias**.
-6. Descompacte o `.zip` baixado: dentro está o `loja-baterias.apk`.
+5. Abra a execução concluída e, em **Artifacts**, baixe **art-das-baterias**.
+6. Descompacte o `.zip` baixado: dentro está o `art-das-baterias.apk`.
 7. Envie o APK para o celular (WhatsApp, Drive, cabo USB…) e toque nele para instalar.
    O Android pode pedir para permitir "instalar apps desta fonte".
 
@@ -36,6 +36,16 @@ pois todos os APKs são assinados com a mesma chave (`app/signing/loja-baterias.
   faturamento e com maior lucro, e vendas por forma de pagamento.
   O botão **Baixar PDF** gera o relatório do período selecionado (resumo, rankings,
   formas de pagamento e lista de vendas) e salva onde você escolher.
+- **Sucatas** (menu ☰ no rodapé):
+  - Na venda, informe se o cliente **deixou a sucata** (e a amperagem dela) ou **não deixou**.
+    Sem sucata, o app sugere cobrar o valor da tabela conforme a amperagem da bateria vendida
+    (valor editável; entra no faturamento). Vendas com várias baterias aceitam sucata parcial.
+  - Estoque de sucatas por amperagem, valor estimado, entrada manual, venda de sucatas
+    (ex.: para o reciclador, com o valor recebido), ajuste e histórico.
+  - **Tabela de sucatas**: valor da sucata por amperagem.
+  - Cancelar uma venda retira do estoque a sucata que veio com ela.
+- **Menu ☰**: acesso a todas as áreas (Início, Nova venda, Vendas, Estoque, Sucatas, Relatórios,
+  Movimentações, Tabela de sucatas e Backup).
 - **Backup**: exporta/importa todos os dados em um arquivo JSON (ícone de engrenagem na tela inicial).
 
 ### Regras de cálculo
@@ -78,6 +88,11 @@ app/src/main/java/br/com/lojabaterias/
 - `sales`: id, data/hora, forma de pagamento, valor bruto, desconto, valor final, custo total, lucro bruto, status
 - `sale_items`: venda, produto, modelo no momento da venda, quantidade, preço unitário, custo unitário histórico, subtotal
 - `stock_movements`: produto, data/hora, tipo (inicial, entrada, ajuste, venda, edição, cancelamento), quantidade, saldo
+- `scrap_prices`: amperagem (única) e valor da sucata
+- `scrap_movements`: data/hora, tipo (recebida na venda, entrada, venda, ajuste, edição, cancelamento), amperagem, quantidade, valor recebido
+
+Atualizações do banco são feitas por **migrações** que preservam os dados (testadas automaticamente
+no GitHub Actions). Os esquemas de cada versão ficam em `app/schemas/`.
 
 ## GitHub Actions
 
@@ -88,7 +103,7 @@ em pull requests e manualmente (`workflow_dispatch`). Ele:
 2. configura Java 17, Android SDK e Gradle;
 3. executa os testes unitários;
 4. compila o APK de release assinado;
-5. publica `loja-baterias.apk` como Artifact.
+5. publica `art-das-baterias.apk` como Artifact.
 
 ### Assinatura própria (opcional)
 

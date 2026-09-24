@@ -67,7 +67,7 @@ fun BackupScreen(onBack: () -> Unit) {
                         enabled = !busy,
                         onClick = {
                             val stamp = LocalDateTime.now().format(DateTimeFormatter.ofPattern("yyyy-MM-dd_HHmm"))
-                            exportLauncher.launch("backup-loja-baterias_$stamp.json")
+                            exportLauncher.launch("backup-art-das-baterias_$stamp.json")
                         },
                     )
                 }
