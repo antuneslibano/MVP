@@ -67,6 +67,16 @@ jobs:
           SIGNING_KEY_ALIAS: ${{ secrets.SIGNING_KEY_ALIAS }}
           SIGNING_KEY_PASSWORD: ${{ secrets.SIGNING_KEY_PASSWORD }}
 
+      - name: Esquemas do banco de dados (Room)
+        if: always()
+        run: |
+          for f in $(find app/schemas -name "*.json" 2>/dev/null | sort); do
+            echo "===== SCHEMA $f ====="
+            cat "$f"
+            echo
+            echo "===== END SCHEMA ====="
+          done
+
       - name: Renomear APK
         run: |
           APK=$(find app/build/outputs/apk/release -name "*.apk" | head -n 1)
