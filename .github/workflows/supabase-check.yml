@@ -24,7 +24,8 @@ jobs:
 
           echo "== Tabelas (acesso anônimo deve ser BLOQUEADO) =="
           for t in products sales sale_items stock_movements scrap_prices scrap_movements deletions; do
-            body=$(curl -sS "$URL/rest/v1/$t?select=id&limit=1" -H "apikey: $KEY" -H "Authorization: Bearer $KEY" -w "\n%{http_code}")
+            col=id; [ "$t" = "deletions" ] && col=record_id
+            body=$(curl -sS "$URL/rest/v1/$t?select=$col&limit=1" -H "apikey: $KEY" -H "Authorization: Bearer $KEY" -w "\n%{http_code}")
             code=$(echo "$body" | tail -n1); text=$(echo "$body" | head -n -1)
             if echo "$text" | grep -qiE "does not exist|Could not find the table"; then
               echo "FALTANDO: tabela $t não existe (rode supabase/schema.sql)"; ok=0
