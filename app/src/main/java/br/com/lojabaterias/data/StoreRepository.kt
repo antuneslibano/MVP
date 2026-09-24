@@ -80,8 +80,10 @@ class StoreRepository(private val db: AppDatabase, private val onChange: () -> U
         if (existing != null && existing.id != product.id) {
             throw BusinessException("Já existe uma bateria com o modelo $model")
         }
-        if (product.id == 0L) {
-            val id = products.insert(product.copy(id = IdGenerator.next(), model = model, updatedAt = now(), dirty = true))
+        val current = if (product.id == 0L) null else products.getById(product.id)
+        if (current == null) {
+            val newId = if (product.id == 0L) IdGenerator.next() else product.id
+            val id = products.insert(product.copy(id = newId, model = model, updatedAt = now(), dirty = true))
             if (product.stock > 0) {
                 movements.insert(
                     StockMovement(
@@ -96,7 +98,6 @@ class StoreRepository(private val db: AppDatabase, private val onChange: () -> U
             }
             id
         } else {
-            val current = products.getById(product.id) ?: throw BusinessException("Produto não encontrado")
             // O estoque é alterado apenas por entrada/ajuste/vendas.
             products.update(
                 product.copy(
