@@ -40,6 +40,8 @@ data class SalesState(
     val sales: List<SaleWithItems> = emptyList(),
     val count: Int = 0,
     val units: Int = 0,
+    /** Baterias vendidas por modelo no filtro atual (ex.: 3× M60GD, 2× Z60D). */
+    val modelCounts: List<Pair<String, Int>> = emptyList(),
     val revenue: Long = 0,
     val profit: Long = 0,
     val loading: Boolean = true,
@@ -64,7 +66,8 @@ class SalesViewModel(repo: StoreRepository) : ViewModel() {
         val query = f.model.trim()
         val filtered = list.filter { s ->
             (f.payment == null || s.sale.payment == f.payment) &&
-                (query.isEmpty() || s.items.any { it.modelSnapshot.contains(query, ignoreCase = true) })
+                (query.isEmpty() || s.items.any { it.modelSnapshot.contains(query, ignoreCase = true) } ||
+                    br.com.lojabaterias.domain.WarrantyCode.matches(s.sale.id, query))
         }
         val valid = filtered.filter { !it.sale.isCanceled }
         SalesState(
@@ -72,6 +75,10 @@ class SalesViewModel(repo: StoreRepository) : ViewModel() {
             sales = filtered,
             count = valid.size,
             units = valid.sumOf { it.quantity },
+            modelCounts = valid.flatMap { it.items }
+                .groupBy { it.modelSnapshot }
+                .map { (model, items) -> model to items.sumOf { it.quantity } }
+                .sortedWith(compareByDescending<Pair<String, Int>> { it.second }.thenBy { it.first }),
             revenue = valid.sumOf { it.sale.finalAmount },
             profit = valid.sumOf { it.sale.grossProfit },
             loading = false,

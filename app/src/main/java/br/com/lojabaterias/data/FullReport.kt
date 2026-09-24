@@ -39,6 +39,35 @@ data class StockPeriodSummary(
     val soldUnits: Int = 0,
 )
 
+/** Baterias na carga: recebidas no período e situação atual. */
+data class ChargePeriodSummary(
+    val received: Int = 0,
+    val charged: Long = 0,
+    val paid: Long = 0,
+    val unpaid: Long = 0,
+    /** Situação atual (independe do período). */
+    val openNow: Int = 0,
+    val loansOutNow: Int = 0,
+    val unpaidTotalNow: Long = 0,
+)
+
+/** Garantias: atendimentos do período e pendências atuais. */
+data class WarrantyPeriodSummary(
+    val attended: Int = 0,
+    val noDefect: Int = 0,
+    val exchanged: Int = 0,
+    val differenceTotal: Long = 0,
+    /** Custo das baterias novas entregues nas trocas. */
+    val replacementCost: Long = 0,
+    val replacedByFactory: Int = 0,
+    val denied: Int = 0,
+    val usedSoldValue: Long = 0,
+    // Situação atual
+    val awaitingPickupNow: Int = 0,
+    val atFactoryNow: Int = 0,
+    val usedInShopNow: Int = 0,
+)
+
 /** Relatório completo de um período: vendas, estoque e sucatas. */
 data class FullReport(
     val sales: Report = Report.EMPTY,
@@ -55,6 +84,11 @@ data class FullReport(
     val scrap: ScrapPeriodSummary = ScrapPeriodSummary(),
     val scrapStock: List<ScrapStockRow> = emptyList(),
     val scrapMovements: List<ScrapMovement> = emptyList(),
+    // Carga e garantias
+    val charges: ChargePeriodSummary = ChargePeriodSummary(),
+    val chargesInPeriod: List<ChargeService> = emptyList(),
+    val warranty: WarrantyPeriodSummary = WarrantyPeriodSummary(),
+    val warrantiesInPeriod: List<WarrantyClaim> = emptyList(),
 ) {
     val canceledAmount: Long get() = canceledSales.sumOf { it.sale.finalAmount }
     val stockUnits: Int get() = stockRows.sumOf { it.stock.coerceAtLeast(0) }
@@ -73,7 +107,38 @@ data class FullReport(
             products: List<Product>,
             scrapStock: List<ScrapStock>,
             scrapPrices: Map<Int, Long>,
+            allCharges: List<ChargeService> = emptyList(),
+            allWarranties: List<WarrantyClaim> = emptyList(),
+            range: br.com.lojabaterias.domain.DateRange? = null,
         ): FullReport {
+            fun inRange(t: Long?) = t != null && (range == null || t in range)
+            val periodCharges = allCharges.filter { inRange(it.receivedAt) }
+            val openCharges = allCharges.filter { it.isOpen }
+            val periodClaims = allWarranties.filter { inRange(it.createdAt) }
+            val exchanged = periodClaims.filter { it.defective }
+            val chargeSummary = ChargePeriodSummary(
+                received = periodCharges.size,
+                charged = periodCharges.sumOf { it.price },
+                paid = periodCharges.filter { it.paid }.sumOf { it.price },
+                unpaid = periodCharges.filter { !it.paid }.sumOf { it.price },
+                openNow = openCharges.size,
+                loansOutNow = openCharges.count { it.hasLoan },
+                unpaidTotalNow = allCharges.filter { !it.paid }.sumOf { it.price },
+            )
+            val warrantySummary = WarrantyPeriodSummary(
+                attended = periodClaims.size,
+                noDefect = periodClaims.count { !it.defective },
+                exchanged = exchanged.size,
+                differenceTotal = exchanged.sumOf { it.differenceAmount },
+                replacementCost = exchanged.sumOf { it.replacementCost },
+                replacedByFactory = allWarranties.count { it.status == WarrantyStatus.REPLACED && inRange(it.resolvedAt) },
+                denied = allWarranties.count { it.status == WarrantyStatus.DENIED && inRange(it.resolvedAt) },
+                usedSoldValue = allWarranties.filter { it.usedDestination == UsedDestination.SOLD && inRange(it.usedDestinationAt) }
+                    .sumOf { it.usedSaleValue },
+                awaitingPickupNow = allWarranties.count { it.status == WarrantyStatus.AWAITING_PICKUP },
+                atFactoryNow = allWarranties.count { it.status == WarrantyStatus.AT_FACTORY },
+                usedInShopNow = allWarranties.count { it.isUsedInShop },
+            )
             val active = salesInPeriod.filter { !it.sale.isCanceled }
             val canceled = salesInPeriod.filter { it.sale.isCanceled }
             val report = ReportCalculator.build(active.map { StoreRepository.toReportSale(it) })
@@ -101,6 +166,10 @@ data class FullReport(
                 scrapStock = scrapStock.filter { it.quantity != 0 }
                     .map { ScrapStockRow(it.amperage, it.quantity, scrapPrices[it.amperage]) },
                 scrapMovements = scrapMovements,
+                charges = chargeSummary,
+                chargesInPeriod = periodCharges,
+                warranty = warrantySummary,
+                warrantiesInPeriod = periodClaims,
             )
         }
     }

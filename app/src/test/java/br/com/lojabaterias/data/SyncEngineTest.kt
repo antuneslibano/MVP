@@ -51,7 +51,7 @@ private class FakeCloud : RemoteApi {
     override suspend fun pull(token: String, since: String?): JSONObject {
         val s = since?.toLong() ?: -1L
         val result = JSONObject().put("now", clock.toString())
-        for (t in listOf("products", "sales", "sale_items", "stock_movements", "scrap_prices", "scrap_movements")) {
+        for (t in listOf("products", "sales", "sale_items", "stock_movements", "scrap_prices", "scrap_movements", "charge_services", "warranty_claims")) {
             result.put(t, JSONArray(tables[t].orEmpty().values.filter { it.getLong("_v") > s }))
         }
         result.put("deletions", JSONArray(deletions.values.filter { it.getLong("_v") > s }))
@@ -184,5 +184,31 @@ class SyncEngineTest {
         b.sync()
         assertEquals(3, b.scrap(60))
         assertEquals(5_000L, b.repo.observeScrapPrices().first().single().value)
+    }
+
+    @Test
+    fun chargesAndWarranties_sync() = runBlocking {
+        val a = Phone()
+        val b = Phone()
+        val id = a.newProduct(stock = 5)
+        a.sync()
+        b.sync()
+        // B empresta uma bateria; A vê a carga e o estoque baixo
+        val chargeId = b.repo.createCharge("Carlos", "11999990000", "", 1_000, 2_500, false, null, id, null)
+        b.sync()
+        a.sync()
+        assertEquals(4, a.product("BEP60D").stock)
+        assertEquals("Carlos", a.repo.getCharge(chargeId)!!.customerName)
+        // A registra uma troca em garantia; B vê a pendência
+        val w = a.repo.createWarranty(null, "", id, "BEP60D", true, id, 0, null, null)
+        a.sync()
+        b.sync()
+        assertEquals(3, b.product("BEP60D").stock)
+        assertEquals(br.com.lojabaterias.data.WarrantyStatus.AWAITING_PICKUP, b.repo.observeWarranty(w).first()!!.status)
+        // B entrega a carga; A vê a devolução do empréstimo
+        b.repo.deliverCharge(chargeId, null)
+        b.sync()
+        a.sync()
+        assertEquals(4, a.product("BEP60D").stock)
     }
 }

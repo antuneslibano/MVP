@@ -7,6 +7,8 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.List
 import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.Build
+import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.Home
 import androidx.compose.material.icons.filled.Menu
@@ -40,6 +42,13 @@ import androidx.navigation.compose.rememberNavController
 import androidx.navigation.navArgument
 import br.com.lojabaterias.ui.components.AppIcons
 import br.com.lojabaterias.ui.screens.BackupScreen
+import br.com.lojabaterias.ui.screens.ChargeDetailScreen
+import br.com.lojabaterias.ui.screens.ChargeFormScreen
+import br.com.lojabaterias.ui.screens.ChargesScreen
+import br.com.lojabaterias.ui.screens.WarrantiesScreen
+import br.com.lojabaterias.ui.screens.WarrantyDetailScreen
+import br.com.lojabaterias.ui.screens.WarrantyFormScreen
+import br.com.lojabaterias.ui.screens.WarrantySalePickerScreen
 import br.com.lojabaterias.ui.screens.HomeScreen
 import br.com.lojabaterias.ui.screens.MovementsScreen
 import br.com.lojabaterias.ui.screens.ProductDetailScreen
@@ -67,6 +76,19 @@ object Routes {
     const val BACKUP = "backup"
     const val SCRAPS = "scraps"
     const val SCRAP_PRICES = "scrapprices"
+    const val CHARGES = "charges"
+    const val CHARGE_NEW = "chargenew"
+    const val CHARGE_EDIT = "chargeedit/{id}"
+    const val CHARGE_DETAIL = "chargedetail/{id}"
+    const val WARRANTIES = "warranties"
+    const val WARRANTY_PICK = "warrantypick"
+    const val WARRANTY_NEW = "warrantynew?saleId={saleId}"
+    const val WARRANTY_DETAIL = "warrantydetail/{id}"
+
+    fun chargeEdit(id: Long) = "chargeedit/$id"
+    fun chargeDetail(id: Long) = "chargedetail/$id"
+    fun warrantyNew(saleId: Long? = null) = if (saleId == null) "warrantynew" else "warrantynew?saleId=$saleId"
+    fun warrantyDetail(id: Long) = "warrantydetail/$id"
 
     fun newSale(productId: Long? = null) = if (productId == null) "newsale" else "newsale?productId=$productId"
     fun saleDetail(id: Long) = "saledetail/$id"
@@ -85,7 +107,7 @@ private val topLevel = listOf(
 )
 
 /** Telas principais que exibem a barra inferior mas ficam no menu (não têm botão próprio). */
-private val menuOnlyTopLevel = setOf(Routes.SCRAPS)
+private val menuOnlyTopLevel = setOf(Routes.SCRAPS, Routes.CHARGES, Routes.WARRANTIES)
 
 private data class MenuEntry(val label: String, val icon: ImageVector, val route: String, val topLevel: Boolean)
 
@@ -94,6 +116,8 @@ private val menuEntries = listOf(
     MenuEntry("Nova venda", Icons.Filled.Add, Routes.newSale(), false),
     MenuEntry("Vendas", Icons.Filled.ShoppingCart, Routes.SALES, true),
     MenuEntry("Estoque de baterias", AppIcons.Battery, Routes.STOCK, true),
+    MenuEntry("Baterias na carga", Icons.Filled.Build, Routes.CHARGES, true),
+    MenuEntry("Garantias", Icons.Filled.CheckCircle, Routes.WARRANTIES, true),
     MenuEntry("Sucatas", Icons.Filled.Refresh, Routes.SCRAPS, true),
     MenuEntry("Relatórios", AppIcons.BarChart, Routes.REPORTS, true),
     MenuEntry("Movimentações de estoque", Icons.AutoMirrored.Filled.List, Routes.MOVEMENTS, false),
@@ -148,6 +172,8 @@ fun LojaNavHost() {
                     onOpenSale = { nav.navigate(Routes.saleDetail(it)) },
                     onSeeAllSales = { nav.navigateTopLevel(Routes.SALES) },
                     onBackup = { nav.navigate(Routes.BACKUP) },
+                    onCharges = { nav.navigateTopLevel(Routes.CHARGES) },
+                    onWarranties = { nav.navigateTopLevel(Routes.WARRANTIES) },
                 )
             }
             composable(Routes.SALES) {
@@ -183,6 +209,8 @@ fun LojaNavHost() {
                     saleId = id,
                     onEdit = { nav.navigate(Routes.saleEdit(id)) },
                     onBack = { nav.popBackStack() },
+                    onWarranty = { nav.navigate(Routes.warrantyNew(id)) },
+                    onOpenWarranty = { nav.navigate(Routes.warrantyDetail(it)) },
                 )
             }
             composable(Routes.PRODUCT_NEW) {
@@ -211,6 +239,42 @@ fun LojaNavHost() {
             }
             composable(Routes.BACKUP) {
                 BackupScreen(onBack = { nav.popBackStack() })
+            }
+            composable(Routes.CHARGES) {
+                ChargesScreen(onNew = { nav.navigate(Routes.CHARGE_NEW) }, onOpen = { nav.navigate(Routes.chargeDetail(it)) })
+            }
+            composable(Routes.CHARGE_NEW) {
+                ChargeFormScreen(chargeId = null, onDone = { nav.popBackStack() }, onBack = { nav.popBackStack() })
+            }
+            composable(Routes.CHARGE_EDIT, arguments = listOf(navArgument("id") { type = NavType.LongType })) { entry ->
+                val id = entry.arguments?.getLong("id") ?: 0L
+                ChargeFormScreen(chargeId = id, onDone = { nav.popBackStack() }, onBack = { nav.popBackStack() })
+            }
+            composable(Routes.CHARGE_DETAIL, arguments = listOf(navArgument("id") { type = NavType.LongType })) { entry ->
+                val id = entry.arguments?.getLong("id") ?: 0L
+                ChargeDetailScreen(chargeId = id, onEdit = { nav.navigate(Routes.chargeEdit(id)) }, onBack = { nav.popBackStack() })
+            }
+            composable(Routes.WARRANTIES) {
+                WarrantiesScreen(onNew = { nav.navigate(Routes.WARRANTY_PICK) }, onOpen = { nav.navigate(Routes.warrantyDetail(it)) })
+            }
+            composable(Routes.WARRANTY_PICK) {
+                WarrantySalePickerScreen(
+                    onPickSale = { nav.navigate(Routes.warrantyNew(it)) },
+                    onNoSale = { nav.navigate(Routes.warrantyNew()) },
+                    onBack = { nav.popBackStack() },
+                )
+            }
+            composable(
+                Routes.WARRANTY_NEW,
+                arguments = listOf(navArgument("saleId") { type = NavType.LongType; defaultValue = -1L }),
+            ) { entry ->
+                val saleId = entry.arguments?.getLong("saleId")?.takeIf { it > 0 }
+                val finish: () -> Unit = { if (!nav.popBackStack(Routes.WARRANTY_PICK, inclusive = true)) nav.popBackStack() }
+                WarrantyFormScreen(saleId = saleId, onDone = finish, onBack = { nav.popBackStack() })
+            }
+            composable(Routes.WARRANTY_DETAIL, arguments = listOf(navArgument("id") { type = NavType.LongType })) { entry ->
+                val id = entry.arguments?.getLong("id") ?: 0L
+                WarrantyDetailScreen(id = id, onOpenSale = { nav.navigate(Routes.saleDetail(it)) }, onBack = { nav.popBackStack() })
             }
             composable(Routes.SCRAPS) {
                 ScrapsScreen(onPriceTable = { nav.navigate(Routes.SCRAP_PRICES) })

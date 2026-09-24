@@ -1,11 +1,13 @@
 package br.com.lojabaterias.data.sync
 
+import br.com.lojabaterias.data.ChargeService
 import br.com.lojabaterias.data.Product
 import br.com.lojabaterias.data.Sale
 import br.com.lojabaterias.data.SaleItem
 import br.com.lojabaterias.data.ScrapMovement
 import br.com.lojabaterias.data.ScrapPrice
 import br.com.lojabaterias.data.StockMovement
+import br.com.lojabaterias.data.WarrantyClaim
 import org.json.JSONObject
 
 /** Conversão entre as entidades locais e as linhas das tabelas na nuvem (mesmos nomes de colunas). */
@@ -131,6 +133,82 @@ object RemoteMapper {
         quantity = o.getInt("quantity"),
         amount = o.optLong("amount", 0),
         saleId = o.longOrNull("sale_id"),
+        note = o.stringOrNull("note"),
+        updatedAt = o.optLong("updated_at", 0),
+        dirty = false,
+    )
+
+    fun toJson(c: ChargeService) = JSONObject().apply {
+        put("id", c.id); put("customer_name", c.customerName); put("phone", c.phone)
+        put("battery_description", c.batteryDescription); put("received_at", c.receivedAt); put("price", c.price)
+        put("paid", c.paid); put("paid_at", c.paidAt.orNull()); put("payment_method", c.paymentMethod.orNull())
+        put("loan_product_id", c.loanProductId.orNull()); put("loan_model", c.loanModel.orNull())
+        put("loan_movement_id", c.loanMovementId.orNull()); put("loan_return_movement_id", c.loanReturnMovementId.orNull())
+        put("status", c.status); put("delivered_at", c.deliveredAt.orNull()); put("note", c.note.orNull())
+        put("updated_at", c.updatedAt)
+    }
+
+    fun charge(o: JSONObject) = ChargeService(
+        id = o.getLong("id"),
+        customerName = o.getString("customer_name"),
+        phone = o.optString("phone", ""),
+        batteryDescription = o.optString("battery_description", ""),
+        receivedAt = o.getLong("received_at"),
+        price = o.getLong("price"),
+        paid = o.optBoolean("paid", false),
+        paidAt = o.longOrNull("paid_at"),
+        paymentMethod = o.stringOrNull("payment_method"),
+        loanProductId = o.longOrNull("loan_product_id"),
+        loanModel = o.stringOrNull("loan_model"),
+        loanMovementId = o.longOrNull("loan_movement_id"),
+        loanReturnMovementId = o.longOrNull("loan_return_movement_id"),
+        status = o.getString("status"),
+        deliveredAt = o.longOrNull("delivered_at"),
+        note = o.stringOrNull("note"),
+        updatedAt = o.optLong("updated_at", 0),
+        dirty = false,
+    )
+
+    fun toJson(w: WarrantyClaim) = JSONObject().apply {
+        put("id", w.id); put("sale_id", w.saleId.orNull()); put("created_at", w.createdAt)
+        put("customer_name", w.customerName); put("returned_product_id", w.returnedProductId.orNull())
+        put("returned_model", w.returnedModel); put("defective", w.defective)
+        put("replacement_product_id", w.replacementProductId.orNull()); put("replacement_model", w.replacementModel.orNull())
+        put("replacement_cost", w.replacementCost); put("out_movement_id", w.outMovementId.orNull())
+        put("difference_amount", w.differenceAmount); put("difference_method", w.differenceMethod.orNull())
+        put("status", w.status); put("collected_at", w.collectedAt.orNull()); put("resolved_at", w.resolvedAt.orNull())
+        put("factory_product_id", w.factoryProductId.orNull()); put("factory_model", w.factoryModel.orNull())
+        put("in_movement_id", w.inMovementId.orNull()); put("refusal_notes", w.refusalNotes.orNull())
+        put("used_destination", w.usedDestination.orNull()); put("used_destination_at", w.usedDestinationAt.orNull())
+        put("used_sale_value", w.usedSaleValue); put("scrap_movement_id", w.scrapMovementId.orNull())
+        put("note", w.note.orNull()); put("updated_at", w.updatedAt)
+    }
+
+    fun warranty(o: JSONObject) = WarrantyClaim(
+        id = o.getLong("id"),
+        saleId = o.longOrNull("sale_id"),
+        createdAt = o.getLong("created_at"),
+        customerName = o.optString("customer_name", ""),
+        returnedProductId = o.longOrNull("returned_product_id"),
+        returnedModel = o.getString("returned_model"),
+        defective = o.optBoolean("defective", false),
+        replacementProductId = o.longOrNull("replacement_product_id"),
+        replacementModel = o.stringOrNull("replacement_model"),
+        replacementCost = o.optLong("replacement_cost", 0),
+        outMovementId = o.longOrNull("out_movement_id"),
+        differenceAmount = o.optLong("difference_amount", 0),
+        differenceMethod = o.stringOrNull("difference_method"),
+        status = o.getString("status"),
+        collectedAt = o.longOrNull("collected_at"),
+        resolvedAt = o.longOrNull("resolved_at"),
+        factoryProductId = o.longOrNull("factory_product_id"),
+        factoryModel = o.stringOrNull("factory_model"),
+        inMovementId = o.longOrNull("in_movement_id"),
+        refusalNotes = o.stringOrNull("refusal_notes"),
+        usedDestination = o.stringOrNull("used_destination"),
+        usedDestinationAt = o.longOrNull("used_destination_at"),
+        usedSaleValue = o.optLong("used_sale_value", 0),
+        scrapMovementId = o.longOrNull("scrap_movement_id"),
         note = o.stringOrNull("note"),
         updatedAt = o.optLong("updated_at", 0),
         dirty = false,

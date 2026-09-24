@@ -6,6 +6,7 @@ import br.com.lojabaterias.data.BackupManager
 import br.com.lojabaterias.data.StoreRepository
 import br.com.lojabaterias.data.sync.SupabaseApi
 import br.com.lojabaterias.data.sync.SyncManager
+import br.com.lojabaterias.update.AppUpdater
 
 class LojaApp : Application() {
     lateinit var container: AppContainer
@@ -32,5 +33,6 @@ class AppContainer(val app: Application) {
 
     /** Toda alteração local dispara a sincronização. */
     val repository: StoreRepository by lazy { StoreRepository(database) { syncManager.requestSync() } }
+    val updater: AppUpdater by lazy { AppUpdater(app) }
     val backupManager: BackupManager by lazy { BackupManager(database) { syncManager.requestSync() } }
 }

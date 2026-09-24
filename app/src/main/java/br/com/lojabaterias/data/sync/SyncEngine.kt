@@ -91,6 +91,16 @@ class SyncEngine(
             list.forEach { dao.cleanScrapMovement(it.id, it.updatedAt) }
             count += list.size
         }
+        dao.dirtyCharges().let { list ->
+            send(token, SyncTables.CHARGES, list.map { RemoteMapper.toJson(it) })
+            list.forEach { dao.cleanCharge(it.id, it.updatedAt) }
+            count += list.size
+        }
+        dao.dirtyWarranties().let { list ->
+            send(token, SyncTables.WARRANTIES, list.map { RemoteMapper.toJson(it) })
+            list.forEach { dao.cleanWarranty(it.id, it.updatedAt) }
+            count += list.size
+        }
         val tombstones = dao.tombstones()
         if (tombstones.isNotEmpty()) {
             send(
@@ -177,6 +187,22 @@ class SyncEngine(
                     count++
                 }
             }
+            data.rows(SyncTables.CHARGES).forEach { o ->
+                val r = RemoteMapper.charge(o)
+                val local = dao.charge(r.id)
+                if (local == null || !local.dirty || local.updatedAt <= r.updatedAt) {
+                    dao.upsertCharge(r)
+                    count++
+                }
+            }
+            data.rows(SyncTables.WARRANTIES).forEach { o ->
+                val r = RemoteMapper.warranty(o)
+                val local = dao.warranty(r.id)
+                if (local == null || !local.dirty || local.updatedAt <= r.updatedAt) {
+                    dao.upsertWarranty(r)
+                    count++
+                }
+            }
             data.rows(DELETIONS).forEach { o ->
                 val id = o.getLong("record_id")
                 when (o.getString("table_name")) {
@@ -186,6 +212,8 @@ class SyncEngine(
                     SyncTables.STOCK_MOVEMENTS -> dao.deleteStockMovement(id)
                     SyncTables.SCRAP_PRICES -> dao.deleteScrapPrice(id)
                     SyncTables.SCRAP_MOVEMENTS -> dao.deleteScrapMovement(id)
+                    SyncTables.CHARGES -> dao.deleteCharge(id)
+                    SyncTables.WARRANTIES -> dao.deleteWarranty(id)
                 }
                 count++
             }
@@ -206,6 +234,7 @@ class SyncEngine(
         private val TABLES = listOf(
             SyncTables.PRODUCTS, SyncTables.SALES, SyncTables.SALE_ITEMS,
             SyncTables.STOCK_MOVEMENTS, SyncTables.SCRAP_PRICES, SyncTables.SCRAP_MOVEMENTS,
+            SyncTables.CHARGES, SyncTables.WARRANTIES,
         )
     }
 }

@@ -159,6 +159,8 @@ class SyncManager(
         mutex.withLock {
             val dao = db.syncDao()
             db.withTransaction {
+                dao.wipeCharges()
+                dao.wipeWarranties()
                 dao.wipeScrapMovements()
                 dao.wipeScrapPrices()
                 dao.wipeStockMovements()

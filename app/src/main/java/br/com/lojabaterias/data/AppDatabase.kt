@@ -16,8 +16,10 @@ import androidx.sqlite.db.SupportSQLiteDatabase
         ScrapPrice::class,
         ScrapMovement::class,
         Tombstone::class,
+        ChargeService::class,
+        WarrantyClaim::class,
     ],
-    version = 3,
+    version = 4,
     exportSchema = true,
 )
 abstract class AppDatabase : RoomDatabase() {
@@ -26,6 +28,8 @@ abstract class AppDatabase : RoomDatabase() {
     abstract fun movementDao(): MovementDao
     abstract fun scrapDao(): ScrapDao
     abstract fun syncDao(): SyncDao
+    abstract fun chargeDao(): ChargeDao
+    abstract fun warrantyDao(): WarrantyDao
 
     companion object {
         const val NAME = "loja_baterias.db"
@@ -109,7 +113,39 @@ abstract class AppDatabase : RoomDatabase() {
             }
         }
 
-        val ALL_MIGRATIONS = arrayOf(MIGRATION_1_2, MIGRATION_2_3)
+        /** v3 → v4: baterias na carga e garantias (apenas novas tabelas). */
+        val MIGRATION_3_4 = object : Migration(3, 4) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL(
+                    "CREATE TABLE IF NOT EXISTS `charge_services` (" +
+                        "`id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, `customer_name` TEXT NOT NULL, " +
+                        "`phone` TEXT NOT NULL, `battery_description` TEXT NOT NULL, `received_at` INTEGER NOT NULL, " +
+                        "`price` INTEGER NOT NULL, `paid` INTEGER NOT NULL, `paid_at` INTEGER, `payment_method` TEXT, " +
+                        "`loan_product_id` INTEGER, `loan_model` TEXT, `loan_movement_id` INTEGER, `loan_return_movement_id` INTEGER, `status` TEXT NOT NULL, " +
+                        "`delivered_at` INTEGER, `note` TEXT, `updated_at` INTEGER NOT NULL DEFAULT 0, " +
+                        "`dirty` INTEGER NOT NULL DEFAULT 1)"
+                )
+                db.execSQL("CREATE INDEX IF NOT EXISTS `index_charge_services_received_at` ON `charge_services` (`received_at`)")
+                db.execSQL("CREATE INDEX IF NOT EXISTS `index_charge_services_status` ON `charge_services` (`status`)")
+                db.execSQL(
+                    "CREATE TABLE IF NOT EXISTS `warranty_claims` (" +
+                        "`id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, `sale_id` INTEGER, `created_at` INTEGER NOT NULL, " +
+                        "`customer_name` TEXT NOT NULL, `returned_product_id` INTEGER, `returned_model` TEXT NOT NULL, " +
+                        "`defective` INTEGER NOT NULL, `replacement_product_id` INTEGER, `replacement_model` TEXT, " +
+                        "`replacement_cost` INTEGER NOT NULL, `out_movement_id` INTEGER, `difference_amount` INTEGER NOT NULL, " +
+                        "`difference_method` TEXT, `status` TEXT NOT NULL, `collected_at` INTEGER, `resolved_at` INTEGER, " +
+                        "`factory_product_id` INTEGER, `factory_model` TEXT, `in_movement_id` INTEGER, `refusal_notes` TEXT, " +
+                        "`used_destination` TEXT, `used_destination_at` INTEGER, `used_sale_value` INTEGER NOT NULL, " +
+                        "`scrap_movement_id` INTEGER, `note` TEXT, `updated_at` INTEGER NOT NULL DEFAULT 0, " +
+                        "`dirty` INTEGER NOT NULL DEFAULT 1)"
+                )
+                db.execSQL("CREATE INDEX IF NOT EXISTS `index_warranty_claims_sale_id` ON `warranty_claims` (`sale_id`)")
+                db.execSQL("CREATE INDEX IF NOT EXISTS `index_warranty_claims_status` ON `warranty_claims` (`status`)")
+                db.execSQL("CREATE INDEX IF NOT EXISTS `index_warranty_claims_created_at` ON `warranty_claims` (`created_at`)")
+            }
+        }
+
+        val ALL_MIGRATIONS = arrayOf(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4)
 
         fun build(context: Context): AppDatabase =
             Room.databaseBuilder(context.applicationContext, AppDatabase::class.java, NAME)

@@ -3,6 +3,8 @@ package br.com.lojabaterias.ui.screens
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.WindowInsets
@@ -12,6 +14,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Clear
@@ -23,6 +26,7 @@ import androidx.compose.material3.FilterChipDefaults
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.Surface
 import androidx.compose.material3.SegmentedButton
 import androidx.compose.material3.SegmentedButtonDefaults
 import androidx.compose.material3.SingleChoiceSegmentedButtonRow
@@ -52,7 +56,7 @@ import br.com.lojabaterias.ui.viewmodel.SalesViewModel
 import br.com.lojabaterias.ui.viewmodel.appViewModel
 import java.time.LocalDate
 
-@OptIn(ExperimentalMaterial3Api::class)
+@OptIn(ExperimentalMaterial3Api::class, ExperimentalLayoutApi::class)
 @Composable
 fun SalesScreen(onNewSale: () -> Unit, onOpenSale: (Long) -> Unit) {
     val vm = appViewModel { SalesViewModel(it.repository) }
@@ -132,7 +136,7 @@ fun SalesScreen(onNewSale: () -> Unit, onOpenSale: (Long) -> Unit) {
                 SearchField(
                     value = filter.model,
                     onValueChange = vm::setModel,
-                    placeholder = "Filtrar por modelo...",
+                    placeholder = "Modelo ou código de garantia...",
                 )
             }
             item {
@@ -147,6 +151,39 @@ fun SalesScreen(onNewSale: () -> Unit, onOpenSale: (Long) -> Unit) {
                             Modifier.weight(1.2f),
                             color = moneyResultColor(state.profit),
                         )
+                    }
+                }
+            }
+            if (state.modelCounts.isNotEmpty()) {
+                item {
+                    AppCard {
+                        Column(Modifier.padding(horizontal = 16.dp, vertical = 12.dp)) {
+                            Text(
+                                "Baterias vendidas por modelo",
+                                style = MaterialTheme.typography.labelLarge,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            )
+                            FlowRow(
+                                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                                verticalArrangement = Arrangement.spacedBy(6.dp),
+                                modifier = Modifier.padding(top = 8.dp),
+                            ) {
+                                state.modelCounts.forEach { (model, qty) ->
+                                    Surface(
+                                        color = MaterialTheme.colorScheme.primaryContainer,
+                                        shape = RoundedCornerShape(10.dp),
+                                    ) {
+                                        Text(
+                                            "$qty× $model",
+                                            style = MaterialTheme.typography.titleSmall,
+                                            fontWeight = FontWeight.Bold,
+                                            color = MaterialTheme.colorScheme.onPrimaryContainer,
+                                            modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp),
+                                        )
+                                    }
+                                }
+                            }
+                        }
                     }
                 }
             }

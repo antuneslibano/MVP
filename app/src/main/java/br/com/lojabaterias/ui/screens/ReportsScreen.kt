@@ -236,6 +236,46 @@ fun ReportsScreen() {
                     }
                 }
             }
+            item { SectionTitle("Baterias na carga") }
+            item {
+                AppCard {
+                    Column(Modifier.padding(horizontal = 16.dp, vertical = 8.dp)) {
+                        val c = f.charges
+                        Text("No período", style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.primary)
+                        InfoRow("Recebidas", c.received.toString())
+                        InfoRow("Valor cobrado", Money.format(c.charged))
+                        InfoRow("Pago", Money.format(c.paid))
+                        InfoRow("Não pago", Money.format(c.unpaid), valueColor = if (c.unpaid > 0) warningColor() else Color.Unspecified)
+                        HorizontalDivider(Modifier.padding(vertical = 6.dp))
+                        Text("Situação atual", style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.primary)
+                        InfoRow("Na loja", c.openNow.toString())
+                        InfoRow("Baterias emprestadas", c.loansOutNow.toString())
+                        InfoRow("Total a receber", Money.format(c.unpaidTotalNow))
+                    }
+                }
+            }
+            item { SectionTitle("Garantias") }
+            item {
+                AppCard {
+                    Column(Modifier.padding(horizontal = 16.dp, vertical = 8.dp)) {
+                        val g = f.warranty
+                        Text("No período", style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.primary)
+                        InfoRow("Atendimentos", g.attended.toString())
+                        InfoRow("Trocas (bateria ruim)", g.exchanged.toString())
+                        InfoRow("Testadas sem defeito", g.noDefect.toString())
+                        InfoRow("Diferenças recebidas", Money.format(g.differenceTotal))
+                        InfoRow("Custo das baterias trocadas", Money.format(g.replacementCost))
+                        InfoRow("Repostas pela fábrica", g.replacedByFactory.toString())
+                        InfoRow("Garantias negadas", g.denied.toString())
+                        if (g.usedSoldValue > 0) InfoRow("Usadas vendidas", Money.format(g.usedSoldValue))
+                        HorizontalDivider(Modifier.padding(vertical = 6.dp))
+                        Text("Situação atual", style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.primary)
+                        InfoRow("Aguardando recolha", g.awaitingPickupNow.toString())
+                        InfoRow("Na fábrica", g.atFactoryNow.toString())
+                        InfoRow("Usadas na loja", g.usedInShopNow.toString())
+                    }
+                }
+            }
             item {
                 Text(
                     "O PDF traz tudo isso e mais: lista de vendas e cancelamentos, estoque modelo a modelo " +

@@ -51,6 +51,15 @@ pois todos os APKs são assinados com a mesma chave (`app/signing/loja-baterias.
   A senha não fica escrita no código (apenas um hash e uma versão cifrada com a resposta).
 - **Excluir registros**: vendas (na tela da venda), movimentações de estoque (entrada, ajuste,
   estoque inicial) e de sucatas (entrada, compra, venda, ajuste). O estoque é corrigido junto.
+- **Baterias na carga** (Menu ☰): recebimento com cliente, telefone (botões Ligar/WhatsApp), data,
+  valor, se foi pago e empréstimo de bateria da loja (sai do estoque e volta na entrega).
+- **Garantias** (Menu ☰, ou pela venda): cada venda tem um código de garantia (ex.: G-7K2Q9XA).
+  Na venda, "Garantia: testar / trocar bateria" guia o passo a passo: teste (ruim/boa), bateria nova
+  entregue (mesma ou outra), diferença paga. A nova sai do estoque e a do cliente vai para
+  "Aguardando recolha" → "Na fábrica" → reposição (mesma, outra aceita, ou recusada) ou garantia negada
+  (seção "Usadas": sucata, vendida ou descartada).
+- **Atualização automática**: cada build vira uma Release no GitHub; o app avisa no Início e instala
+  com um toque (Menu > Backup e sincronização > Atualizações).
 - **Menu ☰**: acesso a todas as áreas (Início, Nova venda, Vendas, Estoque, Sucatas, Relatórios,
   Movimentações, Tabela de sucatas e Backup).
 - **Backup**: exporta/importa todos os dados em um arquivo JSON (ícone de engrenagem na tela inicial).

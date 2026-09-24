@@ -128,8 +128,16 @@ object MovementType {
     const val SALE = "SALE"
     const val SALE_EDIT = "SALE_EDIT"
     const val SALE_CANCEL = "SALE_CANCEL"
+    const val LOAN_OUT = "LOAN_OUT"
+    const val LOAN_RETURN = "LOAN_RETURN"
+    const val WARRANTY_OUT = "WARRANTY_OUT"
+    const val WARRANTY_IN = "WARRANTY_IN"
 
     fun label(type: String): String = when (type) {
+        LOAN_OUT -> "Emprestada (carga)"
+        LOAN_RETURN -> "Devolvida (carga)"
+        WARRANTY_OUT -> "Troca em garantia"
+        WARRANTY_IN -> "Reposição da fábrica"
         INITIAL -> "Estoque inicial"
         ENTRY -> "Entrada"
         ADJUSTMENT -> "Ajuste"
@@ -238,6 +246,132 @@ data class ScrapSoldSummary(
     val quantity: Int = 0,
     val amount: Long = 0,
 )
+
+object ChargeStatus {
+    const val IN_SHOP = "IN_SHOP"
+    const val READY = "READY"
+    const val DELIVERED = "DELIVERED"
+
+    fun label(status: String): String = when (status) {
+        IN_SHOP -> "Na carga"
+        READY -> "Pronta"
+        DELIVERED -> "Entregue"
+        else -> status
+    }
+}
+
+/** Bateria de cliente recebida para carga. */
+@Entity(tableName = "charge_services", indices = [Index("received_at"), Index("status")])
+data class ChargeService(
+    @PrimaryKey(autoGenerate = true) val id: Long = IdGenerator.next(),
+    @ColumnInfo(name = "customer_name") val customerName: String,
+    val phone: String = "",
+    /** Descrição da bateria do cliente (modelo, marca...). */
+    @ColumnInfo(name = "battery_description") val batteryDescription: String = "",
+    @ColumnInfo(name = "received_at") val receivedAt: Long,
+    /** Valor cobrado pela carga, em centavos. */
+    val price: Long,
+    val paid: Boolean = false,
+    @ColumnInfo(name = "paid_at") val paidAt: Long? = null,
+    @ColumnInfo(name = "payment_method") val paymentMethod: String? = null,
+    /** Bateria da loja emprestada ao cliente enquanto a dele carrega. */
+    @ColumnInfo(name = "loan_product_id") val loanProductId: Long? = null,
+    @ColumnInfo(name = "loan_model") val loanModel: String? = null,
+    @ColumnInfo(name = "loan_movement_id") val loanMovementId: Long? = null,
+    @ColumnInfo(name = "loan_return_movement_id") val loanReturnMovementId: Long? = null,
+    val status: String = ChargeStatus.IN_SHOP,
+    @ColumnInfo(name = "delivered_at") val deliveredAt: Long? = null,
+    val note: String? = null,
+    /** Controle de sincronização: momento da última alteração local. */
+    @ColumnInfo(name = "updated_at", defaultValue = "0") val updatedAt: Long = System.currentTimeMillis(),
+    /** Controle de sincronização: alteração ainda não enviada para a nuvem. */
+    @ColumnInfo(name = "dirty", defaultValue = "1") val dirty: Boolean = true,
+) {
+    val hasLoan: Boolean get() = loanProductId != null
+    val isOpen: Boolean get() = status != ChargeStatus.DELIVERED
+}
+
+object WarrantyStatus {
+    /** Testada e sem defeito: não houve troca. */
+    const val NO_DEFECT = "NO_DEFECT"
+    /** Trocada; bateria do cliente aguardando a fábrica recolher. */
+    const val AWAITING_PICKUP = "AWAITING_PICKUP"
+    /** Recolhida pela fábrica (em análise / aguardando reposição). */
+    const val AT_FACTORY = "AT_FACTORY"
+    /** A fábrica repôs uma bateria. */
+    const val REPLACED = "REPLACED"
+    /** A fábrica negou a garantia: a bateria usada voltou para a loja. */
+    const val DENIED = "DENIED"
+
+    fun label(status: String): String = when (status) {
+        NO_DEFECT -> "Testada sem defeito"
+        AWAITING_PICKUP -> "Aguardando recolha"
+        AT_FACTORY -> "Na fábrica"
+        REPLACED -> "Reposta pela fábrica"
+        DENIED -> "Garantia negada (usada na loja)"
+        else -> status
+    }
+}
+
+object UsedDestination {
+    const val SCRAP = "SCRAP"
+    const val SOLD = "SOLD"
+    const val DISCARDED = "DISCARDED"
+
+    fun label(d: String?): String = when (d) {
+        SCRAP -> "Virou sucata"
+        SOLD -> "Vendida como usada"
+        DISCARDED -> "Descartada"
+        else -> "Na loja"
+    }
+}
+
+/**
+ * Atendimento de garantia (uma bateria).
+ * Guarda o teste, a troca, a ida para a fábrica e o desfecho.
+ */
+@Entity(tableName = "warranty_claims", indices = [Index("sale_id"), Index("status"), Index("created_at")])
+data class WarrantyClaim(
+    @PrimaryKey(autoGenerate = true) val id: Long = IdGenerator.next(),
+    /** Venda original (null quando a venda não está no sistema). */
+    @ColumnInfo(name = "sale_id") val saleId: Long? = null,
+    @ColumnInfo(name = "created_at") val createdAt: Long,
+    @ColumnInfo(name = "customer_name") val customerName: String = "",
+    /** Bateria que o cliente trouxe. */
+    @ColumnInfo(name = "returned_product_id") val returnedProductId: Long? = null,
+    @ColumnInfo(name = "returned_model") val returnedModel: String,
+    /** Resultado do teste. */
+    val defective: Boolean,
+    /** Bateria nova entregue ao cliente. */
+    @ColumnInfo(name = "replacement_product_id") val replacementProductId: Long? = null,
+    @ColumnInfo(name = "replacement_model") val replacementModel: String? = null,
+    @ColumnInfo(name = "replacement_cost") val replacementCost: Long = 0,
+    @ColumnInfo(name = "out_movement_id") val outMovementId: Long? = null,
+    /** Diferença paga pelo cliente (bateria melhor/diferente). */
+    @ColumnInfo(name = "difference_amount") val differenceAmount: Long = 0,
+    @ColumnInfo(name = "difference_method") val differenceMethod: String? = null,
+    val status: String,
+    @ColumnInfo(name = "collected_at") val collectedAt: Long? = null,
+    @ColumnInfo(name = "resolved_at") val resolvedAt: Long? = null,
+    /** Bateria enviada pela fábrica e aceita. */
+    @ColumnInfo(name = "factory_product_id") val factoryProductId: Long? = null,
+    @ColumnInfo(name = "factory_model") val factoryModel: String? = null,
+    @ColumnInfo(name = "in_movement_id") val inMovementId: Long? = null,
+    /** Registro das reposições recusadas (modelo diferente etc.). */
+    @ColumnInfo(name = "refusal_notes") val refusalNotes: String? = null,
+    /** Destino da bateria usada quando a garantia é negada. */
+    @ColumnInfo(name = "used_destination") val usedDestination: String? = null,
+    @ColumnInfo(name = "used_destination_at") val usedDestinationAt: Long? = null,
+    @ColumnInfo(name = "used_sale_value") val usedSaleValue: Long = 0,
+    @ColumnInfo(name = "scrap_movement_id") val scrapMovementId: Long? = null,
+    val note: String? = null,
+    /** Controle de sincronização: momento da última alteração local. */
+    @ColumnInfo(name = "updated_at", defaultValue = "0") val updatedAt: Long = System.currentTimeMillis(),
+    /** Controle de sincronização: alteração ainda não enviada para a nuvem. */
+    @ColumnInfo(name = "dirty", defaultValue = "1") val dirty: Boolean = true,
+) {
+    val isUsedInShop: Boolean get() = status == WarrantyStatus.DENIED && usedDestination == null
+}
 
 /** Registro de exclusão local, ainda não enviado para a nuvem. */
 @Entity(tableName = "tombstones")

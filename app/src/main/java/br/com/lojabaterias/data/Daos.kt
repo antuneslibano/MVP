@@ -258,6 +258,7 @@ interface SyncDao {
         "SELECT (SELECT COUNT(*) FROM products WHERE dirty = 1) + (SELECT COUNT(*) FROM sales WHERE dirty = 1) + " +
             "(SELECT COUNT(*) FROM sale_items WHERE dirty = 1) + (SELECT COUNT(*) FROM stock_movements WHERE dirty = 1) + " +
             "(SELECT COUNT(*) FROM scrap_prices WHERE dirty = 1) + (SELECT COUNT(*) FROM scrap_movements WHERE dirty = 1) + " +
+            "(SELECT COUNT(*) FROM charge_services WHERE dirty = 1) + (SELECT COUNT(*) FROM warranty_claims WHERE dirty = 1) + " +
             "(SELECT COUNT(*) FROM tombstones)"
     )
     suspend fun pendingCount(): Int
@@ -271,6 +272,23 @@ interface SyncDao {
 
     @Query("SELECT (SELECT COUNT(*) FROM products) + (SELECT COUNT(*) FROM sales) + (SELECT COUNT(*) FROM scrap_movements)")
     suspend fun localDataCount(): Int
+
+    @Query("SELECT * FROM charge_services WHERE dirty = 1") suspend fun dirtyCharges(): List<ChargeService>
+    @Query("SELECT * FROM warranty_claims WHERE dirty = 1") suspend fun dirtyWarranties(): List<WarrantyClaim>
+    @Query("UPDATE charge_services SET dirty = 0 WHERE id = :id AND updated_at = :updatedAt")
+    suspend fun cleanCharge(id: Long, updatedAt: Long)
+    @Query("UPDATE warranty_claims SET dirty = 0 WHERE id = :id AND updated_at = :updatedAt")
+    suspend fun cleanWarranty(id: Long, updatedAt: Long)
+    @Query("SELECT * FROM charge_services WHERE id = :id") suspend fun charge(id: Long): ChargeService?
+    @Query("SELECT * FROM warranty_claims WHERE id = :id") suspend fun warranty(id: Long): WarrantyClaim?
+    @Upsert suspend fun upsertCharge(c: ChargeService)
+    @Upsert suspend fun upsertWarranty(w: WarrantyClaim)
+    @Query("DELETE FROM charge_services WHERE id = :id") suspend fun deleteCharge(id: Long)
+    @Query("DELETE FROM warranty_claims WHERE id = :id") suspend fun deleteWarranty(id: Long)
+    @Query("SELECT id FROM charge_services") suspend fun allChargeIds(): List<Long>
+    @Query("SELECT id FROM warranty_claims") suspend fun allWarrantyIds(): List<Long>
+    @Query("DELETE FROM charge_services") suspend fun wipeCharges()
+    @Query("DELETE FROM warranty_claims") suspend fun wipeWarranties()
 
     // ----- Marcar como enviado (só se não mudou durante o envio)
     @Query("UPDATE products SET dirty = 0 WHERE id = :id AND updated_at = :updatedAt")
@@ -344,4 +362,54 @@ interface SyncDao {
     @Query("DELETE FROM sale_items") suspend fun wipeSaleItems()
     @Query("DELETE FROM sales") suspend fun wipeSales()
     @Query("DELETE FROM products") suspend fun wipeProducts()
+}
+
+@Dao
+interface ChargeDao {
+    @Query("SELECT * FROM charge_services ORDER BY received_at DESC")
+    fun observeAll(): Flow<List<ChargeService>>
+
+    @Query("SELECT * FROM charge_services WHERE id = :id")
+    fun observeById(id: Long): Flow<ChargeService?>
+
+    @Query("SELECT * FROM charge_services WHERE id = :id")
+    suspend fun getById(id: Long): ChargeService?
+
+    @Query("SELECT * FROM charge_services WHERE received_at >= :start AND received_at < :end ORDER BY received_at DESC")
+    fun observeInRange(start: Long, end: Long): Flow<List<ChargeService>>
+
+    @Query("SELECT * FROM charge_services ORDER BY id")
+    suspend fun getAll(): List<ChargeService>
+
+    @Insert suspend fun insert(c: ChargeService)
+    @Insert suspend fun insertAll(list: List<ChargeService>)
+    @Update suspend fun update(c: ChargeService)
+
+    @Query("DELETE FROM charge_services WHERE id = :id") suspend fun delete(id: Long)
+    @Query("DELETE FROM charge_services") suspend fun deleteAll()
+}
+
+@Dao
+interface WarrantyDao {
+    @Query("SELECT * FROM warranty_claims ORDER BY created_at DESC")
+    fun observeAll(): Flow<List<WarrantyClaim>>
+
+    @Query("SELECT * FROM warranty_claims WHERE id = :id")
+    fun observeById(id: Long): Flow<WarrantyClaim?>
+
+    @Query("SELECT * FROM warranty_claims WHERE id = :id")
+    suspend fun getById(id: Long): WarrantyClaim?
+
+    @Query("SELECT * FROM warranty_claims WHERE sale_id = :saleId ORDER BY created_at DESC")
+    fun observeForSale(saleId: Long): Flow<List<WarrantyClaim>>
+
+    @Query("SELECT * FROM warranty_claims ORDER BY id")
+    suspend fun getAll(): List<WarrantyClaim>
+
+    @Insert suspend fun insert(w: WarrantyClaim)
+    @Insert suspend fun insertAll(list: List<WarrantyClaim>)
+    @Update suspend fun update(w: WarrantyClaim)
+
+    @Query("DELETE FROM warranty_claims WHERE id = :id") suspend fun delete(id: Long)
+    @Query("DELETE FROM warranty_claims") suspend fun deleteAll()
 }

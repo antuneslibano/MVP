@@ -12,7 +12,7 @@ concurrency:
   cancel-in-progress: true
 
 permissions:
-  contents: read
+  contents: write  # necessário para publicar a Release (atualização automática do app)
 
 jobs:
   build:
@@ -92,6 +92,22 @@ jobs:
           path: dist/art-das-baterias.apk
           if-no-files-found: error
           retention-days: 30
+
+      # Cada build publicado vira uma "Release" no GitHub. O app verifica a Release mais recente
+      # e oferece a atualização automaticamente (Menu > Backup e sincronização > Atualizações).
+      - name: Publicar versão para atualização automática (GitHub Release)
+        if: github.event_name != 'pull_request'
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: build-${{ github.run_number }}
+          target_commitish: ${{ github.sha }}
+          name: Versão 1.0.${{ github.run_number }}
+          body: |
+            Art das Baterias — versão 1.0.${{ github.run_number }}
+
+            ${{ github.event.head_commit.message }}
+          files: dist/art-das-baterias.apk
+          make_latest: true
 
       - name: Publicar relatórios de teste (em caso de falha)
         if: failure()

@@ -23,7 +23,7 @@ jobs:
           curl -sS -o /dev/null -w "HTTP %{http_code}\n" "$URL/auth/v1/health" -H "apikey: $KEY"
 
           echo "== Tabelas (acesso anônimo deve ser BLOQUEADO) =="
-          for t in products sales sale_items stock_movements scrap_prices scrap_movements deletions; do
+          for t in products sales sale_items stock_movements scrap_prices scrap_movements charge_services warranty_claims deletions; do
             col=id; [ "$t" = "deletions" ] && col=record_id
             body=$(curl -sS "$URL/rest/v1/$t?select=$col&limit=1" -H "apikey: $KEY" -H "Authorization: Bearer $KEY" -w "\n%{http_code}")
             code=$(echo "$body" | tail -n1); text=$(echo "$body" | head -n -1)

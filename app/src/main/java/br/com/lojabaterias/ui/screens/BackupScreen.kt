@@ -26,6 +26,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import br.com.lojabaterias.data.sync.SyncState
 import br.com.lojabaterias.domain.Periods
 import br.com.lojabaterias.ui.components.AppCard
+import br.com.lojabaterias.ui.components.UpdateSection
 import br.com.lojabaterias.ui.components.rememberSyncStatus
 import br.com.lojabaterias.ui.components.syncColor
 import br.com.lojabaterias.ui.components.syncLabel
@@ -63,6 +64,7 @@ fun BackupScreen(onBack: () -> Unit) {
             verticalArrangement = Arrangement.spacedBy(12.dp),
         ) {
             if (busy) LinearProgressIndicator(Modifier.fillMaxWidth())
+            UpdateSection()
             AppCard {
                 Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                     Text("Sincronização com a nuvem", style = MaterialTheme.typography.titleMedium)

@@ -34,6 +34,7 @@ class MainActivity : ComponentActivity() {
                         LockScreen(onUnlock = { pin ->
                             locked = false
                             (application as LojaApp).container.syncManager.onUnlocked(pin)
+                            (application as LojaApp).container.updater.check()
                         })
                     }
                 }

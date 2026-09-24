@@ -41,6 +41,7 @@ import br.com.lojabaterias.ui.components.AppCard
 import br.com.lojabaterias.ui.components.EmptyState
 import br.com.lojabaterias.ui.components.SaleRow
 import br.com.lojabaterias.ui.components.SyncIndicator
+import br.com.lojabaterias.ui.components.UpdateBanner
 import br.com.lojabaterias.ui.theme.moneyResultColor
 import br.com.lojabaterias.ui.viewmodel.HomeViewModel
 import br.com.lojabaterias.ui.viewmodel.appViewModel
@@ -52,6 +53,8 @@ fun HomeScreen(
     onOpenSale: (Long) -> Unit,
     onSeeAllSales: () -> Unit,
     onBackup: () -> Unit,
+    onCharges: () -> Unit = {},
+    onWarranties: () -> Unit = {},
 ) {
     val vm = appViewModel { HomeViewModel(it.repository) }
     val state by vm.state.collectAsStateWithLifecycle()
@@ -97,11 +100,42 @@ fun HomeScreen(
             contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = 4.dp, bottom = 96.dp),
             verticalArrangement = Arrangement.spacedBy(10.dp),
         ) {
+            item { UpdateBanner() }
             item { TodayCard(state.today) }
             item {
                 Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                     PeriodCard("Esta semana", state.week, Modifier.weight(1f))
                     PeriodCard("Este mês", state.month, Modifier.weight(1f))
+                }
+            }
+            if (state.chargesOpen > 0 || state.warrantiesPending > 0) {
+                item {
+                    Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                        if (state.chargesOpen > 0) {
+                            AppCard(onClick = onCharges, modifier = Modifier.weight(1f)) {
+                                Column(Modifier.padding(12.dp)) {
+                                    Text("Na carga", style = MaterialTheme.typography.labelMedium)
+                                    Text(
+                                        "${state.chargesOpen} bateria(s)",
+                                        style = MaterialTheme.typography.titleMedium,
+                                        fontWeight = FontWeight.Bold,
+                                    )
+                                }
+                            }
+                        }
+                        if (state.warrantiesPending > 0) {
+                            AppCard(onClick = onWarranties, modifier = Modifier.weight(1f)) {
+                                Column(Modifier.padding(12.dp)) {
+                                    Text("Garantias pendentes", style = MaterialTheme.typography.labelMedium)
+                                    Text(
+                                        "${state.warrantiesPending} com a fábrica",
+                                        style = MaterialTheme.typography.titleMedium,
+                                        fontWeight = FontWeight.Bold,
+                                    )
+                                }
+                            }
+                        }
+                    }
                 }
             }
             item {

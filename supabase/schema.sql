@@ -87,6 +87,57 @@ create table if not exists public.scrap_movements (
   server_updated_at timestamptz not null default now()
 );
 
+create table if not exists public.charge_services (
+  id bigint primary key,
+  customer_name text not null,
+  phone text not null default '',
+  battery_description text not null default '',
+  received_at bigint not null,
+  price bigint not null,
+  paid boolean not null default false,
+  paid_at bigint,
+  payment_method text,
+  loan_product_id bigint,
+  loan_model text,
+  loan_movement_id bigint,
+  loan_return_movement_id bigint,
+  status text not null,
+  delivered_at bigint,
+  note text,
+  updated_at bigint not null default 0,
+  server_updated_at timestamptz not null default now()
+);
+
+create table if not exists public.warranty_claims (
+  id bigint primary key,
+  sale_id bigint,
+  created_at bigint not null,
+  customer_name text not null default '',
+  returned_product_id bigint,
+  returned_model text not null,
+  defective boolean not null,
+  replacement_product_id bigint,
+  replacement_model text,
+  replacement_cost bigint not null default 0,
+  out_movement_id bigint,
+  difference_amount bigint not null default 0,
+  difference_method text,
+  status text not null,
+  collected_at bigint,
+  resolved_at bigint,
+  factory_product_id bigint,
+  factory_model text,
+  in_movement_id bigint,
+  refusal_notes text,
+  used_destination text,
+  used_destination_at bigint,
+  used_sale_value bigint not null default 0,
+  scrap_movement_id bigint,
+  note text,
+  updated_at bigint not null default 0,
+  server_updated_at timestamptz not null default now()
+);
+
 -- Exclusões (para apagar também nos outros celulares)
 create table if not exists public.deletions (
   table_name text not null,
@@ -104,6 +155,8 @@ create index if not exists stock_movements_sua on public.stock_movements (server
 create index if not exists scrap_prices_sua on public.scrap_prices (server_updated_at);
 create index if not exists scrap_movements_sua on public.scrap_movements (server_updated_at);
 create index if not exists deletions_sua on public.deletions (server_updated_at);
+create index if not exists charge_services_sua on public.charge_services (server_updated_at);
+create index if not exists warranty_claims_sua on public.warranty_claims (server_updated_at);
 
 -- ---------- Gatilhos ----------
 -- Marca o horário do servidor em cada gravação (usado para saber o que mudou).
@@ -128,7 +181,7 @@ end $$;
 create or replace function public.apply_deletion()
 returns trigger language plpgsql security definer set search_path = public as $$
 begin
-  if new.table_name in ('products','sales','sale_items','stock_movements','scrap_prices','scrap_movements') then
+  if new.table_name in ('products','sales','sale_items','stock_movements','scrap_prices','scrap_movements','charge_services','warranty_claims') then
     execute format('delete from public.%I where id = $1', new.table_name) using new.record_id;
   end if;
   return new;
@@ -137,11 +190,11 @@ end $$;
 do $$
 declare t text;
 begin
-  foreach t in array array['products','sales','sale_items','stock_movements','scrap_prices','scrap_movements','deletions'] loop
+  foreach t in array array['products','sales','sale_items','stock_movements','scrap_prices','scrap_movements','charge_services','warranty_claims','deletions'] loop
     execute format('drop trigger if exists touch_%1$s on public.%1$I', t);
     execute format('create trigger touch_%1$s before insert or update on public.%1$I for each row execute function public.touch_server_updated_at()', t);
   end loop;
-  foreach t in array array['products','sales','sale_items','stock_movements','scrap_prices','scrap_movements'] loop
+  foreach t in array array['products','sales','sale_items','stock_movements','scrap_prices','scrap_movements','charge_services','warranty_claims'] loop
     execute format('drop trigger if exists skip_deleted_%1$s on public.%1$I', t);
     execute format('create trigger skip_deleted_%1$s before insert on public.%1$I for each row execute function public.skip_if_deleted()', t);
   end loop;
@@ -155,7 +208,7 @@ create trigger apply_deletion after insert or update on public.deletions
 do $$
 declare t text;
 begin
-  foreach t in array array['products','sales','sale_items','stock_movements','scrap_prices','scrap_movements','deletions'] loop
+  foreach t in array array['products','sales','sale_items','stock_movements','scrap_prices','scrap_movements','charge_services','warranty_claims','deletions'] loop
     execute format('alter table public.%I enable row level security', t);
     execute format('drop policy if exists loja_acesso on public.%I', t);
     execute format('create policy loja_acesso on public.%I for all to authenticated using (true) with check (true)', t);
@@ -182,6 +235,8 @@ as $$
     'stock_movements', coalesce((select json_agg(x) from stock_movements x, c where x.server_updated_at > c.t), '[]'::json),
     'scrap_prices',    coalesce((select json_agg(x) from scrap_prices x, c where x.server_updated_at > c.t), '[]'::json),
     'scrap_movements', coalesce((select json_agg(x) from scrap_movements x, c where x.server_updated_at > c.t), '[]'::json),
+    'charge_services', coalesce((select json_agg(x) from charge_services x, c where x.server_updated_at > c.t), '[]'::json),
+    'warranty_claims', coalesce((select json_agg(x) from warranty_claims x, c where x.server_updated_at > c.t), '[]'::json),
     'deletions',       coalesce((select json_agg(x) from deletions x, c where x.server_updated_at > c.t), '[]'::json)
   );
 $$;
@@ -189,4 +244,4 @@ $$;
 revoke all on function public.pull_changes(timestamptz) from public, anon;
 grant execute on function public.pull_changes(timestamptz) to authenticated;
 
--- Pronto! Confira em Table Editor: devem aparecer 7 tabelas.
+-- Pronto! Confira em Table Editor: devem aparecer 9 tabelas.

@@ -1,6 +1,7 @@
 package br.com.lojabaterias.data
 
 import androidx.room.withTransaction
+import br.com.lojabaterias.data.sync.RemoteMapper
 import org.json.JSONArray
 import org.json.JSONObject
 import java.io.InputStream
@@ -92,6 +93,13 @@ class BackupManager(private val db: AppDatabase, private val onChange: () -> Uni
                     put("value", p.value)
                 })
             }
+        })
+        // Carga e garantias (mesmo formato usado na nuvem)
+        root.put("chargeServices", JSONArray().apply {
+            db.chargeDao().getAll().forEach { put(RemoteMapper.toJson(it)) }
+        })
+        root.put("warrantyClaims", JSONArray().apply {
+            db.warrantyDao().getAll().forEach { put(RemoteMapper.toJson(it)) }
         })
         root.put("scrapMovements", JSONArray().apply {
             db.scrapDao().getAllMovements().forEach { m ->
@@ -196,6 +204,12 @@ class BackupManager(private val db: AppDatabase, private val onChange: () -> Uni
             )
         }
 
+        val importNow = System.currentTimeMillis()
+        val chargeList = root.optJSONArray("chargeServices")?.objects().orEmpty()
+            .map { RemoteMapper.charge(it).copy(updatedAt = importNow, dirty = true) }
+        val warrantyList = root.optJSONArray("warrantyClaims")?.objects().orEmpty()
+            .map { RemoteMapper.warranty(it).copy(updatedAt = importNow, dirty = true) }
+
         db.withTransaction {
             // Para a sincronização: o que existia e não está no backup vira exclusão na nuvem;
             // tudo o que está no backup é marcado para envio (dirty).
@@ -210,6 +224,10 @@ class BackupManager(private val db: AppDatabase, private val onChange: () -> Uni
             gone(SyncTables.STOCK_MOVEMENTS, sync.allStockMovementIds(), movements.map { it.id }.toSet())
             gone(SyncTables.SCRAP_PRICES, sync.allScrapPriceIds(), scrapPrices.map { it.id }.toSet())
             gone(SyncTables.SCRAP_MOVEMENTS, sync.allScrapMovementIds(), scrapMovements.map { it.id }.toSet())
+            gone(SyncTables.CHARGES, sync.allChargeIds(), chargeList.map { it.id }.toSet())
+            gone(SyncTables.WARRANTIES, sync.allWarrantyIds(), warrantyList.map { it.id }.toSet())
+            db.chargeDao().deleteAll()
+            db.warrantyDao().deleteAll()
 
             db.scrapDao().deleteAllMovements()
             db.scrapDao().deleteAllPrices()
@@ -223,6 +241,8 @@ class BackupManager(private val db: AppDatabase, private val onChange: () -> Uni
             db.movementDao().insertAll(movements)
             db.scrapDao().insertPrices(scrapPrices)
             db.scrapDao().insertMovements(scrapMovements)
+            db.chargeDao().insertAll(chargeList)
+            db.warrantyDao().insertAll(warrantyList)
             sync.insertTombstones(removed)
             // O estoque é a soma das movimentações: se o backup tiver diferença, registra um ajuste de conciliação.
             val now = System.currentTimeMillis()
@@ -249,6 +269,6 @@ class BackupManager(private val db: AppDatabase, private val onChange: () -> Uni
     private fun JSONArray.objects(): List<JSONObject> = (0 until length()).map { getJSONObject(it) }
 
     companion object {
-        const val FORMAT_VERSION = 2
+        const val FORMAT_VERSION = 3
     }
 }

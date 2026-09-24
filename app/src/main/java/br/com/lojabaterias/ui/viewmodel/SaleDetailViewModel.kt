@@ -3,6 +3,7 @@ package br.com.lojabaterias.ui.viewmodel
 import androidx.lifecycle.viewModelScope
 import br.com.lojabaterias.data.SaleWithItems
 import br.com.lojabaterias.data.StoreRepository
+import br.com.lojabaterias.data.WarrantyClaim
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.map
@@ -30,6 +31,10 @@ class SaleDetailViewModel(private val repo: StoreRepository, private val saleId:
             }
         }
     }
+
+    /** Atendimentos de garantia desta venda. */
+    val warranties: StateFlow<List<WarrantyClaim>> = repo.observeWarrantiesForSale(saleId)
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
 
     fun cancel() {
         viewModelScope.launch {

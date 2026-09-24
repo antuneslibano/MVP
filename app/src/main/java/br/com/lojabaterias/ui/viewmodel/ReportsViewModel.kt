@@ -54,6 +54,8 @@ class ReportsViewModel(private val container: AppContainer) : MessageViewModel()
         repo.observeScrapPrices().map { list -> list.associate { it.amperage to it.value } },
     ) { products, scrapStock, prices -> Triple(products, scrapStock, prices) }
 
+    private val services = combine(repo.observeCharges(), repo.observeWarranties()) { c, w -> c to w }
+
     val state: StateFlow<ReportsState> = combine(selection, currentDateFlow()) { sel, today -> sel to today }
         .flatMapLatest { (sel, today) ->
             val range = Periods.range(sel.type, today, sel.offset)
@@ -62,12 +64,17 @@ class ReportsViewModel(private val container: AppContainer) : MessageViewModel()
                 repo.observeStockMovementsInRange(range),
                 repo.observeScrapMovementsInRange(range),
             ) { sales, stockMoves, scrapMoves -> Triple(sales, stockMoves, scrapMoves) }
-            combine(period, snapshot) { (sales, stockMoves, scrapMoves), (products, scrapStock, prices) ->
+            combine(period, snapshot, services) { (sales, stockMoves, scrapMoves), (products, scrapStock, prices), (charges, claims) ->
                 ReportsState(
                     selection = sel,
                     today = today,
                     label = Periods.label(sel.type, today, sel.offset),
-                    full = FullReport.build(sales, stockMoves, scrapMoves, products, scrapStock, prices),
+                    full = FullReport.build(
+                        sales, stockMoves, scrapMoves, products, scrapStock, prices,
+                        allCharges = charges,
+                        allWarranties = claims,
+                        range = range,
+                    ),
                     loading = false,
                 )
             }

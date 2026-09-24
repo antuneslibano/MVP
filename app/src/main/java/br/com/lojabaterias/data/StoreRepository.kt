@@ -38,6 +38,8 @@ object SyncTables {
     const val STOCK_MOVEMENTS = "stock_movements"
     const val SCRAP_PRICES = "scrap_prices"
     const val SCRAP_MOVEMENTS = "scrap_movements"
+    const val CHARGES = "charge_services"
+    const val WARRANTIES = "warranty_claims"
 }
 
 /**
@@ -50,6 +52,8 @@ class StoreRepository(private val db: AppDatabase, private val onChange: () -> U
     private val movements = db.movementDao()
     private val scraps = db.scrapDao()
     private val sync = db.syncDao()
+    private val charges = db.chargeDao()
+    private val warranties = db.warrantyDao()
 
     /** Executa uma alteração em transação e avisa a sincronização. */
     private suspend fun <T> write(block: suspend () -> T): T {
@@ -64,6 +68,40 @@ class StoreRepository(private val db: AppDatabase, private val onChange: () -> U
     }
 
     private fun now() = System.currentTimeMillis()
+
+    /** Registra uma movimentação de estoque e atualiza o estoque do produto. Retorna o ID da movimentação. */
+    private suspend fun moveStock(
+        productId: Long,
+        quantity: Int,
+        type: String,
+        note: String?,
+        at: Long = now(),
+        unitCost: Long? = null,
+    ): Long {
+        val product = products.getById(productId) ?: throw BusinessException("Bateria não encontrada no estoque")
+        val newStock = product.stock + quantity
+        products.updateStock(product.id, newStock)
+        val m = StockMovement(
+            productId = product.id,
+            dateTime = at,
+            type = type,
+            quantity = quantity,
+            stockAfter = newStock,
+            note = note,
+            unitCost = unitCost,
+        )
+        movements.insert(m)
+        return m.id
+    }
+
+    /** Desfaz uma movimentação de estoque (usada ao excluir registros de carga/garantia). */
+    private suspend fun undoStockMovement(id: Long?) {
+        if (id == null) return
+        val m = movements.getById(id) ?: return
+        products.getById(m.productId)?.let { products.updateStock(it.id, it.stock - m.quantity) }
+        tomb(SyncTables.STOCK_MOVEMENTS, listOf(id))
+        movements.deleteById(id)
+    }
 
     // ---------------------------------------------------------------- Produtos
 
@@ -417,6 +455,296 @@ class StoreRepository(private val db: AppDatabase, private val onChange: () -> U
                 ScrapMovement(dateTime = now, type = type, amperage = amperage, quantity = -toRemove, saleId = saleId)
             )
         }
+    }
+
+    // ---------------------------------------------------------- Baterias na carga
+
+    fun observeCharges(): Flow<List<ChargeService>> = charges.observeAll()
+    fun observeCharge(id: Long): Flow<ChargeService?> = charges.observeById(id)
+    fun observeChargesInRange(range: DateRange): Flow<List<ChargeService>> = charges.observeInRange(range.start, range.end)
+    suspend fun getCharge(id: Long): ChargeService? = charges.getById(id)
+
+    /** Recebe uma bateria para carga. Se emprestar uma bateria da loja, ela sai do estoque. */
+    suspend fun createCharge(
+        customerName: String,
+        phone: String,
+        batteryDescription: String,
+        receivedAt: Long,
+        price: Long,
+        paid: Boolean,
+        paymentMethod: PaymentMethod?,
+        loanProductId: Long?,
+        note: String?,
+    ): Long = write {
+        val name = customerName.trim()
+        if (name.isEmpty()) throw BusinessException("Informe o nome do cliente")
+        if (price < 0) throw BusinessException("Valor inválido")
+        val id = IdGenerator.next()
+        var loanModel: String? = null
+        var loanMovementId: Long? = null
+        if (loanProductId != null) {
+            val p = products.getById(loanProductId) ?: throw BusinessException("Bateria para empréstimo não encontrada")
+            if (p.stock <= 0) throw BusinessException("Sem estoque de ${p.model} para emprestar")
+            loanModel = p.model
+            loanMovementId = moveStock(p.id, -1, MovementType.LOAN_OUT, "Emprestada para $name (carga)", receivedAt)
+        }
+        charges.insert(
+            ChargeService(
+                id = id,
+                customerName = name,
+                phone = phone.trim(),
+                batteryDescription = batteryDescription.trim(),
+                receivedAt = receivedAt,
+                price = price,
+                paid = paid,
+                paidAt = if (paid) now() else null,
+                paymentMethod = if (paid) paymentMethod?.name else null,
+                loanProductId = loanProductId,
+                loanModel = loanModel,
+                loanMovementId = loanMovementId,
+                note = note?.trim()?.ifEmpty { null },
+            )
+        )
+        id
+    }
+
+    /** Edita os dados da carga (o empréstimo não muda aqui). */
+    suspend fun updateCharge(
+        id: Long,
+        customerName: String,
+        phone: String,
+        batteryDescription: String,
+        receivedAt: Long,
+        price: Long,
+        paid: Boolean,
+        paymentMethod: PaymentMethod?,
+        note: String?,
+    ): Unit = write {
+        val c = charges.getById(id) ?: throw BusinessException("Registro não encontrado")
+        val name = customerName.trim()
+        if (name.isEmpty()) throw BusinessException("Informe o nome do cliente")
+        if (price < 0) throw BusinessException("Valor inválido")
+        charges.update(
+            c.copy(
+                customerName = name,
+                phone = phone.trim(),
+                batteryDescription = batteryDescription.trim(),
+                receivedAt = receivedAt,
+                price = price,
+                paid = paid,
+                paidAt = if (paid) (c.paidAt ?: now()) else null,
+                paymentMethod = if (paid) (paymentMethod?.name ?: c.paymentMethod) else null,
+                note = note?.trim()?.ifEmpty { null },
+                updatedAt = now(),
+                dirty = true,
+            )
+        )
+    }
+
+    suspend fun markChargePaid(id: Long, method: PaymentMethod): Unit = write {
+        val c = charges.getById(id) ?: throw BusinessException("Registro não encontrado")
+        charges.update(c.copy(paid = true, paidAt = now(), paymentMethod = method.name, updatedAt = now(), dirty = true))
+    }
+
+    suspend fun markChargeReady(id: Long): Unit = write {
+        val c = charges.getById(id) ?: throw BusinessException("Registro não encontrado")
+        if (c.status == ChargeStatus.DELIVERED) return@write
+        charges.update(c.copy(status = ChargeStatus.READY, updatedAt = now(), dirty = true))
+    }
+
+    /**
+     * Entrega a bateria ao cliente. Se houve empréstimo, a bateria da loja volta ao estoque.
+     * [paidNow] registra o pagamento no momento da entrega.
+     */
+    suspend fun deliverCharge(id: Long, paidNow: PaymentMethod?): Unit = write {
+        val c = charges.getById(id) ?: throw BusinessException("Registro não encontrado")
+        if (c.status == ChargeStatus.DELIVERED) return@write
+        val at = now()
+        var returnId: Long? = c.loanReturnMovementId
+        if (c.loanProductId != null && returnId == null && products.getById(c.loanProductId) != null) {
+            returnId = moveStock(c.loanProductId, +1, MovementType.LOAN_RETURN, "Devolvida por ${c.customerName} (carga)", at)
+        }
+        charges.update(
+            c.copy(
+                status = ChargeStatus.DELIVERED,
+                deliveredAt = at,
+                loanReturnMovementId = returnId,
+                paid = c.paid || paidNow != null,
+                paidAt = if (c.paid) c.paidAt else if (paidNow != null) at else null,
+                paymentMethod = if (c.paid) c.paymentMethod else paidNow?.name,
+                updatedAt = at,
+                dirty = true,
+            )
+        )
+    }
+
+    /** Exclui o registro de carga, desfazendo o empréstimo no estoque. */
+    suspend fun deleteCharge(id: Long): Unit = write {
+        val c = charges.getById(id) ?: return@write
+        undoStockMovement(c.loanReturnMovementId)
+        undoStockMovement(c.loanMovementId)
+        tomb(SyncTables.CHARGES, listOf(id))
+        charges.delete(id)
+    }
+
+    // ---------------------------------------------------------------- Garantias
+
+    fun observeWarranties(): Flow<List<WarrantyClaim>> = warranties.observeAll()
+    fun observeWarranty(id: Long): Flow<WarrantyClaim?> = warranties.observeById(id)
+    fun observeWarrantiesForSale(saleId: Long): Flow<List<WarrantyClaim>> = warranties.observeForSale(saleId)
+
+    /**
+     * Registra um atendimento de garantia.
+     * Se a bateria estiver ruim: a nova sai do estoque e a do cliente vai para "Aguardando recolha".
+     */
+    suspend fun createWarranty(
+        saleId: Long?,
+        customerName: String,
+        returnedProductId: Long?,
+        returnedModel: String,
+        defective: Boolean,
+        replacementProductId: Long?,
+        differenceAmount: Long,
+        differenceMethod: PaymentMethod?,
+        note: String?,
+        at: Long = now(),
+    ): Long = write {
+        val model = returnedModel.trim()
+        if (model.isEmpty()) throw BusinessException("Informe a bateria que o cliente trouxe")
+        if (differenceAmount < 0) throw BusinessException("Diferença inválida")
+        val id = IdGenerator.next()
+        val code = saleId?.let { br.com.lojabaterias.domain.WarrantyCode.of(it) } ?: "sem venda"
+        if (!defective) {
+            warranties.insert(
+                WarrantyClaim(
+                    id = id, saleId = saleId, createdAt = at, customerName = customerName.trim(),
+                    returnedProductId = returnedProductId, returnedModel = model, defective = false,
+                    status = WarrantyStatus.NO_DEFECT, resolvedAt = at, note = note?.trim()?.ifEmpty { null },
+                )
+            )
+            return@write id
+        }
+        val replacementId = replacementProductId ?: throw BusinessException("Escolha a bateria nova entregue ao cliente")
+        val replacement = products.getById(replacementId) ?: throw BusinessException("Bateria nova não encontrada")
+        if (replacement.stock <= 0) throw BusinessException("Sem estoque de ${replacement.model}. Escolha outra bateria.")
+        val outId = moveStock(
+            replacement.id, -1, MovementType.WARRANTY_OUT,
+            "Garantia $code: entregue no lugar de $model", at, replacement.cost,
+        )
+        warranties.insert(
+            WarrantyClaim(
+                id = id,
+                saleId = saleId,
+                createdAt = at,
+                customerName = customerName.trim(),
+                returnedProductId = returnedProductId,
+                returnedModel = model,
+                defective = true,
+                replacementProductId = replacement.id,
+                replacementModel = replacement.model,
+                replacementCost = replacement.cost,
+                outMovementId = outId,
+                differenceAmount = differenceAmount,
+                differenceMethod = if (differenceAmount > 0) (differenceMethod ?: PaymentMethod.PIX).name else null,
+                status = WarrantyStatus.AWAITING_PICKUP,
+                note = note?.trim()?.ifEmpty { null },
+            )
+        )
+        id
+    }
+
+    private suspend fun claim(id: Long) = warranties.getById(id) ?: throw BusinessException("Garantia não encontrada")
+
+    /** A fábrica recolheu as baterias (uma ou várias). */
+    suspend fun markWarrantiesCollected(ids: List<Long>, at: Long = now()): Unit = write {
+        for (id in ids) {
+            val w = claim(id)
+            if (w.status != WarrantyStatus.AWAITING_PICKUP) continue
+            warranties.update(w.copy(status = WarrantyStatus.AT_FACTORY, collectedAt = at, updatedAt = now(), dirty = true))
+        }
+    }
+
+    /** A fábrica entregou a reposição (mesmo modelo ou outro, aceito pela loja): entra no estoque. */
+    suspend fun warrantyReplaced(id: Long, productId: Long, at: Long = now()): Unit = write {
+        val w = claim(id)
+        if (w.status != WarrantyStatus.AT_FACTORY && w.status != WarrantyStatus.AWAITING_PICKUP) {
+            throw BusinessException("Esta garantia não está aguardando reposição")
+        }
+        val p = products.getById(productId) ?: throw BusinessException("Bateria não encontrada")
+        val code = w.saleId?.let { br.com.lojabaterias.domain.WarrantyCode.of(it) } ?: "sem venda"
+        val inId = moveStock(p.id, +1, MovementType.WARRANTY_IN, "Reposição da fábrica (garantia $code, era ${w.returnedModel})", at)
+        warranties.update(
+            w.copy(
+                status = WarrantyStatus.REPLACED,
+                collectedAt = w.collectedAt ?: at,
+                resolvedAt = at,
+                factoryProductId = p.id,
+                factoryModel = p.model,
+                inMovementId = inId,
+                updatedAt = now(),
+                dirty = true,
+            )
+        )
+    }
+
+    /** A fábrica ofereceu outra bateria e a loja recusou: fica registrado e a garantia continua pendente. */
+    suspend fun warrantyOfferRefused(id: Long, offered: String, reason: String, at: Long = now()): Unit = write {
+        val w = claim(id)
+        val line = "${br.com.lojabaterias.domain.Periods.formatDate(at)}: recusamos $offered" +
+            (reason.trim().takeIf { it.isNotEmpty() }?.let { " ($it)" } ?: "")
+        val notes = listOfNotNull(w.refusalNotes, line).joinToString("\n")
+        warranties.update(w.copy(refusalNotes = notes, updatedAt = now(), dirty = true))
+    }
+
+    /** A fábrica negou a garantia: a bateria usada volta para a loja. */
+    suspend fun warrantyDenied(id: Long, at: Long = now()): Unit = write {
+        val w = claim(id)
+        if (w.status != WarrantyStatus.AT_FACTORY && w.status != WarrantyStatus.AWAITING_PICKUP) {
+            throw BusinessException("Esta garantia não está pendente com a fábrica")
+        }
+        warranties.update(
+            w.copy(status = WarrantyStatus.DENIED, collectedAt = w.collectedAt ?: at, resolvedAt = at, updatedAt = now(), dirty = true)
+        )
+    }
+
+    /** Destino da bateria usada (garantia negada): sucata, vendida como usada ou descartada. */
+    suspend fun setUsedDestination(id: Long, destination: String, saleValue: Long, scrapAmperage: Int?): Unit = write {
+        val w = claim(id)
+        if (!w.isUsedInShop) throw BusinessException("Esta bateria não está na seção de usadas")
+        var scrapId: Long? = null
+        if (destination == UsedDestination.SCRAP) {
+            val amp = scrapAmperage ?: 0
+            if (amp <= 0) throw BusinessException("Informe a amperagem para registrar como sucata")
+            val m = ScrapMovement(
+                dateTime = now(), type = ScrapMovementType.MANUAL_IN, amperage = amp, quantity = 1,
+                note = "Garantia negada: ${w.returnedModel}",
+            )
+            scraps.insertMovement(m)
+            scrapId = m.id
+        }
+        warranties.update(
+            w.copy(
+                usedDestination = destination,
+                usedDestinationAt = now(),
+                usedSaleValue = if (destination == UsedDestination.SOLD) saleValue else 0,
+                scrapMovementId = scrapId,
+                updatedAt = now(),
+                dirty = true,
+            )
+        )
+    }
+
+    /** Exclui o atendimento de garantia, desfazendo as movimentações de estoque e de sucata. */
+    suspend fun deleteWarranty(id: Long): Unit = write {
+        val w = warranties.getById(id) ?: return@write
+        undoStockMovement(w.inMovementId)
+        undoStockMovement(w.outMovementId)
+        w.scrapMovementId?.let { sid ->
+            tomb(SyncTables.SCRAP_MOVEMENTS, listOf(sid))
+            scraps.deleteMovement(sid)
+        }
+        tomb(SyncTables.WARRANTIES, listOf(id))
+        warranties.delete(id)
     }
 
     // ----------------------------------------------------------------- Sucatas

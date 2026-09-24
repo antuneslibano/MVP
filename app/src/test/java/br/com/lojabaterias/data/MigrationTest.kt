@@ -56,7 +56,7 @@ class MigrationTest {
     )
 
     @Test
-    fun migrate1To3_keepsAllData() {
+    fun migrate1To4_keepsAllData() {
         context.deleteDatabase(dbName)
         val file = context.getDatabasePath(dbName)
         file.parentFile?.mkdirs()
@@ -114,6 +114,9 @@ class MigrationTest {
                 assertTrue(db.scrapDao().getPrices().isEmpty())
                 assertTrue(db.scrapDao().getAllMovements().isEmpty())
                 assertTrue(db.syncDao().tombstones().isEmpty())
+                // v4: tabelas de carga e garantias criadas vazias
+                assertTrue(db.chargeDao().getAll().isEmpty())
+                assertTrue(db.warrantyDao().getAll().isEmpty())
                 // o recálculo pela soma das movimentações mantém o estoque
                 db.syncDao().recomputeStock()
                 assertEquals(7, db.productDao().getById(1)!!.stock)

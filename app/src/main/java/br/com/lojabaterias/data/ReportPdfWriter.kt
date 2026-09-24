@@ -72,6 +72,10 @@ object ReportPdfWriter {
                 scraps(f.scrap)
                 scrapStock(f)
                 scrapMovements(f.scrapMovements)
+                chapter("4. Baterias na carga")
+                chargesSection(f)
+                chapter("5. Garantias")
+                warrantySection(f)
                 finish()
             }
             pdf.writeTo(output)
@@ -309,6 +313,76 @@ object ReportPdfWriter {
                         (if (m.quantity > 0) "+" else "") + m.quantity,
                         if (m.amount > 0) Money.format(m.amount) else "",
                         m.note ?: (m.saleId?.let { "Venda #$it" } ?: ""),
+                    )
+                },
+            )
+        }
+
+        fun chargesSection(f: FullReport) {
+            val c = f.charges
+            sectionTitle("Resumo")
+            keyValueTable(
+                listOf(
+                    "Recebidas no período" to c.received.toString(),
+                    "Valor cobrado" to Money.format(c.charged),
+                    "Pago" to Money.format(c.paid),
+                    "Não pago" to Money.format(c.unpaid),
+                    "Na loja agora" to c.openNow.toString(),
+                    "Baterias da loja emprestadas agora" to c.loansOutNow.toString(),
+                    "Total a receber (todas)" to Money.format(c.unpaidTotalNow),
+                ),
+            )
+            sectionTitle("Recebidas no período (${f.chargesInPeriod.size})")
+            if (f.chargesInPeriod.isEmpty()) return emptyLine("Nenhuma bateria recebida para carga no período.")
+            table(
+                listOf(Col(1.6f), Col(2f), Col(1.5f), Col(1.2f, true), Col(1f), Col(1.3f)),
+                listOf("Recebida", "Cliente", "Telefone", "Valor", "Pago", "Situação"),
+                f.chargesInPeriod.map { ch ->
+                    listOf(
+                        Periods.formatDateTime(ch.receivedAt),
+                        ch.customerName + (ch.loanModel?.let { " (empr. $it)" } ?: ""),
+                        ch.phone,
+                        Money.format(ch.price),
+                        if (ch.paid) "Sim" else "Não",
+                        ChargeStatus.label(ch.status),
+                    )
+                },
+                rowColors = { i -> listOf(null, null, null, null, if (f.chargesInPeriod[i].paid) GREEN else RED, null) },
+            )
+        }
+
+        fun warrantySection(f: FullReport) {
+            val g = f.warranty
+            sectionTitle("Resumo")
+            keyValueTable(
+                listOf(
+                    "Atendimentos no período" to g.attended.toString(),
+                    "Trocas (bateria ruim)" to g.exchanged.toString(),
+                    "Testadas sem defeito" to g.noDefect.toString(),
+                    "Diferenças recebidas" to Money.format(g.differenceTotal),
+                    "Custo das baterias novas entregues" to Money.format(g.replacementCost),
+                    "Repostas pela fábrica no período" to g.replacedByFactory.toString(),
+                    "Garantias negadas no período" to g.denied.toString(),
+                    "Usadas vendidas no período" to Money.format(g.usedSoldValue),
+                    "Aguardando recolha (agora)" to g.awaitingPickupNow.toString(),
+                    "Na fábrica (agora)" to g.atFactoryNow.toString(),
+                    "Usadas na loja (agora)" to g.usedInShopNow.toString(),
+                ),
+            )
+            sectionTitle("Atendimentos no período (${f.warrantiesInPeriod.size})")
+            if (f.warrantiesInPeriod.isEmpty()) return emptyLine("Nenhum atendimento de garantia no período.")
+            table(
+                listOf(Col(1.5f), Col(1.3f), Col(1.6f), Col(1.6f), Col(1.1f, true), Col(1.9f)),
+                listOf("Data", "Garantia", "Trouxe", "Entregue", "Diferença", "Situação"),
+                f.warrantiesInPeriod.map { w ->
+                    listOf(
+                        Periods.formatDate(w.createdAt),
+                        w.saleId?.let { br.com.lojabaterias.domain.WarrantyCode.of(it) } ?: "sem venda",
+                        w.returnedModel,
+                        w.replacementModel ?: "—",
+                        if (w.differenceAmount > 0) Money.format(w.differenceAmount) else "",
+                        if (w.status == WarrantyStatus.DENIED) "Negada: " + UsedDestination.label(w.usedDestination)
+                        else WarrantyStatus.label(w.status),
                     )
                 },
             )
