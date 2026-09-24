@@ -3,15 +3,12 @@ package br.com.lojabaterias.ui.viewmodel
 import android.net.Uri
 import androidx.lifecycle.viewModelScope
 import br.com.lojabaterias.AppContainer
+import br.com.lojabaterias.data.FullReport
 import br.com.lojabaterias.data.ReportDocument
 import br.com.lojabaterias.data.ReportPdfWriter
-import br.com.lojabaterias.data.SaleWithItems
-import br.com.lojabaterias.data.ScrapPeriodSummary
-import br.com.lojabaterias.data.StoreRepository
 import br.com.lojabaterias.domain.PeriodType
 import br.com.lojabaterias.domain.Periods
 import br.com.lojabaterias.domain.Report
-import br.com.lojabaterias.domain.ReportCalculator
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -34,12 +31,10 @@ data class ReportsState(
     val selection: ReportSelection = ReportSelection(),
     val today: LocalDate = LocalDate.now(),
     val label: String = "",
-    val report: Report = Report.EMPTY,
-    /** Vendas válidas do período (usadas no PDF). */
-    val sales: List<SaleWithItems> = emptyList(),
-    val scrap: ScrapPeriodSummary = ScrapPeriodSummary(),
+    val full: FullReport = FullReport(),
     val loading: Boolean = true,
 ) {
+    val report: Report get() = full.sales
     val pdfFileName: String get() = Periods.reportFileName(selection.type, today, selection.offset)
 }
 
@@ -52,21 +47,30 @@ class ReportsViewModel(private val container: AppContainer) : MessageViewModel()
     private val _exporting = MutableStateFlow(false)
     val exporting: StateFlow<Boolean> = _exporting.asStateFlow()
 
+    /** Posição atual de estoque e sucatas (independe do período). */
+    private val snapshot = combine(
+        repo.observeProducts(),
+        repo.observeScrapStock(),
+        repo.observeScrapPrices().map { list -> list.associate { it.amperage to it.value } },
+    ) { products, scrapStock, prices -> Triple(products, scrapStock, prices) }
+
     val state: StateFlow<ReportsState> = combine(selection, currentDateFlow()) { sel, today -> sel to today }
         .flatMapLatest { (sel, today) ->
             val range = Periods.range(sel.type, today, sel.offset)
-            combine(repo.observeActiveSales(range), repo.observeScrapSold(range)) { sales, sold -> sales to sold }
-                .map { (sales, sold) ->
-                    ReportsState(
-                        selection = sel,
-                        today = today,
-                        label = Periods.label(sel.type, today, sel.offset),
-                        report = ReportCalculator.build(sales.map { StoreRepository.toReportSale(it) }),
-                        sales = sales,
-                        scrap = ScrapPeriodSummary.from(sales, sold),
-                        loading = false,
-                    )
-                }
+            val period = combine(
+                repo.observeSales(range),
+                repo.observeStockMovementsInRange(range),
+                repo.observeScrapMovementsInRange(range),
+            ) { sales, stockMoves, scrapMoves -> Triple(sales, stockMoves, scrapMoves) }
+            combine(period, snapshot) { (sales, stockMoves, scrapMoves), (products, scrapStock, prices) ->
+                ReportsState(
+                    selection = sel,
+                    today = today,
+                    label = Periods.label(sel.type, today, sel.offset),
+                    full = FullReport.build(sales, stockMoves, scrapMoves, products, scrapStock, prices),
+                    loading = false,
+                )
+            }
         }
         .flowOn(Dispatchers.Default)
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), ReportsState())
@@ -86,9 +90,7 @@ class ReportsViewModel(private val container: AppContainer) : MessageViewModel()
                 val doc = ReportDocument(
                     type = s.selection.type,
                     periodLabel = Periods.formalLabel(s.selection.type, s.today, s.selection.offset),
-                    report = s.report,
-                    sales = s.sales,
-                    scrap = s.scrap,
+                    full = s.full,
                 )
                 withContext(Dispatchers.IO) {
                     val out = container.app.contentResolver.openOutputStream(uri, "wt")

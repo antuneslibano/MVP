@@ -14,9 +14,13 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.FilledTonalButton
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
@@ -39,6 +43,7 @@ import br.com.lojabaterias.data.Product
 import br.com.lojabaterias.domain.Money
 import br.com.lojabaterias.domain.Periods
 import br.com.lojabaterias.ui.components.AppCard
+import br.com.lojabaterias.ui.components.ConfirmDialog
 import br.com.lojabaterias.ui.components.EmptyState
 import br.com.lojabaterias.ui.components.InfoRow
 import br.com.lojabaterias.ui.components.IntField
@@ -60,6 +65,7 @@ fun ProductDetailScreen(productId: Long, onEdit: () -> Unit, onSell: () -> Unit,
 
     var showEntry by remember { mutableStateOf(false) }
     var showAdjust by remember { mutableStateOf(false) }
+    var toDelete by remember { mutableStateOf<MovementWithModel?>(null) }
 
     SubScreen(
         title = "Bateria",
@@ -109,9 +115,19 @@ fun ProductDetailScreen(productId: Long, onEdit: () -> Unit, onSell: () -> Unit,
                 if (movements.isEmpty()) {
                     item { EmptyState("Sem movimentações.") }
                 }
-                items(movements, key = { it.movement.id }) { MovementRow(it, showModel = false) }
+                items(movements, key = { it.movement.id }) { m ->
+                    MovementRow(
+                        m,
+                        showModel = false,
+                        onDelete = if (MovementType.isDeletable(m.movement.type)) ({ toDelete = m }) else null,
+                    )
+                }
             }
         }
+    }
+
+    toDelete?.let { m ->
+        DeleteMovementDialog(m, onConfirm = { vm.deleteMovement(m.movement.id) { toDelete = null } }, onDismiss = { toDelete = null })
     }
 
     val product = loaded?.value
@@ -163,7 +179,22 @@ private fun ProductHeader(product: Product) {
 }
 
 @Composable
-fun MovementRow(item: MovementWithModel, showModel: Boolean) {
+fun DeleteMovementDialog(item: MovementWithModel, onConfirm: () -> Unit, onDismiss: () -> Unit) {
+    val m = item.movement
+    ConfirmDialog(
+        title = "Excluir registro?",
+        text = "${MovementType.label(m.type)} de ${if (m.quantity > 0) "+" else ""}${m.quantity} " +
+            "(${item.model ?: "bateria excluída"}) em ${Periods.formatDateTime(m.dateTime)}. " +
+            "O estoque será corrigido desfazendo esta movimentação.",
+        confirmLabel = "Excluir",
+        destructive = true,
+        onConfirm = onConfirm,
+        onDismiss = onDismiss,
+    )
+}
+
+@Composable
+fun MovementRow(item: MovementWithModel, showModel: Boolean, onDelete: (() -> Unit)? = null) {
     val m = item.movement
     AppCard {
         Row(Modifier.padding(horizontal = 16.dp, vertical = 10.dp), verticalAlignment = Alignment.CenterVertically) {
@@ -194,6 +225,11 @@ fun MovementRow(item: MovementWithModel, showModel: Boolean) {
                     style = MaterialTheme.typography.labelSmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
+            }
+            if (onDelete != null) {
+                IconButton(onClick = onDelete) {
+                    Icon(Icons.Filled.Delete, contentDescription = "Excluir", tint = MaterialTheme.colorScheme.onSurfaceVariant)
+                }
             }
         }
     }

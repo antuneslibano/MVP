@@ -34,16 +34,23 @@ pois todos os APKs são assinados com a mesma chave (`app/signing/loja-baterias.
 - **Relatórios**: diário, semanal e mensal (com navegação para períodos anteriores): faturamento, custo,
   lucro bruto, número de vendas, baterias vendidas, ticket médio, modelos mais vendidos, com maior
   faturamento e com maior lucro, e vendas por forma de pagamento.
-  O botão **Baixar PDF** gera o relatório do período selecionado (resumo, rankings,
-  formas de pagamento e lista de vendas) e salva onde você escolher.
+  O botão **Baixar PDF** gera o relatório **completo** do período selecionado:
+  vendas (resumo, descontos, rankings, formas de pagamento, lista de vendas e cancelamentos),
+  estoque (entradas, ajustes, posição atual modelo a modelo com valores, alertas e movimentações)
+  e sucatas (resumo, compras, vendas, estoque atual e movimentações).
 - **Sucatas** (menu ☰ no rodapé):
   - Na venda, informe se o cliente **deixou a sucata** (e a amperagem dela) ou **não deixou**.
     Sem sucata, o app sugere cobrar o valor da tabela conforme a amperagem da bateria vendida
     (valor editável; entra no faturamento). Vendas com várias baterias aceitam sucata parcial.
-  - Estoque de sucatas por amperagem, valor estimado, entrada manual, venda de sucatas
+  - Estoque de sucatas por amperagem, valor estimado, entrada manual, **compra de sucatas** (valor pago), venda de sucatas
     (ex.: para o reciclador, com o valor recebido), ajuste e histórico.
   - **Tabela de sucatas**: valor da sucata por amperagem.
   - Cancelar uma venda retira do estoque a sucata que veio com ela.
+- **Senha de acesso**: pedida ao abrir o app e ao voltar depois de 2 minutos em segundo plano.
+  "Esqueci a senha" mostra a pergunta secreta e, com a resposta certa, revela a senha.
+  A senha não fica escrita no código (apenas um hash e uma versão cifrada com a resposta).
+- **Excluir registros**: vendas (na tela da venda), movimentações de estoque (entrada, ajuste,
+  estoque inicial) e de sucatas (entrada, compra, venda, ajuste). O estoque é corrigido junto.
 - **Menu ☰**: acesso a todas as áreas (Início, Nova venda, Vendas, Estoque, Sucatas, Relatórios,
   Movimentações, Tabela de sucatas e Backup).
 - **Backup**: exporta/importa todos os dados em um arquivo JSON (ícone de engrenagem na tela inicial).

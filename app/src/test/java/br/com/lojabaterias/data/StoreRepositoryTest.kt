@@ -164,4 +164,99 @@ class StoreRepositoryTest {
         assertEquals(1, prices.size)
         assertTrue(prices.first().value == 5_000L)
     }
+
+    @Test
+    fun deleteActiveSale_restoresStockAndRemovesEverything() = runBlocking {
+        val id = newProduct()
+        val saleId = repo.registerSale(id, 2, PaymentMethod.PIX, 25_000, 0, 1_000, ScrapInput(2, 0, 60, 0))
+        assertEquals(6, repo.getProduct(id)!!.stock)
+        assertEquals(2, scrapStock(60))
+        repo.deleteSale(saleId)
+        assertEquals(8, repo.getProduct(id)!!.stock)
+        assertEquals(0, scrapStock(60))
+        assertEquals(null, repo.getSale(saleId))
+        val range = br.com.lojabaterias.domain.DateRange(0, Long.MAX_VALUE)
+        assertTrue(repo.observeStockMovementsInRange(range).first().none { it.movement.saleId == saleId })
+        assertEquals(0, repo.observeSummary(range).first().count)
+    }
+
+    @Test
+    fun deleteCanceledSale_doesNotChangeStockAgain() = runBlocking {
+        val id = newProduct()
+        val saleId = repo.registerSale(id, 1, PaymentMethod.PIX, 25_000, 0, 1_000, ScrapInput(1, 0, 60, 0))
+        repo.cancelSale(saleId)
+        repo.deleteSale(saleId)
+        assertEquals(8, repo.getProduct(id)!!.stock)
+        assertEquals(0, scrapStock(60))
+    }
+
+    @Test
+    fun deleteStockEntry_revertsStock_andSaleMovementsAreProtected() = runBlocking {
+        val id = newProduct(stock = 2)
+        repo.addStock(id, 5, null, null)
+        assertEquals(7, repo.getProduct(id)!!.stock)
+        val range = br.com.lojabaterias.domain.DateRange(0, Long.MAX_VALUE)
+        val entry = repo.observeStockMovementsInRange(range).first().first { it.movement.type == MovementType.ENTRY }
+        repo.deleteStockMovement(entry.movement.id)
+        assertEquals(2, repo.getProduct(id)!!.stock)
+
+        repo.registerSale(id, 1, PaymentMethod.PIX, 25_000, 0, 1_000, ScrapInput(1, 0, 60, 0))
+        val saleMove = repo.observeStockMovementsInRange(range).first().first { it.movement.type == MovementType.SALE }
+        expectBusinessError { repo.deleteStockMovement(saleMove.movement.id) }
+        // Excluir o estoque inicial (2) com só 1 em estoque deixaria negativo
+        val initial = repo.observeStockMovementsInRange(range).first().first { it.movement.type == MovementType.INITIAL }
+        expectBusinessError { repo.deleteStockMovement(initial.movement.id) }
+        assertEquals(1, repo.getProduct(id)!!.stock)
+    }
+
+    @Test
+    fun buyAndDeleteScrapMovements() = runBlocking {
+        repo.buyScrap(60, 4, 12_000, "fornecedor")
+        assertEquals(4, scrapStock(60))
+        repo.sellScrap(60, 3, 15_000, null)
+        val range = br.com.lojabaterias.domain.DateRange(0, Long.MAX_VALUE)
+        val moves = repo.observeScrapMovementsInRange(range).first()
+        val summary = ScrapPeriodSummary.from(emptyList(), moves)
+        assertEquals(4, summary.purchasedQuantity)
+        assertEquals(12_000L, summary.purchasedAmount)
+        assertEquals(3, summary.soldQuantity)
+        assertEquals(3_000L, summary.netAmount)
+        // excluir a compra deixaria o estoque negativo (-3)
+        val purchase = moves.first { it.type == ScrapMovementType.PURCHASE }
+        expectBusinessError { repo.deleteScrapMovement(purchase.id) }
+        val sold = moves.first { it.type == ScrapMovementType.SOLD }
+        repo.deleteScrapMovement(sold.id)
+        assertEquals(4, scrapStock(60))
+    }
+
+    @Test
+    fun fullReport_coversSalesStockAndScrap() = runBlocking {
+        val id = newProduct()
+        repo.saveScrapPrice(0, 60, 5_000)
+        repo.addStock(id, 2, null, null)
+        val s1 = repo.registerSale(id, 2, PaymentMethod.PIX, 25_000, 1_000, 1_000, ScrapInput(1, 1, 60, 5_000))
+        val s2 = repo.registerSale(id, 1, PaymentMethod.CREDITO, 28_000, 0, 2_000, ScrapInput(1, 0, 60, 0))
+        repo.cancelSale(s2)
+        val range = br.com.lojabaterias.domain.DateRange(0, Long.MAX_VALUE)
+        val report = FullReport.build(
+            repo.observeSales(range).first(),
+            repo.observeStockMovementsInRange(range).first(),
+            repo.observeScrapMovementsInRange(range).first(),
+            repo.observeProducts().first(),
+            repo.observeScrapStock().first(),
+            mapOf(60 to 5_000L),
+        )
+        assertEquals(1, report.sales.salesCount)
+        assertEquals(2, report.sales.unitsSold)
+        assertEquals(54_000L, report.sales.revenue) // 50.000 - 1.000 + 5.000
+        assertEquals(1_000L, report.discountTotal)
+        assertEquals(1, report.canceledSales.size)
+        assertEquals(2, report.stockPeriod.entriesQuantity)
+        assertEquals(8, report.stockUnits) // 8 + 2 - 2 (a venda cancelada devolveu 1)
+        assertEquals(1, report.scrap.returnedInSales)
+        assertEquals(1, report.scrap.missingInSales)
+        assertEquals(1, report.scrapStockQuantity)
+        assertEquals(5_000L, report.scrapStockValue)
+        assertTrue(s1 > 0)
+    }
 }

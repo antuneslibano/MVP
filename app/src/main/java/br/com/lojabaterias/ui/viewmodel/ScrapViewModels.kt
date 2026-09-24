@@ -3,6 +3,7 @@ package br.com.lojabaterias.ui.viewmodel
 import androidx.lifecycle.viewModelScope
 import br.com.lojabaterias.data.ScrapMovement
 import br.com.lojabaterias.data.ScrapPeriodSummary
+import br.com.lojabaterias.data.ScrapStockRow
 import br.com.lojabaterias.data.ScrapPrice
 import br.com.lojabaterias.data.StoreRepository
 import br.com.lojabaterias.domain.PeriodType
@@ -15,15 +16,6 @@ import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
-
-data class ScrapStockRow(
-    val amperage: Int,
-    val quantity: Int,
-    /** Valor de tabela por unidade (null se a amperagem não está na tabela). */
-    val unitValue: Long?,
-) {
-    val totalValue: Long get() = (unitValue ?: 0) * quantity
-}
 
 data class ScrapsState(
     val stock: List<ScrapStockRow> = emptyList(),
@@ -41,8 +33,8 @@ class ScrapsViewModel(private val repo: StoreRepository) : MessageViewModel() {
 
     private val monthSummary = currentDateFlow().flatMapLatest { today ->
         val range = Periods.range(PeriodType.MONTH, today)
-        combine(repo.observeActiveSales(range), repo.observeScrapSold(range)) { sales, sold ->
-            ScrapPeriodSummary.from(sales, sold) to Periods.formalLabel(PeriodType.MONTH, today, 0)
+        combine(repo.observeActiveSales(range), repo.observeScrapMovementsInRange(range)) { sales, moves ->
+            ScrapPeriodSummary.from(sales, moves) to Periods.formalLabel(PeriodType.MONTH, today, 0)
         }
     }
 
@@ -81,6 +73,12 @@ class ScrapsViewModel(private val repo: StoreRepository) : MessageViewModel() {
         execute("Entrada de ${quantity} sucata(s) ${amperage}Ah registrada", onSuccess) {
             repo.addScrap(amperage, quantity, note)
         }
+
+    fun buyScrap(amperage: Int, quantity: Int, amount: Long, note: String, onSuccess: () -> Unit) =
+        execute("Compra de sucatas registrada", onSuccess) { repo.buyScrap(amperage, quantity, amount, note) }
+
+    fun deleteMovement(id: Long, onSuccess: () -> Unit) =
+        execute("Registro excluído", onSuccess) { repo.deleteScrapMovement(id) }
 
     fun sellScrap(amperage: Int, quantity: Int, amount: Long, note: String, onSuccess: () -> Unit) =
         execute("Venda de sucatas registrada", onSuccess) { repo.sellScrap(amperage, quantity, amount, note) }

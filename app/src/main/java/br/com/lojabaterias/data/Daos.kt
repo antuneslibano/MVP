@@ -105,6 +105,12 @@ interface SaleDao {
     @Query("DELETE FROM sale_items")
     suspend fun deleteAllItems()
 
+    @Query("DELETE FROM sale_items WHERE sale_id = :saleId")
+    suspend fun deleteItemsForSale(saleId: Long)
+
+    @Query("DELETE FROM sales WHERE id = :saleId")
+    suspend fun deleteSale(saleId: Long)
+
     @Query("DELETE FROM sales")
     suspend fun deleteAllSales()
 }
@@ -138,6 +144,22 @@ interface MovementDao {
 
     @Query("SELECT * FROM stock_movements ORDER BY id")
     suspend fun getAll(): List<StockMovement>
+
+    @Query(
+        "SELECT m.*, p.model AS model FROM stock_movements m " +
+            "LEFT JOIN products p ON p.id = m.product_id " +
+            "WHERE m.date_time >= :start AND m.date_time < :end ORDER BY m.date_time DESC, m.id DESC"
+    )
+    fun observeInRange(start: Long, end: Long): Flow<List<MovementWithModel>>
+
+    @Query("SELECT * FROM stock_movements WHERE id = :id")
+    suspend fun getById(id: Long): StockMovement?
+
+    @Query("DELETE FROM stock_movements WHERE id = :id")
+    suspend fun deleteById(id: Long)
+
+    @Query("DELETE FROM stock_movements WHERE sale_id = :saleId")
+    suspend fun deleteForSale(saleId: Long)
 
     @Query("DELETE FROM stock_movements WHERE product_id = :productId")
     suspend fun deleteForProduct(productId: Long)
@@ -200,6 +222,21 @@ interface ScrapDao {
 
     @Query("SELECT * FROM scrap_movements ORDER BY id")
     suspend fun getAllMovements(): List<ScrapMovement>
+
+    @Query(
+        "SELECT * FROM scrap_movements WHERE date_time >= :start AND date_time < :end " +
+            "ORDER BY date_time DESC, id DESC"
+    )
+    fun observeInRange(start: Long, end: Long): Flow<List<ScrapMovement>>
+
+    @Query("SELECT * FROM scrap_movements WHERE id = :id")
+    suspend fun getMovement(id: Long): ScrapMovement?
+
+    @Query("DELETE FROM scrap_movements WHERE id = :id")
+    suspend fun deleteMovement(id: Long)
+
+    @Query("DELETE FROM scrap_movements WHERE sale_id = :saleId")
+    suspend fun deleteForSale(saleId: Long)
 
     @Query("DELETE FROM scrap_movements")
     suspend fun deleteAllMovements()

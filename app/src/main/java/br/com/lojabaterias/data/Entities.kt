@@ -125,6 +125,9 @@ object MovementType {
         SALE_CANCEL -> "Cancelamento de venda"
         else -> type
     }
+
+    /** Tipos que podem ser excluídos individualmente (os ligados a vendas são excluídos com a venda). */
+    fun isDeletable(type: String): Boolean = type in setOf(INITIAL, ENTRY, ADJUSTMENT)
 }
 
 @Entity(
@@ -160,6 +163,7 @@ data class ScrapPrice(
 object ScrapMovementType {
     const val SALE_IN = "SALE_IN"
     const val MANUAL_IN = "MANUAL_IN"
+    const val PURCHASE = "PURCHASE"
     const val SOLD = "SOLD"
     const val ADJUSTMENT = "ADJUSTMENT"
     const val SALE_EDIT = "SALE_EDIT"
@@ -168,12 +172,16 @@ object ScrapMovementType {
     fun label(type: String): String = when (type) {
         SALE_IN -> "Recebida na venda"
         MANUAL_IN -> "Entrada manual"
+        PURCHASE -> "Compra de sucatas"
         SOLD -> "Venda de sucatas"
         ADJUSTMENT -> "Ajuste"
         SALE_EDIT -> "Edição de venda"
         SALE_CANCEL -> "Cancelamento de venda"
         else -> type
     }
+
+    /** Tipos que podem ser excluídos individualmente (os ligados a vendas são excluídos com a venda). */
+    fun isDeletable(type: String): Boolean = type in setOf(MANUAL_IN, PURCHASE, SOLD, ADJUSTMENT)
 }
 
 /** Movimentação do estoque de sucatas. O estoque é a soma das quantidades por amperagem. */
@@ -188,7 +196,7 @@ data class ScrapMovement(
     val amperage: Int,
     /** Variação (+ entrada, − saída). */
     val quantity: Int,
-    /** Valor recebido (venda de sucatas ao reciclador), em centavos. */
+    /** Valor recebido (venda de sucatas) ou pago (compra de sucatas), em centavos. */
     val amount: Long = 0,
     @ColumnInfo(name = "sale_id") val saleId: Long? = null,
     val note: String? = null,

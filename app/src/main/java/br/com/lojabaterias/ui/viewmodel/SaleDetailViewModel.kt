@@ -18,6 +18,19 @@ class SaleDetailViewModel(private val repo: StoreRepository, private val saleId:
         .map { Loaded(it) }
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), null)
 
+    /** Exclui a venda definitivamente. [onDeleted] é chamado para fechar a tela. */
+    fun delete(onDeleted: () -> Unit) {
+        viewModelScope.launch {
+            try {
+                repo.deleteSale(saleId)
+                message("Venda excluída")
+                onDeleted()
+            } catch (e: Exception) {
+                message(errorMessage(e))
+            }
+        }
+    }
+
     fun cancel() {
         viewModelScope.launch {
             try {

@@ -45,7 +45,9 @@ import br.com.lojabaterias.ui.components.AppCard
 import br.com.lojabaterias.ui.components.InfoRow
 import br.com.lojabaterias.ui.components.SectionTitle
 import br.com.lojabaterias.ui.components.ToastEffect
+import br.com.lojabaterias.ui.theme.dangerColor
 import br.com.lojabaterias.ui.theme.moneyResultColor
+import br.com.lojabaterias.ui.theme.warningColor
 import br.com.lojabaterias.ui.viewmodel.ReportsViewModel
 import br.com.lojabaterias.ui.viewmodel.appViewModel
 
@@ -56,6 +58,7 @@ fun ReportsScreen() {
     val state by vm.state.collectAsStateWithLifecycle()
     val exporting by vm.exporting.collectAsStateWithLifecycle()
     val r = state.report
+    val f = state.full
     ToastEffect(vm.messages)
 
     val pdfLauncher = rememberLauncherForActivityResult(ActivityResultContracts.CreateDocument("application/pdf")) { uri ->
@@ -145,6 +148,17 @@ fun ReportsScreen() {
                 }
             }
 
+            item {
+                AppCard {
+                    Column(Modifier.padding(horizontal = 16.dp, vertical = 8.dp)) {
+                        InfoRow("Valor bruto", Money.format(f.grossTotal))
+                        InfoRow("Descontos concedidos", Money.format(f.discountTotal))
+                        InfoRow("Cobrado por sucata faltante", Money.format(f.scrap.charged))
+                        InfoRow("Vendas canceladas", "${f.canceledSales.size} • ${Money.format(f.canceledAmount)}")
+                    }
+                }
+            }
+
             item { SectionTitle("Modelos mais vendidos") }
             item {
                 RankingCard(r.topByQuantity) { "${it.quantity} un." }
@@ -182,17 +196,54 @@ fun ReportsScreen() {
                     }
                 }
             }
+            item { SectionTitle("Estoque de baterias") }
+            item {
+                AppCard {
+                    Column(Modifier.padding(horizontal = 16.dp, vertical = 8.dp)) {
+                        val p = f.stockPeriod
+                        Text("No período", style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.primary)
+                        InfoRow("Baterias vendidas", p.soldUnits.toString())
+                        InfoRow("Entradas", "${p.entriesQuantity} un. • ${Money.format(p.entriesCost)}")
+                        if (p.initialQuantity > 0) InfoRow("Estoque inicial cadastrado", "${p.initialQuantity} un.")
+                        if (p.adjustmentsIn > 0 || p.adjustmentsOut > 0) {
+                            InfoRow("Ajustes", "+${p.adjustmentsIn} / -${p.adjustmentsOut}")
+                        }
+                        HorizontalDivider(Modifier.padding(vertical = 6.dp))
+                        Text("Posição atual", style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.primary)
+                        InfoRow("Baterias em estoque", "${f.stockUnits} (${f.stockRows.size} modelos)")
+                        InfoRow("Valor a preço de custo", Money.format(f.stockValueAtCost))
+                        InfoRow("Valor a preço PIX", Money.format(f.stockValueAtPix))
+                        if (f.lowStock.isNotEmpty()) {
+                            InfoRow("Estoque baixo", f.lowStock.joinToString { it.model }, valueColor = warningColor())
+                        }
+                        if (f.outOfStock.isNotEmpty()) {
+                            InfoRow("Zerados", f.outOfStock.joinToString { it.model }, valueColor = dangerColor())
+                        }
+                    }
+                }
+            }
+
             item { SectionTitle("Sucatas") }
             item {
                 AppCard {
                     Column(Modifier.padding(horizontal = 16.dp, vertical = 8.dp)) {
-                        InfoRow("Recebidas nas vendas", state.scrap.returnedInSales.toString())
-                        InfoRow("Clientes sem sucata", state.scrap.missingInSales.toString())
-                        InfoRow("Cobrado por sucata faltante", Money.format(state.scrap.charged))
-                        InfoRow("Sucatas vendidas", state.scrap.soldQuantity.toString())
-                        InfoRow("Recebido na venda de sucatas", Money.format(state.scrap.soldAmount))
+                        Text("No período", style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.primary)
+                        ScrapSummaryRows(f.scrap)
+                        HorizontalDivider(Modifier.padding(vertical = 6.dp))
+                        Text("Posição atual", style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.primary)
+                        InfoRow("Sucatas em estoque", f.scrapStockQuantity.toString())
+                        InfoRow("Valor estimado", Money.format(f.scrapStockValue))
                     }
                 }
+            }
+            item {
+                Text(
+                    "O PDF traz tudo isso e mais: lista de vendas e cancelamentos, estoque modelo a modelo " +
+                        "e todas as movimentações de estoque e de sucatas do período.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.padding(vertical = 8.dp),
+                )
             }
         }
     }

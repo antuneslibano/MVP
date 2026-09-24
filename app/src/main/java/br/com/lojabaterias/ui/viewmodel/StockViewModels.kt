@@ -71,6 +71,18 @@ class ProductDetailViewModel(private val repo: StoreRepository, private val prod
         }
     }
 
+    fun deleteMovement(id: Long, onSuccess: () -> Unit) {
+        viewModelScope.launch {
+            try {
+                repo.deleteStockMovement(id)
+                message("Registro excluído e estoque corrigido")
+                onSuccess()
+            } catch (e: Exception) {
+                message(errorMessage(e))
+            }
+        }
+    }
+
     fun adjustStock(newStock: Int, note: String, onSuccess: () -> Unit) {
         viewModelScope.launch {
             try {
@@ -198,7 +210,19 @@ class ProductFormViewModel(private val repo: StoreRepository, productId: Long?) 
     }
 }
 
-class MovementsViewModel(repo: StoreRepository) : ViewModel() {
+class MovementsViewModel(private val repo: StoreRepository) : MessageViewModel() {
     val movements: StateFlow<List<MovementWithModel>?> = repo.observeRecentMovements()
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), null)
+
+    fun deleteMovement(id: Long, onSuccess: () -> Unit) {
+        viewModelScope.launch {
+            try {
+                repo.deleteStockMovement(id)
+                message("Registro excluído e estoque corrigido")
+                onSuccess()
+            } catch (e: Exception) {
+                message(errorMessage(e))
+            }
+        }
+    }
 }

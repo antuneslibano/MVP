@@ -15,10 +15,15 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.FilterChip
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
@@ -40,10 +45,13 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import br.com.lojabaterias.data.ScrapMovement
 import br.com.lojabaterias.data.ScrapMovementType
+import br.com.lojabaterias.data.ScrapPeriodSummary
+import br.com.lojabaterias.data.ScrapStockRow
 import br.com.lojabaterias.domain.Money
 import br.com.lojabaterias.domain.Periods
 import br.com.lojabaterias.domain.Scrap
 import br.com.lojabaterias.ui.components.AppCard
+import br.com.lojabaterias.ui.components.ConfirmDialog
 import br.com.lojabaterias.ui.components.EmptyState
 import br.com.lojabaterias.ui.components.InfoRow
 import br.com.lojabaterias.ui.components.IntField
@@ -52,12 +60,11 @@ import br.com.lojabaterias.ui.components.SectionTitle
 import br.com.lojabaterias.ui.components.ToastEffect
 import br.com.lojabaterias.ui.theme.dangerColor
 import br.com.lojabaterias.ui.theme.profitColor
-import br.com.lojabaterias.ui.viewmodel.ScrapStockRow
 import br.com.lojabaterias.ui.viewmodel.ScrapsState
 import br.com.lojabaterias.ui.viewmodel.ScrapsViewModel
 import br.com.lojabaterias.ui.viewmodel.appViewModel
 
-private enum class ScrapDialog { NONE, ENTRY, SELL, ADJUST }
+private enum class ScrapDialog { NONE, ENTRY, PURCHASE, SELL, ADJUST }
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -67,6 +74,7 @@ fun ScrapsScreen(onPriceTable: () -> Unit) {
     ToastEffect(vm.messages)
     var dialog by remember { mutableStateOf(ScrapDialog.NONE) }
     var dialogAmperage by remember { mutableStateOf<Int?>(null) }
+    var toDelete by remember { mutableStateOf<ScrapMovement?>(null) }
 
     Scaffold(
         topBar = {
@@ -88,20 +96,17 @@ fun ScrapsScreen(onPriceTable: () -> Unit) {
         ) {
             item { SummaryCard(state) }
             item {
-                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    FilledTonalButton(
-                        onClick = { dialogAmperage = null; dialog = ScrapDialog.ENTRY },
-                        modifier = Modifier.weight(1f).height(52.dp),
-                    ) { Text("+ Entrada") }
-                    FilledTonalButton(
-                        onClick = { dialogAmperage = null; dialog = ScrapDialog.SELL },
-                        enabled = state.totalQuantity > 0,
-                        modifier = Modifier.weight(1f).height(52.dp),
-                    ) { Text("Vender") }
-                    FilledTonalButton(
-                        onClick = { dialogAmperage = null; dialog = ScrapDialog.ADJUST },
-                        modifier = Modifier.weight(1f).height(52.dp),
-                    ) { Text("Ajustar") }
+                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        ActionButton("Entrada", Modifier.weight(1f)) { dialogAmperage = null; dialog = ScrapDialog.ENTRY }
+                        ActionButton("Compra", Modifier.weight(1f)) { dialogAmperage = null; dialog = ScrapDialog.PURCHASE }
+                    }
+                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        ActionButton("Vender", Modifier.weight(1f), enabled = state.totalQuantity > 0) {
+                            dialogAmperage = null; dialog = ScrapDialog.SELL
+                        }
+                        ActionButton("Ajustar", Modifier.weight(1f)) { dialogAmperage = null; dialog = ScrapDialog.ADJUST }
+                    }
                 }
             }
 
@@ -121,11 +126,7 @@ fun ScrapsScreen(onPriceTable: () -> Unit) {
             item {
                 AppCard {
                     Column(Modifier.padding(16.dp)) {
-                        InfoRow("Recebidas nas vendas", state.month.returnedInSales.toString())
-                        InfoRow("Clientes sem sucata", state.month.missingInSales.toString())
-                        InfoRow("Cobrado por sucata faltante", Money.format(state.month.charged))
-                        InfoRow("Sucatas vendidas", state.month.soldQuantity.toString())
-                        InfoRow("Recebido na venda de sucatas", Money.format(state.month.soldAmount), bold = true)
+                        ScrapSummaryRows(state.month)
                     }
                 }
             }
@@ -134,14 +135,29 @@ fun ScrapsScreen(onPriceTable: () -> Unit) {
             if (!state.loading && state.movements.isEmpty()) {
                 item { EmptyState("Sem movimentações de sucata.") }
             }
-            items(state.movements, key = { it.id }) { ScrapMovementRow(it) }
+            items(state.movements, key = { it.id }) { m ->
+                ScrapMovementRow(m, onDelete = if (ScrapMovementType.isDeletable(m.type)) ({ toDelete = m }) else null)
+            }
         }
     }
 
     when (dialog) {
         ScrapDialog.ENTRY -> ScrapEntryDialog(
-            amperages = state.prices.keys.sorted(),
-            onConfirm = { a, q, note -> vm.addScrap(a, q, note) { dialog = ScrapDialog.NONE } },
+            title = "Entrada de sucatas",
+            description = "Sucatas recebidas sem custo e fora de uma venda (as das vendas entram sozinhas).",
+            confirmLabel = "Registrar entrada",
+            withAmount = false,
+            prices = state.prices,
+            onConfirm = { a, q, _, note -> vm.addScrap(a, q, note) { dialog = ScrapDialog.NONE } },
+            onDismiss = { dialog = ScrapDialog.NONE },
+        )
+        ScrapDialog.PURCHASE -> ScrapEntryDialog(
+            title = "Compra de sucatas",
+            description = "Sucatas que a loja comprou. Informe o valor pago.",
+            confirmLabel = "Registrar compra",
+            withAmount = true,
+            prices = state.prices,
+            onConfirm = { a, q, amount, note -> vm.buyScrap(a, q, amount, note) { dialog = ScrapDialog.NONE } },
             onDismiss = { dialog = ScrapDialog.NONE },
         )
         ScrapDialog.SELL -> ScrapSellDialog(
@@ -157,6 +173,43 @@ fun ScrapsScreen(onPriceTable: () -> Unit) {
         )
         ScrapDialog.NONE -> Unit
     }
+
+    toDelete?.let { m ->
+        ConfirmDialog(
+            title = "Excluir registro?",
+            text = "${ScrapMovementType.label(m.type)} de ${Math.abs(m.quantity)} sucata(s) ${m.amperage}Ah em " +
+                "${Periods.formatDateTime(m.dateTime)}. O estoque de sucatas será recalculado.",
+            confirmLabel = "Excluir",
+            destructive = true,
+            onConfirm = { vm.deleteMovement(m.id) { toDelete = null } },
+            onDismiss = { toDelete = null },
+        )
+    }
+}
+
+@Composable
+private fun ActionButton(text: String, modifier: Modifier, enabled: Boolean = true, onClick: () -> Unit) {
+    FilledTonalButton(onClick = onClick, enabled = enabled, modifier = modifier.height(52.dp)) {
+        Text(text, maxLines = 1)
+    }
+}
+
+/** Linhas do resumo de sucatas (usado na aba Sucatas e nos Relatórios). */
+@Composable
+fun ScrapSummaryRows(s: ScrapPeriodSummary) {
+    InfoRow("Recebidas nas vendas", s.returnedInSales.toString())
+    InfoRow("Clientes sem sucata", s.missingInSales.toString())
+    InfoRow("Cobrado por sucata faltante", Money.format(s.charged))
+    InfoRow("Entradas manuais", s.manualInQuantity.toString())
+    InfoRow("Compradas", "${s.purchasedQuantity} • ${Money.format(s.purchasedAmount)}")
+    InfoRow("Vendidas", "${s.soldQuantity} • ${Money.format(s.soldAmount)}")
+    if (s.adjustmentNet != 0) InfoRow("Ajustes", (if (s.adjustmentNet > 0) "+" else "") + s.adjustmentNet)
+    InfoRow(
+        "Resultado (vendido − comprado)",
+        Money.format(s.netAmount),
+        bold = true,
+        valueColor = if (s.netAmount < 0) dangerColor() else profitColor(),
+    )
 }
 
 @Composable
@@ -208,7 +261,7 @@ private fun StockRow(row: ScrapStockRow, onClick: () -> Unit) {
 }
 
 @Composable
-private fun ScrapMovementRow(m: ScrapMovement) {
+private fun ScrapMovementRow(m: ScrapMovement, onDelete: (() -> Unit)?) {
     AppCard {
         Row(Modifier.padding(horizontal = 16.dp, vertical = 10.dp), verticalAlignment = Alignment.CenterVertically) {
             Column(Modifier.weight(1f)) {
@@ -229,6 +282,11 @@ private fun ScrapMovementRow(m: ScrapMovement) {
                 fontWeight = FontWeight.Bold,
                 color = if (m.quantity >= 0) profitColor() else dangerColor(),
             )
+            if (onDelete != null) {
+                IconButton(onClick = onDelete) {
+                    Icon(Icons.Filled.Delete, contentDescription = "Excluir", tint = MaterialTheme.colorScheme.onSurfaceVariant)
+                }
+            }
         }
     }
 }
@@ -259,25 +317,47 @@ private fun NoteInput(value: String, onValueChange: (String) -> Unit) {
 }
 
 @Composable
-private fun ScrapEntryDialog(amperages: List<Int>, onConfirm: (Int, Int, String) -> Unit, onDismiss: () -> Unit) {
+private fun ScrapEntryDialog(
+    title: String,
+    description: String,
+    confirmLabel: String,
+    withAmount: Boolean,
+    prices: Map<Int, Long>,
+    onConfirm: (Int, Int, Long, String) -> Unit,
+    onDismiss: () -> Unit,
+) {
     var amperage by remember { mutableStateOf("") }
     var qty by remember { mutableStateOf("1") }
+    var amount by remember { mutableLongStateOf(0L) }
     var note by remember { mutableStateOf("") }
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text("Entrada de sucatas") },
+        title = { Text(title) },
         text = {
-            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            Column(
+                verticalArrangement = Arrangement.spacedBy(8.dp),
+                modifier = Modifier.verticalScroll(rememberScrollState()),
+            ) {
+                Text(description, style = MaterialTheme.typography.bodyMedium)
                 IntField(value = amperage, onValueChange = { amperage = it.take(3) }, label = "Amperagem (Ah)")
-                AmperageChips(amperages, amperage, { amperage = it.toString() })
+                AmperageChips(prices.keys.sorted(), amperage, { amperage = it.toString() })
                 IntField(value = qty, onValueChange = { qty = it }, label = "Quantidade")
+                if (withAmount) {
+                    val ref = amperage.toIntOrNull()?.let { prices[it] }
+                    MoneyField(
+                        value = amount,
+                        onValueChange = { amount = it },
+                        label = "Valor total pago",
+                        supportingText = ref?.let { "Tabela: ${Money.format(it)} por sucata" },
+                    )
+                }
                 NoteInput(note) { note = it }
             }
         },
         confirmButton = {
-            TextButton(onClick = { onConfirm(amperage.toIntOrNull() ?: 0, qty.toIntOrNull() ?: 0, note) }) {
-                Text("Registrar entrada")
-            }
+            TextButton(onClick = {
+                onConfirm(amperage.toIntOrNull() ?: 0, qty.toIntOrNull() ?: 0, amount, note)
+            }) { Text(confirmLabel) }
         },
         dismissButton = { TextButton(onClick = onDismiss) { Text("Cancelar") } },
     )

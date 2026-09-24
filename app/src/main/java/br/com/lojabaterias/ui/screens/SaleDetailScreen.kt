@@ -17,6 +17,7 @@ import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -46,6 +47,7 @@ fun SaleDetailScreen(saleId: Long, onEdit: () -> Unit, onBack: () -> Unit) {
     val loaded by vm.sale.collectAsStateWithLifecycle()
     ToastEffect(vm.messages)
     var confirmCancel by remember { mutableStateOf(false) }
+    var confirmDelete by remember { mutableStateOf(false) }
 
     SubScreen(title = "Venda #$saleId", onBack = onBack) { inner ->
         val data = loaded
@@ -143,10 +145,31 @@ fun SaleDetailScreen(saleId: Long, onEdit: () -> Unit, onBack: () -> Unit) {
                             ) { Text("Cancelar venda") }
                         }
                     }
+                    Spacer(Modifier.height(10.dp))
+                    TextButton(
+                        onClick = { confirmDelete = true },
+                        modifier = Modifier.fillMaxWidth(),
+                    ) { Text("Excluir venda do histórico", color = dangerColor()) }
                     Spacer(Modifier.height(32.dp))
                 }
             }
         }
+    }
+
+    if (confirmDelete) {
+        ConfirmDialog(
+            title = "Excluir venda?",
+            text = "A venda será apagada definitivamente do histórico e dos relatórios, como se nunca tivesse existido. " +
+                "Se ela estava ativa, as baterias voltam para o estoque e a sucata recebida sai do estoque de sucatas. " +
+                "Para apenas desfazer uma venda mantendo o registro, use \"Cancelar venda\".",
+            confirmLabel = "Excluir",
+            destructive = true,
+            onConfirm = {
+                confirmDelete = false
+                vm.delete(onDeleted = onBack)
+            },
+            onDismiss = { confirmDelete = false },
+        )
     }
 
     if (confirmCancel) {
