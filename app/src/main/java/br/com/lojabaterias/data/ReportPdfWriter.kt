@@ -479,9 +479,10 @@ object ReportPdfWriter {
                     "Compradas" to "${s.purchasedQuantity} • ${Money.format(s.purchasedAmount)}",
                     "Vendidas" to "${s.soldQuantity} • ${Money.format(s.soldAmount)}",
                     "Ajustes (saldo)" to ((if (s.adjustmentNet > 0) "+" else "") + s.adjustmentNet),
-                    "Resultado das sucatas (vendido − comprado)" to Money.format(s.netAmount),
+                    "Vales pagos (casco devolvido)" to "${s.voucherPaidQuantity} • ${Money.format(s.voucherPaidAmount)}",
+                    "Resultado das sucatas (vendido − comprado − vales)" to Money.format(s.netAmount),
                 ),
-                colors = mapOf(7 to if (s.netAmount < 0) RED else GREEN),
+                colors = mapOf(8 to if (s.netAmount < 0) RED else GREEN),
             )
         }
 

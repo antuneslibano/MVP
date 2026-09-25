@@ -206,8 +206,11 @@ fun ScrapSummaryRows(s: ScrapPeriodSummary) {
     InfoRow("Compradas", "${s.purchasedQuantity} • ${Money.format(s.purchasedAmount)}")
     InfoRow("Vendidas", "${s.soldQuantity} • ${Money.format(s.soldAmount)}")
     if (s.adjustmentNet != 0) InfoRow("Ajustes", (if (s.adjustmentNet > 0) "+" else "") + s.adjustmentNet)
+    if (s.voucherPaidQuantity > 0) {
+        InfoRow("Vales pagos (casco devolvido)", "${s.voucherPaidQuantity} • ${Money.format(s.voucherPaidAmount)}")
+    }
     InfoRow(
-        "Resultado (vendido − comprado)",
+        "Resultado (vendido − comprado − vales)",
         Money.format(s.netAmount),
         bold = true,
         valueColor = if (s.netAmount < 0) dangerColor() else profitColor(),

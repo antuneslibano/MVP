@@ -326,6 +326,33 @@ class StoreRepositoryTest {
     }
 
     @Test
+    fun scrapVoucher_isPaidWhenCustomerBringsTheCasco() = runBlocking {
+        val id = newProduct(stock = 4)
+        // Cliente levou 2 baterias sem deixar sucata e pagou R$ 60,00 pelos cascos
+        val saleId = repo.registerSale(id, 2, PaymentMethod.PIX, 25_000, 0, 1_000, ScrapInput(0, 2, 0, 6_000))
+        suspend fun open() = Vouchers.open(
+            repo.observeSales(br.com.lojabaterias.domain.DateRange(0, Long.MAX_VALUE)).first(),
+            repo.observeScrapMovementsInRange(br.com.lojabaterias.domain.DateRange(0, Long.MAX_VALUE)).first(),
+        )
+        assertEquals(6_000L, open().single().value)
+
+        // Trouxe 1 casco: devolve R$ 30,00, o vale continua com 1
+        repo.payVoucher(saleId, 1, 60)
+        assertEquals(1, open().single().remaining)
+        assertEquals(1, scrapStock(60))
+        expectBusinessError { repo.payVoucher(saleId, 2, 60) }
+
+        // Trouxe o outro: vale quitado
+        repo.payVoucher(saleId, 1, 60)
+        assertTrue(open().isEmpty())
+        assertEquals(2, scrapStock(60))
+        val paid = repo.observeScrapMovementsInRange(br.com.lojabaterias.domain.DateRange(0, Long.MAX_VALUE)).first()
+            .filter { it.type == ScrapMovementType.VOUCHER_PAID }
+        assertEquals(6_000L, paid.sumOf { it.amount })
+        expectBusinessError { repo.payVoucher(saleId, 1, 60) }
+    }
+
+    @Test
     fun cardFees_areDiscountedFromProfit() = runBlocking {
         val id = newProduct()
         val credit = repo.registerSale(id, 1, PaymentMethod.CREDITO, 28_000, 0, 1_000, ScrapInput(1, 0, 60, 0))

@@ -57,6 +57,8 @@ pois todos os APKs são assinados com a mesma chave (`app/signing/loja-baterias.
   *Garantias*: baterias trocadas; só conta modelo e quantidade, o estoque não muda.
   *Extras*: baterias que a loja ganhou; entram no estoque com custo zero e, na venda, saem com lucro de 100%
   (a venda usa primeiro as extras disponíveis do modelo; cancelar/excluir a venda devolve a extra).
+- **Vales de casco** (Menu ☰): toda venda com o casco cobrado (sem sucata) vira um vale em aberto. Quando o
+  cliente traz o casco, "Pagar vale" registra o valor devolvido no dia e o casco entra no estoque de sucatas.
 - **Atualização automática**: cada build vira uma Release no GitHub; o app avisa no Início e instala
   com um toque (Menu > Backup e sincronização > Atualizações).
 - **Menu ☰**: acesso a todas as áreas (Início, Nova venda, Vendas, Estoque, Sucatas, Relatórios,

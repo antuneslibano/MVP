@@ -699,6 +699,31 @@ class StoreRepository(
         scraps.deleteMovement(id)
     }
 
+    /**
+     * Paga o vale de casco: o cliente trouxe [quantity] casco(s) da venda [saleId].
+     * Os cascos entram no estoque de sucatas e o valor devolvido fica registrado nesta data.
+     */
+    suspend fun payVoucher(saleId: Long, quantity: Int, amperage: Int, at: Long = now()): Unit = write {
+        if (quantity <= 0) throw BusinessException("Informe quantos cascos o cliente trouxe")
+        if (amperage <= 0) throw BusinessException("Informe a amperagem do casco")
+        val sale = sales.getWithItems(saleId) ?: throw BusinessException("Venda não encontrada")
+        val paid = scraps.getAllMovements().filter { it.type == ScrapMovementType.VOUCHER_PAID && it.saleId == saleId }
+        val voucher = Vouchers.open(listOf(sale), paid).firstOrNull() ?: throw BusinessException("Este vale já foi pago")
+        if (quantity > voucher.remaining) throw BusinessException("Este vale é de ${voucher.remaining} casco(s)")
+        val amount = if (quantity == voucher.remaining) sale.sale.scrapCharge - paid.sumOf { it.amount }
+        else voucher.unitValue * quantity
+        scraps.insertMovement(
+            ScrapMovement(
+                dateTime = at,
+                type = ScrapMovementType.VOUCHER_PAID,
+                amperage = amperage,
+                quantity = quantity,
+                amount = amount,
+                saleId = saleId,
+            )
+        )
+    }
+
     /** Compra de sucatas (pagando por elas). */
     suspend fun buyScrap(amperage: Int, quantity: Int, amountPaid: Long, note: String?): Unit = write {
         if (amperage <= 0) throw BusinessException("Informe a amperagem")

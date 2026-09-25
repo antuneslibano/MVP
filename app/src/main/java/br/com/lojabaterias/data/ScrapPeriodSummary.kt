@@ -18,9 +18,12 @@ data class ScrapPeriodSummary(
     val soldAmount: Long = 0,
     /** Saldo dos ajustes de contagem (+/−). */
     val adjustmentNet: Int = 0,
+    /** Vales de casco pagos (cascos devolvidos) e valor devolvido aos clientes. */
+    val voucherPaidQuantity: Int = 0,
+    val voucherPaidAmount: Long = 0,
 ) {
-    /** Resultado financeiro das sucatas no período: vendido − comprado. */
-    val netAmount: Long get() = soldAmount - purchasedAmount
+    /** Resultado financeiro das sucatas no período: vendido − comprado − vales devolvidos. */
+    val netAmount: Long get() = soldAmount - purchasedAmount - voucherPaidAmount
 
     companion object {
         fun from(sales: List<SaleWithItems>, movements: List<ScrapMovement>): ScrapPeriodSummary {
@@ -36,6 +39,8 @@ data class ScrapPeriodSummary(
                 soldQuantity = -of(ScrapMovementType.SOLD).sumOf { it.quantity },
                 soldAmount = of(ScrapMovementType.SOLD).sumOf { it.amount },
                 adjustmentNet = of(ScrapMovementType.ADJUSTMENT).sumOf { it.quantity },
+                voucherPaidQuantity = of(ScrapMovementType.VOUCHER_PAID).sumOf { it.quantity },
+                voucherPaidAmount = of(ScrapMovementType.VOUCHER_PAID).sumOf { it.amount },
             )
         }
     }

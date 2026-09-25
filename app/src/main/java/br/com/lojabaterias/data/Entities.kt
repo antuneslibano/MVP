@@ -201,9 +201,12 @@ object ScrapMovementType {
     const val ADJUSTMENT = "ADJUSTMENT"
     const val SALE_EDIT = "SALE_EDIT"
     const val SALE_CANCEL = "SALE_CANCEL"
+    /** Vale de casco pago: o cliente trouxe o casco e recebeu de volta o valor cobrado na venda. */
+    const val VOUCHER_PAID = "VOUCHER_PAID"
 
     fun label(type: String): String = when (type) {
         SALE_IN -> "Recebida na venda"
+        VOUCHER_PAID -> "Vale pago (casco devolvido)"
         MANUAL_IN -> "Entrada manual"
         PURCHASE -> "Compra de sucatas"
         SOLD -> "Venda de sucatas"
@@ -214,7 +217,7 @@ object ScrapMovementType {
     }
 
     /** Tipos que podem ser excluídos individualmente (os ligados a vendas são excluídos com a venda). */
-    fun isDeletable(type: String): Boolean = type in setOf(MANUAL_IN, PURCHASE, SOLD, ADJUSTMENT)
+    fun isDeletable(type: String): Boolean = type in setOf(MANUAL_IN, PURCHASE, SOLD, ADJUSTMENT, VOUCHER_PAID)
 }
 
 /** Movimentação do estoque de sucatas. O estoque é a soma das quantidades por amperagem. */
@@ -229,7 +232,7 @@ data class ScrapMovement(
     val amperage: Int,
     /** Variação (+ entrada, − saída). */
     val quantity: Int,
-    /** Valor recebido (venda de sucatas) ou pago (compra de sucatas), em centavos. */
+    /** Valor recebido (venda de sucatas) ou pago (compra de sucatas / vale devolvido), em centavos. */
     val amount: Long = 0,
     @ColumnInfo(name = "sale_id") val saleId: Long? = null,
     val note: String? = null,
