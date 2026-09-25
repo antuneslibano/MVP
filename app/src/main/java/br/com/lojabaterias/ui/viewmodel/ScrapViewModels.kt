@@ -52,7 +52,7 @@ class ScrapsViewModel(private val repo: StoreRepository) : MessageViewModel() {
             prices = prices,
             month = month,
             monthLabel = monthLabel,
-            movements = movements,
+            movements = movements.filter { it.type != br.com.lojabaterias.data.ScrapMovementType.VOUCHER_ISSUED },
             loading = false,
         )
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), ScrapsState())

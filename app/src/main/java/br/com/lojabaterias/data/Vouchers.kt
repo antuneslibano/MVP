@@ -1,7 +1,8 @@
 package br.com.lojabaterias.data
 
 /**
- * Vale de casco: venda em que o cliente não deixou a sucata e pagou por ela.
+ * Vale de casco: venda em que o cliente não deixou a sucata, pagou por ela e levou vale
+ * ([ScrapMovementType.VOUCHER_ISSUED]).
  * Fica em aberto até o cliente trazer os cascos ([ScrapMovementType.VOUCHER_PAID]).
  */
 data class Voucher(
@@ -20,8 +21,9 @@ object Vouchers {
         val paid = scrapMovements.filter { it.type == ScrapMovementType.VOUCHER_PAID && it.saleId != null }
             .groupBy { it.saleId }
             .mapValues { (_, list) -> list.sumOf { it.quantity } }
+        val issued = scrapMovements.filter { it.type == ScrapMovementType.VOUCHER_ISSUED }.mapNotNull { it.saleId }.toSet()
         return sales
-            .filter { !it.sale.isCanceled && it.sale.scrapMissing > 0 && it.sale.scrapCharge > 0 }
+            .filter { it.sale.id in issued && !it.sale.isCanceled && it.sale.scrapMissing > 0 && it.sale.scrapCharge > 0 }
             .mapNotNull { s ->
                 val remaining = s.sale.scrapMissing - (paid[s.sale.id] ?: 0)
                 if (remaining <= 0) null else Voucher(s, remaining, s.sale.scrapCharge / s.sale.scrapMissing)

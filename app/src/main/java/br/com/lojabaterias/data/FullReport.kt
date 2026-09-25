@@ -156,7 +156,7 @@ data class FullReport(
                 scrap = ScrapPeriodSummary.from(active, scrapMovements),
                 scrapStock = scrapStock.filter { it.quantity != 0 }
                     .map { ScrapStockRow(it.amperage, it.quantity, scrapPrices[it.amperage]) },
-                scrapMovements = scrapMovements,
+                scrapMovements = scrapMovements.filter { it.type != ScrapMovementType.VOUCHER_ISSUED },
                 charges = chargeSummary,
                 chargesInPeriod = periodCharges,
                 warranty = WarrantyPeriodSummary.from(periodClaims),

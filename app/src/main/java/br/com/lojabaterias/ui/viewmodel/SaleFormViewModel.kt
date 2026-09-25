@@ -49,6 +49,8 @@ data class SaleFormState(
     val scrapCharge: Long = 0,
     /** Se o usuário alterou o valor cobrado manualmente. */
     val scrapChargeEdited: Boolean = false,
+    /** O cliente levou vale do casco (o valor do vale é o valor cobrado pela sucata). */
+    val scrapVoucher: Boolean = false,
     /** Amperagem da bateria vendida (usada para sugerir sucata e valor). */
     val batteryAmperage: Int = 0,
     /** Taxas das maquininhas em vigor. */
@@ -71,6 +73,7 @@ data class SaleFormState(
                 missing = scrapMissing,
                 amperage = if (scrapReturned > 0) scrapAmperage.toIntOrNull() ?: 0 else 0,
                 charge = if (scrapMissing > 0) scrapCharge else 0,
+                voucher = scrapVoucher,
             )
         }
 
@@ -149,6 +152,7 @@ class SaleFormViewModel(
             scrapAmperage = sale.sale.scrapAmperage?.toString() ?: "",
             scrapCharge = sale.sale.scrapCharge,
             scrapChargeEdited = true,
+            scrapVoucher = repo.hasVoucher(id),
             batteryAmperage = batteryAmperage(product, item?.modelSnapshot ?: ""),
             fees = repo.cardFees,
             freeAvailable = item?.let { repo.freeExtraCount(it.productId, id) } ?: 0,
@@ -188,6 +192,7 @@ class SaleFormViewModel(
                 scrapAmperage = batteryAmperage(product, product.model).takeIf { a -> a > 0 }?.toString() ?: "",
                 scrapCharge = 0,
                 scrapChargeEdited = false,
+                scrapVoucher = false,
                 batteryAmperage = batteryAmperage(product, product.model),
                 freeAvailable = 0,
             ).withScrapDefaults()
@@ -227,6 +232,7 @@ class SaleFormViewModel(
     fun setScrapAmperage(text: String) = _form.update { it.copy(scrapAmperage = text.filter { c -> c.isDigit() }.take(3)) }
     fun setScrapCharge(v: Long) = _form.update { it.copy(scrapCharge = v, scrapChargeEdited = true) }
     fun resetScrapCharge() = _form.update { it.copy(scrapChargeEdited = false).withScrapDefaults() }
+    fun setScrapVoucher(v: Boolean) = _form.update { it.copy(scrapVoucher = v) }
     fun setUnitPrice(v: Long) = _form.update { it.copy(unitPrice = v) }
     fun setDiscount(v: Long) = _form.update { it.copy(discount = v) }
     fun setDateTime(millis: Long) = _form.update { it.copy(dateTime = millis, dateTimeEdited = true) }

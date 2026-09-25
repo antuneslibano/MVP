@@ -22,7 +22,11 @@ data class ScrapInput(
     val missing: Int,
     val amperage: Int,
     val charge: Long,
+    /** O cliente levou vale: devolvemos o valor cobrado quando ele trouxer o casco. */
+    val voucher: Boolean = false,
 ) {
+    val hasVoucher: Boolean get() = voucher && missing > 0 && charge > 0
+
     val amperageOrNull: Int? get() = if (returned > 0 && amperage > 0) amperage else null
 
     companion object {
@@ -317,7 +321,28 @@ class StoreRepository(
                 )
             )
         }
+        setVoucher(saleId, scrap, dateTime)
         saleId
+    }
+
+    /** O cliente levou vale nesta venda? */
+    suspend fun hasVoucher(saleId: Long): Boolean =
+        scraps.getAllMovements().any { it.type == ScrapMovementType.VOUCHER_ISSUED && it.saleId == saleId }
+
+    /** Grava (ou retira) a marca de vale da venda, conforme a sucata informada. */
+    private suspend fun setVoucher(saleId: Long, scrap: ScrapInput, at: Long) {
+        val existing = scraps.getAllMovements().filter { it.type == ScrapMovementType.VOUCHER_ISSUED && it.saleId == saleId }
+        if (scrap.hasVoucher) {
+            if (existing.isEmpty()) {
+                scraps.insertMovement(
+                    ScrapMovement(dateTime = at, type = ScrapMovementType.VOUCHER_ISSUED, amperage = 0, quantity = 0,
+                        amount = scrap.charge, saleId = saleId)
+                )
+            }
+        } else if (existing.isNotEmpty()) {
+            tomb(SyncTables.SCRAP_MOVEMENTS, existing.map { it.id })
+            existing.forEach { scraps.deleteMovement(it.id) }
+        }
     }
 
     /**
@@ -406,6 +431,7 @@ class StoreRepository(
                 )
             }
         }
+        setVoucher(saleId, scrap, dateTime)
     }
 
     /**
@@ -712,8 +738,10 @@ class StoreRepository(
         if (quantity <= 0) throw BusinessException("Informe quantos cascos o cliente trouxe")
         if (amperage <= 0) throw BusinessException("Informe a amperagem do casco")
         val sale = sales.getWithItems(saleId) ?: throw BusinessException("Venda não encontrada")
-        val paid = scraps.getAllMovements().filter { it.type == ScrapMovementType.VOUCHER_PAID && it.saleId == saleId }
-        val voucher = Vouchers.open(listOf(sale), paid).firstOrNull() ?: throw BusinessException("Este vale já foi pago")
+        val ofSale = scraps.getAllMovements().filter { it.saleId == saleId }
+        val paid = ofSale.filter { it.type == ScrapMovementType.VOUCHER_PAID }
+        val voucher = Vouchers.open(listOf(sale), ofSale).firstOrNull()
+            ?: throw BusinessException(if (paid.isEmpty()) "Esta venda não tem vale" else "Este vale já foi pago")
         if (quantity > voucher.remaining) throw BusinessException("Este vale é de ${voucher.remaining} casco(s)")
         val amount = if (quantity == voucher.remaining) sale.sale.scrapCharge - paid.sumOf { it.amount }
         else voucher.unitValue * quantity

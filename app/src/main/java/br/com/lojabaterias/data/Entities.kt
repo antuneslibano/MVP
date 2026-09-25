@@ -203,10 +203,13 @@ object ScrapMovementType {
     const val SALE_CANCEL = "SALE_CANCEL"
     /** Vale de casco pago: o cliente trouxe o casco e recebeu de volta o valor cobrado na venda. */
     const val VOUCHER_PAID = "VOUCHER_PAID"
+    /** Marca que o cliente levou vale na venda (quantidade 0: não mexe no estoque de sucatas). */
+    const val VOUCHER_ISSUED = "VOUCHER_ISSUED"
 
     fun label(type: String): String = when (type) {
         SALE_IN -> "Recebida na venda"
         VOUCHER_PAID -> "Vale pago (casco devolvido)"
+        VOUCHER_ISSUED -> "Vale entregue ao cliente"
         MANUAL_IN -> "Entrada manual"
         PURCHASE -> "Compra de sucatas"
         SOLD -> "Venda de sucatas"

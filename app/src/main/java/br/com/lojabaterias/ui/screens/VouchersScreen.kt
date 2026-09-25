@@ -79,7 +79,8 @@ fun VouchersScreen() {
         ) {
             item {
                 Text(
-                    "Toda venda com o casco cobrado vira um vale. Quando o cliente trouxer o casco, toque em " +
+                    "Vendas em que o cliente pagou o casco e levou vale (\"Deixou vale? Sim\" na venda). " +
+                        "Quando o cliente trouxer o casco, toque em " +
                         "\"Pagar vale\": o valor devolvido fica registrado no dia e o casco entra nas sucatas.",
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,

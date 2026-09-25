@@ -420,5 +420,36 @@ private fun ScrapSection(vm: SaleFormViewModel, form: SaleFormState) {
         if (form.scrapChargeEdited && form.scrapCharge != suggested && suggested > 0) {
             TextButton(onClick = vm::resetScrapCharge) { Text("Usar valor da tabela (${Money.format(suggested)})") }
         }
+        if (form.scrapCharge > 0) {
+            Text(
+                "Deixou vale?",
+                style = MaterialTheme.typography.titleSmall,
+                modifier = Modifier.padding(top = 8.dp, bottom = 4.dp),
+            )
+            SingleChoiceSegmentedButtonRow(Modifier.fillMaxWidth()) {
+                SegmentedButton(
+                    selected = form.scrapVoucher,
+                    onClick = { vm.setScrapVoucher(true) },
+                    shape = SegmentedButtonDefaults.itemShape(0, 2),
+                    icon = {},
+                ) { FitText("Sim", style = MaterialTheme.typography.labelLarge) }
+                SegmentedButton(
+                    selected = !form.scrapVoucher,
+                    onClick = { vm.setScrapVoucher(false) },
+                    shape = SegmentedButtonDefaults.itemShape(1, 2),
+                    icon = {},
+                ) { FitText("Não", style = MaterialTheme.typography.labelLarge) }
+            }
+            Text(
+                if (form.scrapVoucher) {
+                    "Vale de ${Money.format(form.scrapCharge)}: aparece em \"Vales de casco\" até o cliente trazer o casco."
+                } else {
+                    "Sem vale: o casco fica pago e não há nada a devolver."
+                },
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.padding(top = 4.dp),
+            )
+        }
     }
 }
