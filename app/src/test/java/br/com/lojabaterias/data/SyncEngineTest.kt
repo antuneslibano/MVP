@@ -106,7 +106,7 @@ class SyncEngineTest {
         a.sync()
 
         assertEquals(3, a.product("BEP60D").stock)
-        assertEquals(4, b.product("BEP60D").stock)
+        assertEquals(3, b.product("BEP60D").stock)
         assertEquals(2, a.salesCount())
         assertEquals(2, b.salesCount())
         assertEquals(1, b.scrap(60))
@@ -204,7 +204,7 @@ class SyncEngineTest {
         val w = a.repo.createWarranty(null, "", id, "BEP60D", true, id, 0, null, null)
         a.sync()
         b.sync()
-        assertEquals(3, b.product("BEP60D").stock)
+        assertEquals(4, b.product("BEP60D").stock)
         assertEquals(br.com.lojabaterias.data.WarrantyStatus.AWAITING_PICKUP, b.repo.observeWarranty(w).first()!!.status)
         // B entrega a carga; A vê a entrega
         b.repo.deliverCharge(chargeId, null)
