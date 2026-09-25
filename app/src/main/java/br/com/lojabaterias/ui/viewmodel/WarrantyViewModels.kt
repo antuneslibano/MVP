@@ -30,11 +30,20 @@ data class WarrantiesState(
     val byModel: List<ModelCount> = emptyList(),
     /** Registros do mês (da aba escolhida), mais recentes primeiro. */
     val list: List<WarrantyClaim> = emptyList(),
+    /** Os mesmos registros agrupados por modelo e dia (ex.: 2× BE50D). */
+    val groups: List<WarrantyGroup> = emptyList(),
     /** Extras ainda no estoque (não vendidas), considerando todos os meses. */
     val extrasInStock: Int = 0,
     val loading: Boolean = true,
 ) {
     val total: Int get() = list.size
+}
+
+/** Baterias do mesmo modelo lançadas no mesmo dia. */
+data class WarrantyGroup(val model: String, val createdAt: Long, val extra: Boolean, val items: List<WarrantyClaim>) {
+    val count: Int get() = items.size
+    val soldCount: Int get() = items.count { it.saleId != null }
+    val key: String get() = "$extra-${items.first().id}"
 }
 
 class WarrantiesViewModel(private val repo: StoreRepository) : MessageViewModel() {
@@ -55,6 +64,9 @@ class WarrantiesViewModel(private val repo: StoreRepository) : MessageViewModel(
                 monthLabel = Periods.label(PeriodType.MONTH, today, off),
                 byModel = WarrantyPeriodSummary.byModel(inMonth),
                 list = inMonth,
+                groups = inMonth.groupBy { Triple(it.returnedModel, Periods.formatDate(it.createdAt), it.isExtra) }
+                    .map { (key, items) -> WarrantyGroup(key.first, items.maxOf { it.createdAt }, key.third, items) }
+                    .sortedByDescending { it.createdAt },
                 extrasInStock = all.count { it.isExtra && it.saleId == null },
                 loading = false,
             )
@@ -80,11 +92,11 @@ class WarrantiesViewModel(private val repo: StoreRepository) : MessageViewModel(
         }
     }
 
-    fun delete(w: WarrantyClaim) {
+    fun delete(g: WarrantyGroup) {
         viewModelScope.launch {
             try {
-                repo.deleteWarranty(w.id)
-                message(if (w.isExtra) "Extra excluída e retirada do estoque" else "Troca excluída")
+                repo.deleteWarranties(g.items.map { it.id })
+                message(if (g.extra) "Extra excluída e retirada do estoque" else "Troca excluída")
             } catch (e: Exception) {
                 message(errorMessage(e))
             }

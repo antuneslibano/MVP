@@ -643,20 +643,25 @@ class StoreRepository(
     }
 
     /** Exclui uma troca ou uma extra (a extra sai do estoque, se ainda não foi vendida). */
-    suspend fun deleteWarranty(id: Long): Unit = write {
-        val w = warranties.getById(id) ?: return@write
-        if (w.isExtra) {
-            if (w.saleId != null) {
-                throw BusinessException("Esta extra já foi vendida. Para excluí-la, cancele ou exclua a venda antes.")
+    suspend fun deleteWarranty(id: Long) = deleteWarranties(listOf(id))
+
+    /** Exclui várias de uma vez (tudo ou nada). */
+    suspend fun deleteWarranties(ids: List<Long>): Unit = write {
+        for (id in ids) {
+            val w = warranties.getById(id) ?: continue
+            if (w.isExtra) {
+                if (w.saleId != null) {
+                    throw BusinessException("Uma dessas extras já foi vendida. Para excluí-la, cancele ou exclua a venda antes.")
+                }
+                val p = w.returnedProductId?.let { products.getById(it) }
+                if (p != null && p.stock <= 0) {
+                    throw BusinessException("Não é possível excluir: o estoque de ${p.model} ficaria negativo")
+                }
+                undoStockMovement(w.inMovementId)
             }
-            val p = w.returnedProductId?.let { products.getById(it) }
-            if (p != null && p.stock <= 0) {
-                throw BusinessException("Não é possível excluir: o estoque de ${p.model} ficaria negativo")
-            }
-            undoStockMovement(w.inMovementId)
+            tomb(SyncTables.WARRANTIES, listOf(id))
+            warranties.delete(id)
         }
-        tomb(SyncTables.WARRANTIES, listOf(id))
-        warranties.delete(id)
     }
 
     /** Quantas extras (custo zero) de um produto podem entrar numa venda; na edição, conta também as da própria venda. */

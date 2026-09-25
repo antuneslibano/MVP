@@ -42,7 +42,6 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import br.com.lojabaterias.data.Product
-import br.com.lojabaterias.data.WarrantyClaim
 import br.com.lojabaterias.domain.Periods
 import br.com.lojabaterias.ui.components.AppCard
 import br.com.lojabaterias.ui.components.ConfirmDialog
@@ -55,6 +54,7 @@ import br.com.lojabaterias.ui.components.SectionTitle
 import br.com.lojabaterias.ui.components.ToastEffect
 import br.com.lojabaterias.ui.theme.profitColor
 import br.com.lojabaterias.ui.viewmodel.WarrantiesViewModel
+import br.com.lojabaterias.ui.viewmodel.WarrantyGroup
 import br.com.lojabaterias.ui.viewmodel.WarrantyTab
 import br.com.lojabaterias.ui.viewmodel.appViewModel
 
@@ -69,7 +69,7 @@ fun WarrantiesScreen() {
     val extras = state.tab == WarrantyTab.EXTRAS
     var picking by remember { mutableStateOf(false) }
     var chosen by remember { mutableStateOf<Product?>(null) }
-    var toDelete by remember { mutableStateOf<WarrantyClaim?>(null) }
+    var toDelete by remember { mutableStateOf<WarrantyGroup?>(null) }
 
     Scaffold(
         topBar = {
@@ -172,7 +172,7 @@ fun WarrantiesScreen() {
                     )
                 }
             }
-            items(state.list, key = { it.id }) { w -> WarrantyRow(w, onDelete = { toDelete = w }) }
+            items(state.groups, key = { it.key }) { g -> WarrantyRow(g, onDelete = { toDelete = g }) }
         }
     }
 
@@ -192,35 +192,39 @@ fun WarrantiesScreen() {
             onDismiss = { chosen = null },
         )
     }
-    toDelete?.let { w ->
+    toDelete?.let { g ->
         ConfirmDialog(
-            title = if (w.isExtra) "Excluir extra?" else "Excluir troca?",
-            text = "1× ${w.returnedModel} de ${Periods.formatDate(w.createdAt)}." +
-                if (w.isExtra) " A bateria sai do estoque." else "",
+            title = if (g.extra) "Excluir extra?" else "Excluir troca?",
+            text = "${g.count}× ${g.model} de ${Periods.formatDate(g.createdAt)}." +
+                if (g.extra) " As baterias saem do estoque." else "",
             confirmLabel = "Excluir",
             destructive = true,
-            onConfirm = { vm.delete(w); toDelete = null },
+            onConfirm = { vm.delete(g); toDelete = null },
             onDismiss = { toDelete = null },
         )
     }
 }
 
 @Composable
-private fun WarrantyRow(w: WarrantyClaim, onDelete: () -> Unit) {
+private fun WarrantyRow(g: WarrantyGroup, onDelete: () -> Unit) {
     AppCard {
         Row(Modifier.padding(start = 16.dp, top = 4.dp, bottom = 4.dp), verticalAlignment = Alignment.CenterVertically) {
             Column(Modifier.weight(1f).padding(vertical = 6.dp)) {
-                Text(w.returnedModel, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+                Text("${g.count}× ${g.model}", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
                 Text(
-                    Periods.formatDateTime(w.createdAt),
+                    Periods.formatDate(g.createdAt),
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
-                if (w.isExtra) {
+                if (g.extra) {
+                    val inStock = g.count - g.soldCount
                     Text(
-                        if (w.saleId != null) "Vendida (lucro 100%)" else "No estoque",
+                        listOfNotNull(
+                            g.soldCount.takeIf { it > 0 }?.let { "$it vendida(s) (lucro 100%)" },
+                            inStock.takeIf { it > 0 }?.let { "$it no estoque" },
+                        ).joinToString(" • "),
                         style = MaterialTheme.typography.bodySmall,
-                        color = if (w.saleId != null) profitColor() else MaterialTheme.colorScheme.primary,
+                        color = if (inStock == 0) profitColor() else MaterialTheme.colorScheme.primary,
                     )
                 }
             }
