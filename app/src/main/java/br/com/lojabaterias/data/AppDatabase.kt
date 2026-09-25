@@ -19,7 +19,7 @@ import androidx.sqlite.db.SupportSQLiteDatabase
         ChargeService::class,
         WarrantyClaim::class,
     ],
-    version = 7,
+    version = 8,
     exportSchema = true,
 )
 abstract class AppDatabase : RoomDatabase() {
@@ -194,7 +194,26 @@ abstract class AppDatabase : RoomDatabase() {
             }
         }
 
-        val ALL_MIGRATIONS = arrayOf(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5, MIGRATION_5_6, MIGRATION_6_7)
+        /**
+         * v7 → v8: apaga os vales de casco pagos da versão antiga (vendas sem "Deixou vale? Sim").
+         * Os vales novos sempre têm a marca VOUCHER_ISSUED na venda e não são tocados.
+         */
+        val MIGRATION_7_8 = object : Migration(7, 8) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                val now = System.currentTimeMillis()
+                val oldVouchers = "type = 'VOUCHER_PAID' AND (sale_id IS NULL OR sale_id NOT IN " +
+                    "(SELECT sale_id FROM scrap_movements WHERE type = 'VOUCHER_ISSUED' AND sale_id IS NOT NULL))"
+                db.execSQL(
+                    "INSERT INTO tombstones (table_name, record_id, deleted_at) " +
+                        "SELECT 'scrap_movements', id, $now FROM scrap_movements WHERE $oldVouchers"
+                )
+                db.execSQL("DELETE FROM scrap_movements WHERE $oldVouchers")
+            }
+        }
+
+        val ALL_MIGRATIONS = arrayOf(
+            MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5, MIGRATION_5_6, MIGRATION_6_7, MIGRATION_7_8,
+        )
 
         fun build(context: Context): AppDatabase =
             Room.databaseBuilder(context.applicationContext, AppDatabase::class.java, NAME)
