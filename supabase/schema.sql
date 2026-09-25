@@ -149,6 +149,9 @@ create table if not exists public.deletions (
 
 -- Atualizações de colunas (seguro rodar de novo)
 alter table public.sales add column if not exists card_fee bigint not null default 0;
+alter table public.warranty_claims add column if not exists returned_serial text;
+alter table public.warranty_claims add column if not exists returned_sale_date bigint;
+alter table public.warranty_claims add column if not exists replacement_serial text;
 
 -- ---------- Índices para buscar só o que mudou ----------
 create index if not exists products_sua on public.products (server_updated_at);

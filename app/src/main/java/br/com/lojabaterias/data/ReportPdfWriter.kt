@@ -374,11 +374,11 @@ object ReportPdfWriter {
             if (f.warrantiesInPeriod.isEmpty()) return emptyLine("Nenhum atendimento de garantia no período.")
             table(
                 listOf(Col(1.5f), Col(1.3f), Col(1.6f), Col(1.6f), Col(1.1f, true), Col(1.9f)),
-                listOf("Data", "Garantia", "Trouxe", "Entregue", "Diferença", "Situação"),
+                listOf("Data", "Série (trouxe)", "Trouxe", "Entregue", "Diferença", "Situação"),
                 f.warrantiesInPeriod.map { w ->
                     listOf(
                         Periods.formatDate(w.createdAt),
-                        w.saleId?.let { br.com.lojabaterias.domain.WarrantyCode.of(it) } ?: "sem venda",
+                        w.returnedSerial ?: "—",
                         w.returnedModel,
                         w.replacementModel ?: "—",
                         if (w.differenceAmount > 0) Money.format(w.differenceAmount) else "",

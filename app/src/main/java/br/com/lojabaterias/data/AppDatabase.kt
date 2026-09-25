@@ -19,7 +19,7 @@ import androidx.sqlite.db.SupportSQLiteDatabase
         ChargeService::class,
         WarrantyClaim::class,
     ],
-    version = 5,
+    version = 6,
     exportSchema = true,
 )
 abstract class AppDatabase : RoomDatabase() {
@@ -170,7 +170,16 @@ abstract class AppDatabase : RoomDatabase() {
             }
         }
 
-        val ALL_MIGRATIONS = arrayOf(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5)
+        /** v5 → v6: números de série nas trocas em garantia (apenas novas colunas). */
+        val MIGRATION_5_6 = object : Migration(5, 6) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("ALTER TABLE `warranty_claims` ADD COLUMN `returned_serial` TEXT")
+                db.execSQL("ALTER TABLE `warranty_claims` ADD COLUMN `returned_sale_date` INTEGER")
+                db.execSQL("ALTER TABLE `warranty_claims` ADD COLUMN `replacement_serial` TEXT")
+            }
+        }
+
+        val ALL_MIGRATIONS = arrayOf(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5, MIGRATION_5_6)
 
         fun build(context: Context): AppDatabase =
             Room.databaseBuilder(context.applicationContext, AppDatabase::class.java, NAME)

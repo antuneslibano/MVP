@@ -53,9 +53,10 @@ pois todos os APKs são assinados com a mesma chave (`app/signing/loja-baterias.
   estoque inicial) e de sucatas (entrada, compra, venda, ajuste). O estoque é corrigido junto.
 - **Baterias na carga** (Menu ☰): recebimento com cliente, telefone (botões Ligar/WhatsApp), data,
   valor, se foi pago e se emprestou uma bateria usada da loja (qual foi fica na observação; não mexe no estoque).
-- **Garantias** (Menu ☰, ou pela venda): cada venda tem um código de garantia (ex.: G-7K2Q9XA).
-  Na venda, "Garantia: testar / trocar bateria" guia o passo a passo: teste (ruim/boa), bateria nova
-  entregue (mesma ou outra), diferença paga. A nova sai do estoque e a do cliente vai para
+- **Garantias** (Menu ☰, ou pela venda): só as trocas são registradas. "Nova troca / teste" guia o
+  passo a passo: modelo, nº de série e data da venda (do papel da garantia) da bateria do cliente, teste
+  (ruim/boa), bateria nova entregue (mesma ou outra) com seu nº de série e a data da troca, diferença paga.
+  A busca da tela de Garantias encontra a troca pelo nº de série. A nova sai do estoque e a do cliente vai para
   "Aguardando recolha" → "Na fábrica" → reposição (mesma, outra aceita, ou recusada) ou garantia negada
   (seção "Usadas": sucata, vendida ou descartada).
 - **Atualização automática**: cada build vira uma Release no GitHub; o app avisa no Início e instala

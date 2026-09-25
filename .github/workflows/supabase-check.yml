@@ -24,11 +24,14 @@ jobs:
 
           echo "== Tabelas (acesso anônimo deve ser BLOQUEADO) =="
           for t in products sales sale_items stock_movements scrap_prices scrap_movements charge_services warranty_claims deletions; do
-            col=id; [ "$t" = "deletions" ] && col=record_id
+            col=id
+            [ "$t" = "deletions" ] && col=record_id
+            [ "$t" = "sales" ] && col=id,card_fee
+            [ "$t" = "warranty_claims" ] && col=id,returned_serial,returned_sale_date,replacement_serial
             body=$(curl -sS "$URL/rest/v1/$t?select=$col&limit=1" -H "apikey: $KEY" -H "Authorization: Bearer $KEY" -w "\n%{http_code}")
             code=$(echo "$body" | tail -n1); text=$(echo "$body" | head -n -1)
-            if echo "$text" | grep -qiE "does not exist|Could not find the table"; then
-              echo "FALTANDO: tabela $t não existe (rode supabase/schema.sql)"; ok=0
+            if echo "$text" | grep -qiE "does not exist|Could not find"; then
+              echo "FALTANDO: tabela ou coluna nova em $t (rode supabase/schema.sql): $text"; ok=0
             elif [ "$code" = "401" ] || [ "$code" = "403" ] || echo "$text" | grep -qi "permission denied"; then
               echo "OK: $t existe e está protegida ($code)"
             else

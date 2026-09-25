@@ -322,7 +322,7 @@ fun SaleRow(sale: SaleWithItems, onClick: () -> Unit, showDate: Boolean = true) 
                 Spacer(Modifier.height(2.dp))
                 Text(
                     (if (showDate) Periods.formatDateTime(s.dateTime) else Periods.formatTime(s.dateTime)) +
-                        " • " + s.payment.label + " • " + br.com.lojabaterias.domain.WarrantyCode.of(s.id),
+                        " • " + s.payment.label,
                     style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )

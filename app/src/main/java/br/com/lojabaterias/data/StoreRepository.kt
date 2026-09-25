@@ -617,19 +617,25 @@ class StoreRepository(
         differenceAmount: Long,
         differenceMethod: PaymentMethod?,
         note: String?,
+        returnedSerial: String? = null,
+        returnedSaleDate: Long? = null,
+        replacementSerial: String? = null,
         at: Long = now(),
     ): Long = write {
         val model = returnedModel.trim()
         if (model.isEmpty()) throw BusinessException("Informe a bateria que o cliente trouxe")
         if (differenceAmount < 0) throw BusinessException("Diferença inválida")
+        if (returnedSaleDate != null && returnedSaleDate > at) throw BusinessException("A data da venda é depois da data da troca")
         val id = IdGenerator.next()
-        val code = saleId?.let { br.com.lojabaterias.domain.WarrantyCode.of(it) } ?: "sem venda"
+        val oldSerial = returnedSerial?.trim()?.uppercase()?.ifEmpty { null }
+        val newSerial = replacementSerial?.trim()?.uppercase()?.ifEmpty { null }
         if (!defective) {
             warranties.insert(
                 WarrantyClaim(
                     id = id, saleId = saleId, createdAt = at, customerName = customerName.trim(),
                     returnedProductId = returnedProductId, returnedModel = model, defective = false,
                     status = WarrantyStatus.NO_DEFECT, resolvedAt = at, note = note?.trim()?.ifEmpty { null },
+                    returnedSerial = oldSerial, returnedSaleDate = returnedSaleDate,
                 )
             )
             return@write id
@@ -639,7 +645,7 @@ class StoreRepository(
         if (replacement.stock <= 0) throw BusinessException("Sem estoque de ${replacement.model}. Escolha outra bateria.")
         val outId = moveStock(
             replacement.id, -1, MovementType.WARRANTY_OUT,
-            "Garantia $code: entregue no lugar de $model", at, replacement.cost,
+            "Garantia: entregue no lugar de $model" + (oldSerial?.let { " (série $it)" } ?: ""), at, replacement.cost,
         )
         warranties.insert(
             WarrantyClaim(
@@ -658,6 +664,9 @@ class StoreRepository(
                 differenceMethod = if (differenceAmount > 0) (differenceMethod ?: PaymentMethod.PIX).name else null,
                 status = WarrantyStatus.AWAITING_PICKUP,
                 note = note?.trim()?.ifEmpty { null },
+                returnedSerial = oldSerial,
+                returnedSaleDate = returnedSaleDate,
+                replacementSerial = newSerial,
             )
         )
         id
@@ -681,8 +690,8 @@ class StoreRepository(
             throw BusinessException("Esta garantia não está aguardando reposição")
         }
         val p = products.getById(productId) ?: throw BusinessException("Bateria não encontrada")
-        val code = w.saleId?.let { br.com.lojabaterias.domain.WarrantyCode.of(it) } ?: "sem venda"
-        val inId = moveStock(p.id, +1, MovementType.WARRANTY_IN, "Reposição da fábrica (garantia $code, era ${w.returnedModel})", at)
+        val serial = w.returnedSerial?.let { ", série $it" } ?: ""
+        val inId = moveStock(p.id, +1, MovementType.WARRANTY_IN, "Reposição da fábrica (garantia de ${w.returnedModel}$serial)", at)
         warranties.update(
             w.copy(
                 status = WarrantyStatus.REPLACED,

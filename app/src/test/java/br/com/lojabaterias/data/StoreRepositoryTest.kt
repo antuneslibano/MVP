@@ -323,6 +323,28 @@ class StoreRepositoryTest {
     }
 
     @Test
+    fun warranty_savesSerialNumbersAndDates() = runBlocking {
+        val id = newProduct(stock = 2)
+        val soldAt = 1_000_000L
+        val exchangedAt = 2_000_000L
+        val w = repo.createWarranty(
+            null, "", id, "BEP60D", true, id, 0, null, null,
+            returnedSerial = " 12ab-34 ", returnedSaleDate = soldAt, replacementSerial = "99XY", at = exchangedAt,
+        )
+        val saved = repo.observeWarranty(w).first()!!
+        assertEquals("12AB-34", saved.returnedSerial)
+        assertEquals(soldAt, saved.returnedSaleDate)
+        assertEquals("99XY", saved.replacementSerial)
+        assertEquals(exchangedAt, saved.createdAt)
+        assertEquals(1, repo.getProduct(id)!!.stock)
+
+        // Data da venda depois da troca é recusada
+        expectBusinessError {
+            repo.createWarranty(null, "", id, "BEP60D", true, id, 0, null, null, returnedSaleDate = exchangedAt + 1, at = exchangedAt)
+        }
+    }
+
+    @Test
     fun warranty_withoutStock_isRejected() = runBlocking {
         val id = newProduct(stock = 0)
         expectBusinessError { repo.createWarranty(null, "", id, "BEP60D", true, id, 0, null, null) }

@@ -54,19 +54,19 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardCapitalization
+import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import br.com.lojabaterias.data.Product
-import br.com.lojabaterias.data.SaleWithItems
 import br.com.lojabaterias.data.UsedDestination
 import br.com.lojabaterias.data.WarrantyClaim
 import br.com.lojabaterias.data.WarrantyStatus
 import br.com.lojabaterias.domain.Money
 import br.com.lojabaterias.domain.Periods
 import br.com.lojabaterias.domain.Scrap
-import br.com.lojabaterias.domain.WarrantyCode
 import br.com.lojabaterias.ui.components.AppCard
 import br.com.lojabaterias.ui.components.ConfirmDialog
+import br.com.lojabaterias.ui.components.DatePickerModal
 import br.com.lojabaterias.ui.components.EmptyState
 import br.com.lojabaterias.ui.components.InfoRow
 import br.com.lojabaterias.ui.components.IntField
@@ -78,12 +78,13 @@ import br.com.lojabaterias.ui.components.ToastEffect
 import br.com.lojabaterias.ui.theme.dangerColor
 import br.com.lojabaterias.ui.theme.profitColor
 import br.com.lojabaterias.ui.theme.warningColor
-import br.com.lojabaterias.ui.viewmodel.SalePickerViewModel
 import br.com.lojabaterias.ui.viewmodel.WarrantiesViewModel
 import br.com.lojabaterias.ui.viewmodel.WarrantyDetailViewModel
 import br.com.lojabaterias.ui.viewmodel.WarrantyFormViewModel
 import br.com.lojabaterias.ui.viewmodel.WarrantyTab
 import br.com.lojabaterias.ui.viewmodel.appViewModel
+import java.time.LocalDate
+import java.time.ZoneId
 import java.util.concurrent.TimeUnit
 
 /** "há 3 meses", "há 12 dias". */
@@ -147,12 +148,26 @@ fun WarrantiesScreen(onNew: () -> Unit, onOpen: (Long) -> Unit) {
                     )
                 }
             }
+            val searching = state.query.isNotBlank()
             LazyColumn(
                 contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = 12.dp, bottom = 96.dp),
                 verticalArrangement = Arrangement.spacedBy(8.dp),
             ) {
-                item { TabHelp(state.tab) }
-                if (state.tab == WarrantyTab.PICKUP && state.list.size > 1) {
+                item {
+                    SearchField(value = state.query, onValueChange = vm::setQuery, placeholder = "Buscar nº de série, modelo ou cliente...")
+                }
+                item {
+                    if (searching) {
+                        Text(
+                            "Resultado da busca em todas as seções (${state.list.size})",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                    } else {
+                        TabHelp(state.tab)
+                    }
+                }
+                if (!searching && state.tab == WarrantyTab.PICKUP && state.list.size > 1) {
                     item {
                         FilledTonalButton(
                             onClick = { confirmCollectAll = true },
@@ -161,7 +176,7 @@ fun WarrantiesScreen(onNew: () -> Unit, onOpen: (Long) -> Unit) {
                     }
                 }
                 if (!state.loading && state.list.isEmpty()) {
-                    item { EmptyState("Nada nesta seção.") }
+                    item { EmptyState(if (searching) "Nenhuma troca encontrada." else "Nada nesta seção.") }
                 }
                 items(state.list, key = { it.id }) { w -> WarrantyRow(w) { onOpen(w.id) } }
             }
@@ -204,7 +219,7 @@ private fun WarrantyRow(w: WarrantyClaim, onClick: () -> Unit) {
                 )
                 Text(
                     Periods.formatDate(w.createdAt) +
-                        (w.saleId?.let { " • ${WarrantyCode.of(it)}" } ?: " • sem venda") +
+                        (w.returnedSerial?.let { " • série $it" } ?: "") +
                         (w.customerName.takeIf { it.isNotBlank() }?.let { " • $it" } ?: ""),
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
@@ -222,58 +237,6 @@ private fun WarrantyRow(w: WarrantyClaim, onClick: () -> Unit) {
                     else -> warningColor()
                 },
             )
-        }
-    }
-}
-
-// --------------------------------------------------------------- Escolher a venda
-
-@Composable
-fun WarrantySalePickerScreen(onPickSale: (Long) -> Unit, onNoSale: () -> Unit, onBack: () -> Unit) {
-    val vm = appViewModel { SalePickerViewModel(it.repository) }
-    val query by vm.searchQuery.collectAsStateWithLifecycle()
-    val results by vm.results.collectAsStateWithLifecycle()
-
-    SubScreen(title = "Troca em garantia", onBack = onBack) { inner ->
-        LazyColumn(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(inner),
-            contentPadding = PaddingValues(start = 16.dp, end = 16.dp, bottom = 24.dp),
-            verticalArrangement = Arrangement.spacedBy(8.dp),
-        ) {
-            item {
-                StepHeader(1, "Encontre a venda da bateria")
-                Text(
-                    "Digite o código da garantia (ex.: G-7K2Q9XA) ou o modelo da bateria. Depois toque na venda.",
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    modifier = Modifier.padding(bottom = 8.dp),
-                )
-                SearchField(value = query, onValueChange = vm::setQuery, placeholder = "Código da garantia ou modelo...")
-            }
-            item {
-                TextButton(onClick = onNoSale) { Text("A venda não está no sistema (venda antiga)") }
-            }
-            if (results.isEmpty()) item { EmptyState("Nenhuma venda encontrada.") }
-            items(results, key = { it.sale.id }) { s -> SalePickRow(s) { onPickSale(s.sale.id) } }
-        }
-    }
-}
-
-@Composable
-private fun SalePickRow(s: SaleWithItems, onClick: () -> Unit) {
-    AppCard(onClick = onClick) {
-        Row(Modifier.padding(horizontal = 16.dp, vertical = 12.dp), verticalAlignment = Alignment.CenterVertically) {
-            Column(Modifier.weight(1f)) {
-                Text("${s.quantity}× ${s.modelsLabel}", style = MaterialTheme.typography.titleMedium)
-                Text(
-                    "${Periods.formatDate(s.sale.dateTime)} (${elapsedLabel(s.sale.dateTime)}) • ${Money.format(s.sale.finalAmount)}",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-            }
-            Text(WarrantyCode.of(s.sale.id), style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.primary)
         }
     }
 }
@@ -310,6 +273,32 @@ private fun ChoiceCard(title: String, subtitle: String, selected: Boolean, onCli
             Text(subtitle, style = MaterialTheme.typography.bodySmall)
         }
     }
+}
+
+@Composable
+private fun DateField(label: String, date: LocalDate?, onPick: (LocalDate) -> Unit, modifier: Modifier = Modifier) {
+    var open by remember { mutableStateOf(false) }
+    Column(modifier) {
+        Text(label, style = MaterialTheme.typography.labelLarge, modifier = Modifier.padding(bottom = 4.dp))
+        OutlinedButton(onClick = { open = true }, modifier = Modifier.fillMaxWidth().height(52.dp)) {
+            Text(date?.format(Periods.DATE) ?: "Escolher data")
+        }
+    }
+    if (open) {
+        DatePickerModal(initial = date ?: LocalDate.now(), onPick = onPick, onDismiss = { open = false })
+    }
+}
+
+@Composable
+private fun SerialField(value: String, onValueChange: (String) -> Unit, label: String) {
+    OutlinedTextField(
+        value = value,
+        onValueChange = { onValueChange(it.uppercase().take(40)) },
+        label = { Text(label) },
+        singleLine = true,
+        keyboardOptions = KeyboardOptions(capitalization = KeyboardCapitalization.Characters, keyboardType = KeyboardType.Ascii),
+        modifier = Modifier.fillMaxWidth().padding(top = 8.dp),
+    )
 }
 
 @Composable
@@ -356,20 +345,33 @@ fun WarrantyFormScreen(saleId: Long?, onDone: () -> Unit, onBack: () -> Unit) {
             val sale = s.sale
             AppCard(containerColor = MaterialTheme.colorScheme.primaryContainer) {
                 Column(Modifier.padding(16.dp)) {
+                    Text("Modelo", style = MaterialTheme.typography.labelLarge)
+                    Text(s.returnedModel.ifBlank { "Escolha o modelo" }, style = MaterialTheme.typography.headlineSmall)
                     if (sale != null) {
-                        Text("Garantia ${WarrantyCode.of(sale.sale.id)}", style = MaterialTheme.typography.labelLarge)
-                        Text(s.returnedModel, style = MaterialTheme.typography.headlineSmall)
                         Text(
-                            "Vendida em ${Periods.formatDate(sale.sale.dateTime)} (${elapsedLabel(sale.sale.dateTime)}) • " +
-                                "${sale.quantity} un. • ${Money.format(sale.sale.finalAmount)}",
+                            "Venda de ${Periods.formatDate(sale.sale.dateTime)} • ${sale.quantity} un. • ${Money.format(sale.sale.finalAmount)}",
                             style = MaterialTheme.typography.bodyMedium,
                         )
                     } else {
-                        Text("Venda não registrada no sistema", style = MaterialTheme.typography.labelLarge)
-                        Text(s.returnedModel.ifBlank { "Escolha o modelo" }, style = MaterialTheme.typography.headlineSmall)
-                        TextButton(onClick = { pickReturned = true }) { Text("Escolher o modelo da bateria") }
+                        TextButton(onClick = { pickReturned = true }) {
+                            Text(if (s.returnedModel.isBlank()) "Escolher o modelo da bateria" else "Trocar o modelo")
+                        }
                     }
                 }
+            }
+            SerialField(s.returnedSerial, vm::setReturnedSerial, "Nº de série da bateria do cliente")
+            DateField(
+                label = "Data da venda (no papel da garantia)",
+                date = s.saleDate,
+                onPick = vm::setSaleDate,
+                modifier = Modifier.padding(top = 8.dp),
+            )
+            s.saleDate?.let { d ->
+                Text(
+                    "Vendida ${elapsedLabel(d.atStartOfDay(ZoneId.systemDefault()).toInstant().toEpochMilli())}",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
             }
             OutlinedTextField(
                 value = s.customerName,
@@ -424,6 +426,21 @@ fun WarrantyFormScreen(saleId: Long?, onDone: () -> Unit, onBack: () -> Unit) {
                         }
                     }
                 }
+                SerialField(s.replacementSerial, vm::setReplacementSerial, "Nº de série da bateria nova")
+                DateField(
+                    label = "Data da troca",
+                    date = s.exchangeDate,
+                    onPick = vm::setExchangeDate,
+                    modifier = Modifier.padding(top = 8.dp),
+                )
+                if (s.returnedSerial.isBlank() || s.saleDate == null || s.replacementSerial.isBlank()) {
+                    Text(
+                        "Para confirmar a troca, preencha os dois números de série e a data da venda.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = warningColor(),
+                        modifier = Modifier.padding(top = 4.dp),
+                    )
+                }
 
                 // 4. Diferença
                 StepHeader(4, "O cliente pagou diferença?")
@@ -455,7 +472,7 @@ fun WarrantyFormScreen(saleId: Long?, onDone: () -> Unit, onBack: () -> Unit) {
                 AppCard(containerColor = MaterialTheme.colorScheme.surfaceContainerHigh) {
                     Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
                         if (s.defective == true) {
-                            Text("• Sai do estoque: 1× ${s.replacement?.model ?: "(escolha a bateria nova)"} (nova, entregue ao cliente)")
+                            Text("• Sai do estoque: 1× ${s.replacement?.model ?: "(escolha a bateria nova)"} (nova, entregue ao cliente em ${s.exchangeDate.format(Periods.DATE)})")
                             Text("• A bateria do cliente (${s.returnedModel}) vai para \"Aguardando recolha\" da fábrica")
                             if (s.difference > 0) Text("• Diferença recebida: ${Money.format(s.difference)} (${s.differenceMethod.label})")
                         } else {
@@ -523,15 +540,18 @@ fun WarrantyDetailScreen(id: Long, onOpenSale: (Long) -> Unit, onBack: () -> Uni
                             style = MaterialTheme.typography.headlineSmall,
                         )
                         w.saleId?.let {
-                            TextButton(onClick = { onOpenSale(it) }) { Text("Ver venda ${WarrantyCode.of(it)}") }
+                            TextButton(onClick = { onOpenSale(it) }) { Text("Ver venda") }
                         }
                     }
                 }
                 AppCard {
                     Column(Modifier.padding(16.dp)) {
                         Text("Linha do tempo", style = MaterialTheme.typography.titleSmall)
-                        InfoRow("Atendimento", Periods.formatDateTime(w.createdAt))
+                        w.returnedSaleDate?.let { InfoRow("Venda (papel da garantia)", Periods.formatDate(it)) }
+                        InfoRow(if (w.defective) "Troca" else "Teste", Periods.formatDate(w.createdAt))
                         if (w.customerName.isNotBlank()) InfoRow("Cliente", w.customerName)
+                        w.returnedSerial?.let { InfoRow("Série da bateria do cliente", it, bold = true) }
+                        w.replacementSerial?.let { InfoRow("Série da bateria nova", it, bold = true) }
                         InfoRow("Teste", if (w.defective) "Bateria ruim" else "Bateria boa (sem troca)")
                         w.replacementModel?.let { InfoRow("Entregue ao cliente", "$it (custo ${Money.format(w.replacementCost)})") }
                         if (w.differenceAmount > 0) InfoRow("Diferença paga", Money.format(w.differenceAmount))

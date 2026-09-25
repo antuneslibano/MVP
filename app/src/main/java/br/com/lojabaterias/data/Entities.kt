@@ -373,6 +373,12 @@ data class WarrantyClaim(
     @ColumnInfo(name = "used_sale_value") val usedSaleValue: Long = 0,
     @ColumnInfo(name = "scrap_movement_id") val scrapMovementId: Long? = null,
     val note: String? = null,
+    /** Número de série (de fábrica) da bateria que o cliente trouxe. */
+    @ColumnInfo(name = "returned_serial") val returnedSerial: String? = null,
+    /** Data da venda original, conforme o papel da garantia. */
+    @ColumnInfo(name = "returned_sale_date") val returnedSaleDate: Long? = null,
+    /** Número de série (de fábrica) da bateria nova entregue. */
+    @ColumnInfo(name = "replacement_serial") val replacementSerial: String? = null,
     /** Controle de sincronização: momento da última alteração local. */
     @ColumnInfo(name = "updated_at", defaultValue = "0") val updatedAt: Long = System.currentTimeMillis(),
     /** Controle de sincronização: alteração ainda não enviada para a nuvem. */

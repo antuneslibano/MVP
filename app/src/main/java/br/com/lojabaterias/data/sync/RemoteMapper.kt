@@ -183,6 +183,8 @@ object RemoteMapper {
         put("used_destination", w.usedDestination.orNull()); put("used_destination_at", w.usedDestinationAt.orNull())
         put("used_sale_value", w.usedSaleValue); put("scrap_movement_id", w.scrapMovementId.orNull())
         put("note", w.note.orNull()); put("updated_at", w.updatedAt)
+        put("returned_serial", w.returnedSerial.orNull()); put("returned_sale_date", w.returnedSaleDate.orNull())
+        put("replacement_serial", w.replacementSerial.orNull())
     }
 
     fun warranty(o: JSONObject) = WarrantyClaim(
@@ -211,6 +213,9 @@ object RemoteMapper {
         usedSaleValue = o.optLong("used_sale_value", 0),
         scrapMovementId = o.longOrNull("scrap_movement_id"),
         note = o.stringOrNull("note"),
+        returnedSerial = o.stringOrNull("returned_serial"),
+        returnedSaleDate = o.longOrNull("returned_sale_date"),
+        replacementSerial = o.stringOrNull("replacement_serial"),
         updatedAt = o.optLong("updated_at", 0),
         dirty = false,
     )

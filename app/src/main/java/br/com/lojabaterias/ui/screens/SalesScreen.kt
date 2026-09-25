@@ -136,7 +136,7 @@ fun SalesScreen(onNewSale: () -> Unit, onOpenSale: (Long) -> Unit) {
                 SearchField(
                     value = filter.model,
                     onValueChange = vm::setModel,
-                    placeholder = "Modelo ou código de garantia...",
+                    placeholder = "Modelo da bateria...",
                 )
             }
             item {

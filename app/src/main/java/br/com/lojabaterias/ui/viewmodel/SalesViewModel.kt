@@ -66,8 +66,7 @@ class SalesViewModel(repo: StoreRepository) : ViewModel() {
         val query = f.model.trim()
         val filtered = list.filter { s ->
             (f.payment == null || s.sale.payment == f.payment) &&
-                (query.isEmpty() || s.items.any { it.modelSnapshot.contains(query, ignoreCase = true) } ||
-                    br.com.lojabaterias.domain.WarrantyCode.matches(s.sale.id, query))
+                (query.isEmpty() || s.items.any { it.modelSnapshot.contains(query, ignoreCase = true) })
         }
         val valid = filtered.filter { !it.sale.isCanceled }
         SalesState(

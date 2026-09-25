@@ -7,7 +7,6 @@ import br.com.lojabaterias.data.StoreRepository
 import br.com.lojabaterias.data.WarrantyClaim
 import br.com.lojabaterias.data.WarrantyStatus
 import br.com.lojabaterias.domain.PaymentMethod
-import br.com.lojabaterias.domain.WarrantyCode
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
@@ -17,6 +16,9 @@ import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import java.time.LocalDate
+import java.time.LocalTime
+import java.time.ZoneId
 
 enum class WarrantyTab(val label: String) {
     PICKUP("Recolha"),
@@ -27,6 +29,8 @@ enum class WarrantyTab(val label: String) {
 
 data class WarrantiesState(
     val tab: WarrantyTab = WarrantyTab.PICKUP,
+    /** Busca por número de série, modelo ou cliente (procura em todas as seções). */
+    val query: String = "",
     val list: List<WarrantyClaim> = emptyList(),
     val pickupCount: Int = 0,
     val factoryCount: Int = 0,
@@ -36,11 +40,14 @@ data class WarrantiesState(
 
 class WarrantiesViewModel(private val repo: StoreRepository) : MessageViewModel() {
     private val tab = MutableStateFlow(WarrantyTab.PICKUP)
+    private val query = MutableStateFlow("")
 
-    val state: StateFlow<WarrantiesState> = combine(repo.observeWarranties(), tab) { all, t ->
+    val state: StateFlow<WarrantiesState> = combine(repo.observeWarranties(), tab, query) { all, t, q ->
+        val term = q.trim()
         WarrantiesState(
             tab = t,
-            list = all.filter { w ->
+            query = q,
+            list = if (term.isNotEmpty()) all.filter { it.matches(term) } else all.filter { w ->
                 when (t) {
                     WarrantyTab.PICKUP -> w.status == WarrantyStatus.AWAITING_PICKUP
                     WarrantyTab.FACTORY -> w.status == WarrantyStatus.AT_FACTORY
@@ -57,6 +64,15 @@ class WarrantiesViewModel(private val repo: StoreRepository) : MessageViewModel(
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), WarrantiesState())
 
     fun setTab(t: WarrantyTab) { tab.value = t }
+    fun setQuery(q: String) { query.value = q }
+
+    private fun WarrantyClaim.matches(term: String): Boolean {
+        val compact = term.replace(" ", "")
+        return listOfNotNull(returnedSerial, replacementSerial).any { it.replace(" ", "").contains(compact, ignoreCase = true) } ||
+            returnedModel.contains(term, ignoreCase = true) ||
+            replacementModel?.contains(term, ignoreCase = true) == true ||
+            customerName.contains(term, ignoreCase = true)
+    }
 
     /** A fábrica recolheu as baterias informadas. */
     fun collect(ids: List<Long>) {
@@ -72,31 +88,22 @@ class WarrantiesViewModel(private val repo: StoreRepository) : MessageViewModel(
     }
 }
 
-/** Escolha da venda para iniciar uma troca em garantia. */
-class SalePickerViewModel(repo: StoreRepository) : MessageViewModel() {
-    private val query = MutableStateFlow("")
-    val searchQuery: StateFlow<String> = query.asStateFlow()
-
-    val results: StateFlow<List<SaleWithItems>> = combine(repo.observeRecentSales(1000), query) { sales, q ->
-        val term = q.trim()
-        sales.filter { !it.sale.isCanceled }.filter { s ->
-            term.isEmpty() || WarrantyCode.matches(s.sale.id, term) ||
-                s.items.any { it.modelSnapshot.contains(term, ignoreCase = true) }
-        }.take(200)
-    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
-
-    fun setQuery(q: String) { query.value = q }
-}
-
 data class WarrantyFormState(
     val loading: Boolean = false,
     val sale: SaleWithItems? = null,
     val customerName: String = "",
     val returnedProductId: Long? = null,
     val returnedModel: String = "",
+    /** Número de série da bateria que o cliente trouxe. */
+    val returnedSerial: String = "",
+    /** Data da venda, conforme o papel da garantia. */
+    val saleDate: LocalDate? = null,
     /** Resultado do teste: null = ainda não respondido. */
     val defective: Boolean? = null,
     val replacement: Product? = null,
+    /** Número de série da bateria nova entregue. */
+    val replacementSerial: String = "",
+    val exchangeDate: LocalDate = LocalDate.now(),
     val difference: Long = 0,
     val differenceMethod: PaymentMethod = PaymentMethod.PIX,
     val note: String = "",
@@ -104,7 +111,8 @@ data class WarrantyFormState(
     val done: Boolean = false,
 ) {
     val canConfirm: Boolean
-        get() = returnedModel.isNotBlank() && defective != null && (defective == false || replacement != null)
+        get() = returnedModel.isNotBlank() && defective != null &&
+            (defective == false || (replacement != null && returnedSerial.isNotBlank() && saleDate != null && replacementSerial.isNotBlank()))
 }
 
 class WarrantyFormViewModel(private val repo: StoreRepository, private val saleId: Long?) : MessageViewModel() {
@@ -123,6 +131,7 @@ class WarrantyFormViewModel(private val repo: StoreRepository, private val saleI
                     sale = sale,
                     returnedProductId = item?.productId,
                     returnedModel = item?.modelSnapshot.orEmpty(),
+                    saleDate = sale?.sale?.dateTime?.let { java.time.Instant.ofEpochMilli(it).atZone(ZoneId.systemDefault()).toLocalDate() },
                 )
                 if (sale == null) message("Venda não encontrada")
             }
@@ -133,6 +142,10 @@ class WarrantyFormViewModel(private val repo: StoreRepository, private val saleI
     fun setNote(note: String) = _state.update { it.copy(note = note) }
     fun setDifference(v: Long) = _state.update { it.copy(difference = v) }
     fun setMethod(m: PaymentMethod) = _state.update { it.copy(differenceMethod = m) }
+    fun setReturnedSerial(v: String) = _state.update { it.copy(returnedSerial = v) }
+    fun setSaleDate(d: LocalDate) = _state.update { it.copy(saleDate = d) }
+    fun setReplacementSerial(v: String) = _state.update { it.copy(replacementSerial = v) }
+    fun setExchangeDate(d: LocalDate) = _state.update { it.copy(exchangeDate = d) }
 
     /** Bateria que o cliente trouxe (quando não há venda no sistema). */
     fun setReturned(p: Product) = _state.update {
@@ -164,10 +177,16 @@ class WarrantyFormViewModel(private val repo: StoreRepository, private val saleI
     fun confirm() {
         val s = _state.value
         if (s.saving || !s.canConfirm) return
+        val zone = ZoneId.systemDefault()
+        val today = LocalDate.now()
+        if (s.exchangeDate.isAfter(today)) return message("A data da troca não pode ser no futuro")
+        if (s.saleDate != null && s.saleDate.isAfter(s.exchangeDate)) return message("A data da venda é depois da data da troca")
         _state.update { it.copy(saving = true) }
         viewModelScope.launch {
             try {
                 val defective = s.defective == true
+                val at = if (!defective || s.exchangeDate == today) System.currentTimeMillis()
+                else s.exchangeDate.atTime(LocalTime.NOON).atZone(zone).toInstant().toEpochMilli()
                 repo.createWarranty(
                     saleId = s.sale?.sale?.id,
                     customerName = s.customerName,
@@ -178,6 +197,10 @@ class WarrantyFormViewModel(private val repo: StoreRepository, private val saleI
                     differenceAmount = if (defective) s.difference else 0,
                     differenceMethod = s.differenceMethod,
                     note = s.note,
+                    returnedSerial = s.returnedSerial,
+                    returnedSaleDate = s.saleDate?.atStartOfDay(zone)?.toInstant()?.toEpochMilli(),
+                    replacementSerial = if (defective) s.replacementSerial else null,
+                    at = at,
                 )
                 message(if (defective) "Troca registrada" else "Teste registrado (sem troca)")
                 _state.update { it.copy(saving = false, done = true) }

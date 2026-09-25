@@ -31,7 +31,6 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import br.com.lojabaterias.domain.Money
 import br.com.lojabaterias.domain.Periods
 import br.com.lojabaterias.domain.Scrap
-import br.com.lojabaterias.domain.WarrantyCode
 import br.com.lojabaterias.data.WarrantyStatus
 import br.com.lojabaterias.ui.components.AppCard
 import br.com.lojabaterias.ui.components.ConfirmDialog
@@ -89,7 +88,6 @@ fun SaleDetailScreen(
                     }
                     AppCard {
                         Column(Modifier.padding(16.dp)) {
-                            InfoRow("Garantia nº", WarrantyCode.of(s.id), bold = true)
                             InfoRow("Data/hora", Periods.formatDateTime(s.dateTime))
                             InfoRow("Pagamento", s.payment.label)
                         }
@@ -127,7 +125,7 @@ fun SaleDetailScreen(
                     AppCard {
                         Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
                             Text(
-                                "Código ${WarrantyCode.of(s.id)} • vendida ${elapsedLabel(s.dateTime)}",
+                                "Vendida ${elapsedLabel(s.dateTime)}",
                                 style = MaterialTheme.typography.bodyMedium,
                             )
                             if (claims.isEmpty()) {

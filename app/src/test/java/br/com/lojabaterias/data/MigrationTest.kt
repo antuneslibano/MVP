@@ -56,7 +56,7 @@ class MigrationTest {
     )
 
     @Test
-    fun migrate1To5_keepsAllData() {
+    fun migrate1ToLatest_keepsAllData() {
         context.deleteDatabase(dbName)
         val file = context.getDatabasePath(dbName)
         file.parentFile?.mkdirs()

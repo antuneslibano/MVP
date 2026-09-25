@@ -48,7 +48,6 @@ import br.com.lojabaterias.ui.screens.ChargesScreen
 import br.com.lojabaterias.ui.screens.WarrantiesScreen
 import br.com.lojabaterias.ui.screens.WarrantyDetailScreen
 import br.com.lojabaterias.ui.screens.WarrantyFormScreen
-import br.com.lojabaterias.ui.screens.WarrantySalePickerScreen
 import br.com.lojabaterias.ui.screens.HomeScreen
 import br.com.lojabaterias.ui.screens.MovementsScreen
 import br.com.lojabaterias.ui.screens.ProductDetailScreen
@@ -81,7 +80,6 @@ object Routes {
     const val CHARGE_EDIT = "chargeedit/{id}"
     const val CHARGE_DETAIL = "chargedetail/{id}"
     const val WARRANTIES = "warranties"
-    const val WARRANTY_PICK = "warrantypick"
     const val WARRANTY_NEW = "warrantynew?saleId={saleId}"
     const val WARRANTY_DETAIL = "warrantydetail/{id}"
 
@@ -255,22 +253,14 @@ fun LojaNavHost() {
                 ChargeDetailScreen(chargeId = id, onEdit = { nav.navigate(Routes.chargeEdit(id)) }, onBack = { nav.popBackStack() })
             }
             composable(Routes.WARRANTIES) {
-                WarrantiesScreen(onNew = { nav.navigate(Routes.WARRANTY_PICK) }, onOpen = { nav.navigate(Routes.warrantyDetail(it)) })
-            }
-            composable(Routes.WARRANTY_PICK) {
-                WarrantySalePickerScreen(
-                    onPickSale = { nav.navigate(Routes.warrantyNew(it)) },
-                    onNoSale = { nav.navigate(Routes.warrantyNew()) },
-                    onBack = { nav.popBackStack() },
-                )
+                WarrantiesScreen(onNew = { nav.navigate(Routes.warrantyNew()) }, onOpen = { nav.navigate(Routes.warrantyDetail(it)) })
             }
             composable(
                 Routes.WARRANTY_NEW,
                 arguments = listOf(navArgument("saleId") { type = NavType.LongType; defaultValue = -1L }),
             ) { entry ->
                 val saleId = entry.arguments?.getLong("saleId")?.takeIf { it > 0 }
-                val finish: () -> Unit = { if (!nav.popBackStack(Routes.WARRANTY_PICK, inclusive = true)) nav.popBackStack() }
-                WarrantyFormScreen(saleId = saleId, onDone = finish, onBack = { nav.popBackStack() })
+                WarrantyFormScreen(saleId = saleId, onDone = { nav.popBackStack() }, onBack = { nav.popBackStack() })
             }
             composable(Routes.WARRANTY_DETAIL, arguments = listOf(navArgument("id") { type = NavType.LongType })) { entry ->
                 val id = entry.arguments?.getLong("id") ?: 0L
