@@ -2,7 +2,6 @@ package br.com.lojabaterias.ui.viewmodel
 
 import androidx.lifecycle.viewModelScope
 import br.com.lojabaterias.data.ChargeService
-import br.com.lojabaterias.data.Product
 import br.com.lojabaterias.data.StoreRepository
 import br.com.lojabaterias.domain.PaymentMethod
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -69,9 +68,8 @@ data class ChargeFormState(
     val paid: Boolean = false,
     val method: PaymentMethod = PaymentMethod.PIX,
     val loan: Boolean = false,
-    val loanProduct: Product? = null,
-    /** Empréstimo já registrado (na edição não pode ser alterado). */
-    val existingLoanModel: String? = null,
+    /** Empréstimo antigo com controle de estoque (não pode ser alterado). */
+    val lockedLoanModel: String? = null,
     val note: String = "",
     val loading: Boolean = false,
     val saving: Boolean = false,
@@ -83,11 +81,6 @@ data class ChargeFormState(
 class ChargeFormViewModel(private val repo: StoreRepository, private val chargeId: Long?) : MessageViewModel() {
     private val _state = MutableStateFlow(ChargeFormState(id = chargeId, loading = chargeId != null))
     val state: StateFlow<ChargeFormState> = _state.asStateFlow()
-
-    /** Baterias disponíveis para empréstimo (com estoque). */
-    val products: StateFlow<List<Product>> = repo.observeProducts()
-        .map { list -> list.filter { it.stock > 0 } }
-        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
 
     init {
         if (chargeId != null) {
@@ -107,7 +100,7 @@ class ChargeFormViewModel(private val repo: StoreRepository, private val chargeI
                         paid = c.paid,
                         method = c.paymentMethod?.let { PaymentMethod.fromName(it) } ?: PaymentMethod.PIX,
                         loan = c.hasLoan,
-                        existingLoanModel = c.loanModel,
+                        lockedLoanModel = if (c.loanProductId != null) c.loanModel else null,
                         note = c.note.orEmpty(),
                     )
                 }
@@ -120,22 +113,19 @@ class ChargeFormViewModel(private val repo: StoreRepository, private val chargeI
     fun save() {
         val s = _state.value
         if (s.saving) return
-        if (!s.isEdit && s.loan && s.loanProduct == null) {
-            message("Escolha qual bateria da loja foi emprestada")
-            return
-        }
         _state.update { it.copy(saving = true) }
         viewModelScope.launch {
             try {
                 if (s.id == null) {
                     repo.createCharge(
                         s.customerName, s.phone, s.batteryDescription, s.receivedAt, s.price, s.paid,
-                        s.method, if (s.loan) s.loanProduct?.id else null, s.note,
+                        s.method, s.loan, s.note,
                     )
                     message("Bateria recebida para carga")
                 } else {
                     repo.updateCharge(
                         s.id, s.customerName, s.phone, s.batteryDescription, s.receivedAt, s.price, s.paid, s.method, s.note,
+                        loaned = s.loan,
                     )
                     message("Registro atualizado")
                 }

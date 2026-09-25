@@ -167,7 +167,8 @@ private fun ChargeRow(c: ChargeService, onClick: () -> Unit) {
                 )
                 if (c.hasLoan) {
                     Text(
-                        "Emprestada: ${c.loanModel}" + if (c.status == ChargeStatus.DELIVERED) " (devolvida)" else "",
+                        (if (c.loanProductId != null) "Emprestada: ${c.loanModel}" else "Emprestou bateria da loja") +
+                            if (c.status == ChargeStatus.DELIVERED) " (devolvida)" else "",
                         style = MaterialTheme.typography.bodySmall,
                         color = if (c.isOpen) warningColor() else MaterialTheme.colorScheme.onSurfaceVariant,
                     )
@@ -192,9 +193,7 @@ private fun ChargeRow(c: ChargeService, onClick: () -> Unit) {
 fun ChargeFormScreen(chargeId: Long?, onDone: () -> Unit, onBack: () -> Unit) {
     val vm = appViewModel(key = "chargeform-$chargeId") { ChargeFormViewModel(it.repository, chargeId) }
     val s by vm.state.collectAsStateWithLifecycle()
-    val products by vm.products.collectAsStateWithLifecycle()
     ToastEffect(vm.messages)
-    var pickLoan by remember { mutableStateOf(false) }
 
     LaunchedEffect(s.done) { if (s.done) onDone() }
 
@@ -262,10 +261,9 @@ fun ChargeFormScreen(chargeId: Long?, onDone: () -> Unit, onBack: () -> Unit) {
             if (s.paid) PaymentMethodChips(selected = s.method, onSelect = { m -> vm.update { it.copy(method = m) } })
 
             SectionTitle("Empréstimo de bateria da loja")
-            if (s.isEdit) {
+            if (s.lockedLoanModel != null) {
                 Text(
-                    s.existingLoanModel?.let { "Bateria emprestada: $it (o empréstimo não pode ser alterado aqui)" }
-                        ?: "Sem empréstimo.",
+                    "Bateria emprestada: ${s.lockedLoanModel} (registrada no estoque; não pode ser alterada aqui)",
                     style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
@@ -275,11 +273,8 @@ fun ChargeFormScreen(chargeId: Long?, onDone: () -> Unit, onBack: () -> Unit) {
                     Switch(checked = s.loan, onCheckedChange = { v -> vm.update { it.copy(loan = v) } })
                 }
                 if (s.loan) {
-                    OutlinedButton(onClick = { pickLoan = true }, modifier = Modifier.fillMaxWidth().height(52.dp)) {
-                        Text(s.loanProduct?.let { "Emprestada: ${it.model} (trocar)" } ?: "Escolher a bateria emprestada")
-                    }
                     Text(
-                        "A bateria emprestada sai do estoque e volta automaticamente quando a carga for entregue.",
+                        "Anote na observação qual bateria foi emprestada. O estoque não é alterado.",
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
@@ -294,16 +289,6 @@ fun ChargeFormScreen(chargeId: Long?, onDone: () -> Unit, onBack: () -> Unit) {
             )
             Spacer(Modifier.height(24.dp))
         }
-    }
-
-    if (pickLoan) {
-        ProductPickerDialog(
-            title = "Bateria emprestada",
-            products = products,
-            onlyInStock = true,
-            onPick = { p -> vm.update { it.copy(loanProduct = p) }; pickLoan = false },
-            onDismiss = { pickLoan = false },
-        )
     }
 }
 
@@ -358,7 +343,12 @@ fun ChargeDetailScreen(chargeId: Long, onEdit: () -> Unit, onBack: () -> Unit) {
                         )
                         InfoRow(
                             "Empréstimo",
-                            c.loanModel?.let { it + if (c.loanReturnMovementId != null) " (devolvida)" else " (com o cliente)" } ?: "Não",
+                            when {
+                                !c.hasLoan -> "Não"
+                                c.loanProductId != null -> "${c.loanModel}" + if (c.loanReturnMovementId != null) " (devolvida)" else " (com o cliente)"
+                                c.status == ChargeStatus.DELIVERED -> "Sim (devolvida)"
+                                else -> "Sim, com o cliente (ver observação)"
+                            },
                         )
                         c.note?.let { InfoRow("Observação", it) }
                     }
@@ -403,7 +393,8 @@ fun ChargeDetailScreen(chargeId: Long, onEdit: () -> Unit, onBack: () -> Unit) {
             title = "Entregar ao cliente?",
             text = buildString {
                 append("A bateria de ${c.customerName} será marcada como entregue.")
-                if (c.hasLoan) append(" A bateria emprestada (${c.loanModel}) volta para o estoque.")
+                if (c.loanProductId != null) append(" A bateria emprestada (${c.loanModel}) volta para o estoque.")
+                else if (c.hasLoan) append(" Lembre de pegar de volta a bateria emprestada.")
                 if (!c.paid) append(" A carga ainda não foi paga: na próxima etapa informe se recebeu agora.")
             },
             confirmLabel = "Entregar",

@@ -106,7 +106,7 @@ class SyncEngineTest {
         a.sync()
 
         assertEquals(3, a.product("BEP60D").stock)
-        assertEquals(3, b.product("BEP60D").stock)
+        assertEquals(4, b.product("BEP60D").stock)
         assertEquals(2, a.salesCount())
         assertEquals(2, b.salesCount())
         assertEquals(1, b.scrap(60))
@@ -193,22 +193,24 @@ class SyncEngineTest {
         val id = a.newProduct(stock = 5)
         a.sync()
         b.sync()
-        // B empresta uma bateria; A vê a carga e o estoque baixo
-        val chargeId = b.repo.createCharge("Carlos", "11999990000", "", 1_000, 2_500, false, null, id, null)
+        // B recebe uma bateria para carga (empréstimo sem estoque); A vê a carga
+        val chargeId = b.repo.createCharge("Carlos", "11999990000", "", 1_000, 2_500, false, null, true, "Levou 01 Júpiter")
         b.sync()
         a.sync()
-        assertEquals(4, a.product("BEP60D").stock)
+        assertEquals(5, a.product("BEP60D").stock)
         assertEquals("Carlos", a.repo.getCharge(chargeId)!!.customerName)
+        assertEquals(true, a.repo.getCharge(chargeId)!!.hasLoan)
         // A registra uma troca em garantia; B vê a pendência
         val w = a.repo.createWarranty(null, "", id, "BEP60D", true, id, 0, null, null)
         a.sync()
         b.sync()
         assertEquals(3, b.product("BEP60D").stock)
         assertEquals(br.com.lojabaterias.data.WarrantyStatus.AWAITING_PICKUP, b.repo.observeWarranty(w).first()!!.status)
-        // B entrega a carga; A vê a devolução do empréstimo
+        // B entrega a carga; A vê a entrega
         b.repo.deliverCharge(chargeId, null)
         b.sync()
         a.sync()
         assertEquals(4, a.product("BEP60D").stock)
+        assertEquals(ChargeStatus.DELIVERED, a.repo.getCharge(chargeId)!!.status)
     }
 }

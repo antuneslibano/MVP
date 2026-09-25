@@ -261,29 +261,22 @@ class StoreRepositoryTest {
     }
 
     @Test
-    fun charge_withLoan_movesStockAndReturnsOnDelivery() = runBlocking {
+    fun charge_withLoan_doesNotTouchStock() = runBlocking {
         val id = newProduct(stock = 3)
-        val chargeId = repo.createCharge("João", "(11) 99999-0000", "Moura 60", 1_000, 2_000, false, null, id, null)
-        assertEquals(2, repo.getProduct(id)!!.stock)
+        val chargeId = repo.createCharge("João", "(11) 99999-0000", "B45D", 1_000, 2_000, false, null, true, "Levou 01 Júpiter")
+        assertEquals(3, repo.getProduct(id)!!.stock)
+        assertTrue(repo.getCharge(chargeId)!!.hasLoan)
         repo.deliverCharge(chargeId, PaymentMethod.PIX)
         val c = repo.getCharge(chargeId)!!
         assertEquals(ChargeStatus.DELIVERED, c.status)
         assertTrue(c.paid)
         assertEquals(3, repo.getProduct(id)!!.stock)
-        // excluir desfaz empréstimo e devolução (estoque fica igual)
+        // edição pode desmarcar o empréstimo
+        repo.updateCharge(chargeId, "João", "", "B45D", 1_000, 2_000, true, PaymentMethod.PIX, null, loaned = false)
+        assertEquals(false, repo.getCharge(chargeId)!!.hasLoan)
         repo.deleteCharge(chargeId)
-        assertEquals(3, repo.getProduct(id)!!.stock)
         assertEquals(null, repo.getCharge(chargeId))
-    }
-
-    @Test
-    fun charge_deleteWhileLoaned_restoresStock() = runBlocking {
-        val id = newProduct(stock = 1)
-        val chargeId = repo.createCharge("Maria", "", "", 1_000, 1_500, true, PaymentMethod.DINHEIRO, id, null)
-        assertEquals(0, repo.getProduct(id)!!.stock)
-        expectBusinessError { repo.createCharge("Outro", "", "", 1_000, 1_500, false, null, id, null) }
-        repo.deleteCharge(chargeId)
-        assertEquals(1, repo.getProduct(id)!!.stock)
+        assertEquals(3, repo.getProduct(id)!!.stock)
     }
 
     @Test

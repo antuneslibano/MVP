@@ -341,7 +341,7 @@ object ReportPdfWriter {
                 f.chargesInPeriod.map { ch ->
                     listOf(
                         Periods.formatDateTime(ch.receivedAt),
-                        ch.customerName + (ch.loanModel?.let { " (empr. $it)" } ?: ""),
+                        ch.customerName + (if (ch.hasLoan) " (emprestou bateria)" else ""),
                         ch.phone,
                         Money.format(ch.price),
                         if (ch.paid) "Sim" else "Não",

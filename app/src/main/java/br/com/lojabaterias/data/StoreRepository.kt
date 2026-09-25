@@ -474,7 +474,10 @@ class StoreRepository(
     fun observeChargesInRange(range: DateRange): Flow<List<ChargeService>> = charges.observeInRange(range.start, range.end)
     suspend fun getCharge(id: Long): ChargeService? = charges.getById(id)
 
-    /** Recebe uma bateria para carga. Se emprestar uma bateria da loja, ela sai do estoque. */
+    /**
+     * Recebe uma bateria para carga.
+     * [loaned] = a loja emprestou uma bateria usada ao cliente (não mexe no estoque; qual foi fica na observação).
+     */
     suspend fun createCharge(
         customerName: String,
         phone: String,
@@ -483,21 +486,13 @@ class StoreRepository(
         price: Long,
         paid: Boolean,
         paymentMethod: PaymentMethod?,
-        loanProductId: Long?,
+        loaned: Boolean,
         note: String?,
     ): Long = write {
         val name = customerName.trim()
         if (name.isEmpty()) throw BusinessException("Informe o nome do cliente")
         if (price < 0) throw BusinessException("Valor inválido")
         val id = IdGenerator.next()
-        var loanModel: String? = null
-        var loanMovementId: Long? = null
-        if (loanProductId != null) {
-            val p = products.getById(loanProductId) ?: throw BusinessException("Bateria para empréstimo não encontrada")
-            if (p.stock <= 0) throw BusinessException("Sem estoque de ${p.model} para emprestar")
-            loanModel = p.model
-            loanMovementId = moveStock(p.id, -1, MovementType.LOAN_OUT, "Emprestada para $name (carga)", receivedAt)
-        }
         charges.insert(
             ChargeService(
                 id = id,
@@ -509,16 +504,14 @@ class StoreRepository(
                 paid = paid,
                 paidAt = if (paid) now() else null,
                 paymentMethod = if (paid) paymentMethod?.name else null,
-                loanProductId = loanProductId,
-                loanModel = loanModel,
-                loanMovementId = loanMovementId,
+                loanModel = if (loaned) ChargeService.LOAN_USED else null,
                 note = note?.trim()?.ifEmpty { null },
             )
         )
         id
     }
 
-    /** Edita os dados da carga (o empréstimo não muda aqui). */
+    /** Edita os dados da carga. Empréstimos antigos com controle de estoque não mudam aqui. */
     suspend fun updateCharge(
         id: Long,
         customerName: String,
@@ -529,8 +522,14 @@ class StoreRepository(
         paid: Boolean,
         paymentMethod: PaymentMethod?,
         note: String?,
+        loaned: Boolean? = null,
     ): Unit = write {
         val c = charges.getById(id) ?: throw BusinessException("Registro não encontrado")
+        val loanModel = when {
+            c.loanProductId != null || loaned == null -> c.loanModel
+            loaned -> c.loanModel ?: ChargeService.LOAN_USED
+            else -> null
+        }
         val name = customerName.trim()
         if (name.isEmpty()) throw BusinessException("Informe o nome do cliente")
         if (price < 0) throw BusinessException("Valor inválido")
@@ -544,6 +543,7 @@ class StoreRepository(
                 paid = paid,
                 paidAt = if (paid) (c.paidAt ?: now()) else null,
                 paymentMethod = if (paid) (paymentMethod?.name ?: c.paymentMethod) else null,
+                loanModel = loanModel,
                 note = note?.trim()?.ifEmpty { null },
                 updatedAt = now(),
                 dirty = true,

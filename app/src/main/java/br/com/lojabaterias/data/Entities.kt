@@ -289,7 +289,13 @@ data class ChargeService(
     /** Controle de sincronização: alteração ainda não enviada para a nuvem. */
     @ColumnInfo(name = "dirty", defaultValue = "1") val dirty: Boolean = true,
 ) {
-    val hasLoan: Boolean get() = loanProductId != null
+    /** Emprestou uma bateria da loja (usada, fora do estoque; detalhes na observação). */
+    val hasLoan: Boolean get() = loanModel != null || loanProductId != null
+
+    companion object {
+        /** Marca gravada quando a loja empresta uma bateria usada (sem controle de estoque). */
+        const val LOAN_USED = "Bateria usada da loja"
+    }
     val isOpen: Boolean get() = status != ChargeStatus.DELIVERED
 }
 
