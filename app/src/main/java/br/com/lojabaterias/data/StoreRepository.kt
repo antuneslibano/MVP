@@ -262,7 +262,10 @@ class StoreRepository(
         val product = products.getById(productId) ?: throw BusinessException("Produto não encontrado")
         SaleCalculator.validate(unitPrice, quantity, discount, product.stock)?.let { throw BusinessException(it) }
         validateScrap(quantity, scrap)
-        val totals = SaleCalculator.compute(unitPrice, quantity, discount, product.cost, scrap.charge, cardFees.rateFor(method))
+        val extras = availableExtras(product.id).take(quantity)
+        val totals = SaleCalculator.compute(
+            unitPrice, quantity, discount, product.cost, scrap.charge, cardFees.rateFor(method), extras.size,
+        )
         val saleId = sales.insertSale(
             Sale(
                 dateTime = dateTime,
@@ -290,6 +293,7 @@ class StoreRepository(
                 subtotal = totals.grossAmount,
             )
         )
+        useExtras(extras, saleId)
         val newStock = product.stock - quantity
         products.updateStock(product.id, newStock)
         movements.insert(
@@ -340,7 +344,12 @@ class StoreRepository(
         }
         SaleCalculator.validate(unitPrice, quantity, discount, available)?.let { throw BusinessException(it) }
         validateScrap(quantity, scrap)
-        val totals = SaleCalculator.compute(unitPrice, quantity, discount, item.unitCost, scrap.charge, cardFees.rateFor(method))
+        releaseExtras(saleId)
+        val extras = availableExtras(item.productId).take(quantity)
+        val totals = SaleCalculator.compute(
+            unitPrice, quantity, discount, item.unitCost, scrap.charge, cardFees.rateFor(method), extras.size,
+        )
+        useExtras(extras, saleId)
         val now = System.currentTimeMillis()
 
         sales.updateItem(
@@ -426,6 +435,7 @@ class StoreRepository(
         if (s.scrapReturned > 0 && (s.scrapAmperage ?: 0) > 0) {
             removeScrap(s.scrapAmperage ?: 0, s.scrapReturned, ScrapMovementType.SALE_CANCEL, saleId, now)
         }
+        releaseExtras(saleId)
         sales.updateSale(s.copy(status = SaleStatus.CANCELED, canceledAt = now, updatedAt = now, dirty = true))
     }
 
@@ -441,6 +451,7 @@ class StoreRepository(
                 products.updateStock(product.id, product.stock + item.quantity)
             }
         }
+        releaseExtras(saleId)
         tomb(SyncTables.STOCK_MOVEMENTS, sync.stockMovementIdsForSale(saleId))
         tomb(SyncTables.SCRAP_MOVEMENTS, sync.scrapMovementIdsForSale(saleId))
         tomb(SyncTables.SALE_ITEMS, sync.saleItemIds(saleId))
@@ -597,173 +608,72 @@ class StoreRepository(
         charges.delete(id)
     }
 
-    // ---------------------------------------------------------------- Garantias
+    // ------------------------------------------------------- Garantias e extras
 
     fun observeWarranties(): Flow<List<WarrantyClaim>> = warranties.observeAll()
-    fun observeWarranty(id: Long): Flow<WarrantyClaim?> = warranties.observeById(id)
     fun observeWarrantiesForSale(saleId: Long): Flow<List<WarrantyClaim>> = warranties.observeForSale(saleId)
 
-    /**
-     * Registra um atendimento de garantia.
-     * Se a bateria estiver ruim: a nova sai do estoque e a do cliente vai para "Aguardando recolha".
-     */
-    suspend fun createWarranty(
-        saleId: Long?,
-        customerName: String,
-        returnedProductId: Long?,
-        returnedModel: String,
-        defective: Boolean,
-        replacementProductId: Long?,
-        differenceAmount: Long,
-        differenceMethod: PaymentMethod?,
-        note: String?,
-        returnedSerial: String? = null,
-        returnedSaleDate: Long? = null,
-        replacementSerial: String? = null,
-        at: Long = now(),
-    ): Long = write {
-        val model = returnedModel.trim()
-        if (model.isEmpty()) throw BusinessException("Informe a bateria que o cliente trouxe")
-        if (differenceAmount < 0) throw BusinessException("Diferença inválida")
-        if (returnedSaleDate != null && returnedSaleDate > at) throw BusinessException("A data da venda é depois da data da troca")
-        val id = IdGenerator.next()
-        val oldSerial = returnedSerial?.trim()?.uppercase()?.ifEmpty { null }
-        val newSerial = replacementSerial?.trim()?.uppercase()?.ifEmpty { null }
-        if (!defective) {
+    /** Baterias trocadas em garantia: só a contagem por modelo, sem mexer no estoque. */
+    suspend fun registerExchange(productId: Long, quantity: Int, at: Long = now()): Unit = write {
+        if (quantity <= 0) throw BusinessException("Informe a quantidade")
+        val p = products.getById(productId) ?: throw BusinessException("Bateria não encontrada")
+        repeat(quantity) {
             warranties.insert(
                 WarrantyClaim(
-                    id = id, saleId = saleId, createdAt = at, customerName = customerName.trim(),
-                    returnedProductId = returnedProductId, returnedModel = model, defective = false,
-                    status = WarrantyStatus.NO_DEFECT, resolvedAt = at, note = note?.trim()?.ifEmpty { null },
-                    returnedSerial = oldSerial, returnedSaleDate = returnedSaleDate,
+                    createdAt = at, returnedProductId = p.id, returnedModel = p.model,
+                    defective = true, status = WarrantyStatus.EXCHANGE,
                 )
             )
-            return@write id
-        }
-        val replacementId = replacementProductId ?: throw BusinessException("Escolha a bateria nova entregue ao cliente")
-        val replacement = products.getById(replacementId) ?: throw BusinessException("Bateria nova não encontrada")
-        if (replacement.stock <= 0) throw BusinessException("Sem estoque de ${replacement.model}. Escolha outra bateria.")
-        val outId = moveStock(
-            replacement.id, -1, MovementType.WARRANTY_OUT,
-            "Garantia: entregue no lugar de $model" + (oldSerial?.let { " (série $it)" } ?: ""), at, replacement.cost,
-        )
-        warranties.insert(
-            WarrantyClaim(
-                id = id,
-                saleId = saleId,
-                createdAt = at,
-                customerName = customerName.trim(),
-                returnedProductId = returnedProductId,
-                returnedModel = model,
-                defective = true,
-                replacementProductId = replacement.id,
-                replacementModel = replacement.model,
-                replacementCost = replacement.cost,
-                outMovementId = outId,
-                differenceAmount = differenceAmount,
-                differenceMethod = if (differenceAmount > 0) (differenceMethod ?: PaymentMethod.PIX).name else null,
-                status = WarrantyStatus.AWAITING_PICKUP,
-                note = note?.trim()?.ifEmpty { null },
-                returnedSerial = oldSerial,
-                returnedSaleDate = returnedSaleDate,
-                replacementSerial = newSerial,
-            )
-        )
-        id
-    }
-
-    private suspend fun claim(id: Long) = warranties.getById(id) ?: throw BusinessException("Garantia não encontrada")
-
-    /** A fábrica recolheu as baterias (uma ou várias). */
-    suspend fun markWarrantiesCollected(ids: List<Long>, at: Long = now()): Unit = write {
-        for (id in ids) {
-            val w = claim(id)
-            if (w.status != WarrantyStatus.AWAITING_PICKUP) continue
-            warranties.update(w.copy(status = WarrantyStatus.AT_FACTORY, collectedAt = at, updatedAt = now(), dirty = true))
         }
     }
 
-    /** A fábrica entregou a reposição (mesmo modelo ou outro, aceito pela loja): entra no estoque. */
-    suspend fun warrantyReplaced(id: Long, productId: Long, at: Long = now()): Unit = write {
-        val w = claim(id)
-        if (w.status != WarrantyStatus.AT_FACTORY && w.status != WarrantyStatus.AWAITING_PICKUP) {
-            throw BusinessException("Esta garantia não está aguardando reposição")
-        }
+    /** Baterias extras ganhadas: entram no estoque com custo zero (lucro de 100% na venda). */
+    suspend fun registerExtra(productId: Long, quantity: Int, at: Long = now()): Unit = write {
+        if (quantity <= 0) throw BusinessException("Informe a quantidade")
         val p = products.getById(productId) ?: throw BusinessException("Bateria não encontrada")
-        val serial = w.returnedSerial?.let { ", série $it" } ?: ""
-        val inId = moveStock(p.id, +1, MovementType.WARRANTY_IN, "Reposição da fábrica (garantia de ${w.returnedModel}$serial)", at)
-        warranties.update(
-            w.copy(
-                status = WarrantyStatus.REPLACED,
-                collectedAt = w.collectedAt ?: at,
-                resolvedAt = at,
-                factoryProductId = p.id,
-                factoryModel = p.model,
-                inMovementId = inId,
-                updatedAt = now(),
-                dirty = true,
+        repeat(quantity) {
+            val moveId = moveStock(p.id, +1, MovementType.EXTRA_IN, "Bateria extra (ganhada)", at, 0)
+            warranties.insert(
+                WarrantyClaim(
+                    createdAt = at, returnedProductId = p.id, returnedModel = p.model,
+                    defective = false, status = WarrantyStatus.EXTRA, inMovementId = moveId,
+                )
             )
-        )
-    }
-
-    /** A fábrica ofereceu outra bateria e a loja recusou: fica registrado e a garantia continua pendente. */
-    suspend fun warrantyOfferRefused(id: Long, offered: String, reason: String, at: Long = now()): Unit = write {
-        val w = claim(id)
-        val line = "${br.com.lojabaterias.domain.Periods.formatDate(at)}: recusamos $offered" +
-            (reason.trim().takeIf { it.isNotEmpty() }?.let { " ($it)" } ?: "")
-        val notes = listOfNotNull(w.refusalNotes, line).joinToString("\n")
-        warranties.update(w.copy(refusalNotes = notes, updatedAt = now(), dirty = true))
-    }
-
-    /** A fábrica negou a garantia: a bateria usada volta para a loja. */
-    suspend fun warrantyDenied(id: Long, at: Long = now()): Unit = write {
-        val w = claim(id)
-        if (w.status != WarrantyStatus.AT_FACTORY && w.status != WarrantyStatus.AWAITING_PICKUP) {
-            throw BusinessException("Esta garantia não está pendente com a fábrica")
         }
-        warranties.update(
-            w.copy(status = WarrantyStatus.DENIED, collectedAt = w.collectedAt ?: at, resolvedAt = at, updatedAt = now(), dirty = true)
-        )
     }
 
-    /** Destino da bateria usada (garantia negada): sucata, vendida como usada ou descartada. */
-    suspend fun setUsedDestination(id: Long, destination: String, saleValue: Long, scrapAmperage: Int?): Unit = write {
-        val w = claim(id)
-        if (!w.isUsedInShop) throw BusinessException("Esta bateria não está na seção de usadas")
-        var scrapId: Long? = null
-        if (destination == UsedDestination.SCRAP) {
-            val amp = scrapAmperage ?: 0
-            if (amp <= 0) throw BusinessException("Informe a amperagem para registrar como sucata")
-            val m = ScrapMovement(
-                dateTime = now(), type = ScrapMovementType.MANUAL_IN, amperage = amp, quantity = 1,
-                note = "Garantia negada: ${w.returnedModel}",
-            )
-            scraps.insertMovement(m)
-            scrapId = m.id
-        }
-        warranties.update(
-            w.copy(
-                usedDestination = destination,
-                usedDestinationAt = now(),
-                usedSaleValue = if (destination == UsedDestination.SOLD) saleValue else 0,
-                scrapMovementId = scrapId,
-                updatedAt = now(),
-                dirty = true,
-            )
-        )
-    }
-
-    /** Exclui o atendimento de garantia, desfazendo as movimentações de estoque e de sucata. */
+    /** Exclui uma troca ou uma extra (a extra sai do estoque, se ainda não foi vendida). */
     suspend fun deleteWarranty(id: Long): Unit = write {
         val w = warranties.getById(id) ?: return@write
-        undoStockMovement(w.inMovementId)
-        undoStockMovement(w.outMovementId)
-        w.scrapMovementId?.let { sid ->
-            tomb(SyncTables.SCRAP_MOVEMENTS, listOf(sid))
-            scraps.deleteMovement(sid)
+        if (w.isExtra) {
+            if (w.saleId != null) {
+                throw BusinessException("Esta extra já foi vendida. Para excluí-la, cancele ou exclua a venda antes.")
+            }
+            val p = w.returnedProductId?.let { products.getById(it) }
+            if (p != null && p.stock <= 0) {
+                throw BusinessException("Não é possível excluir: o estoque de ${p.model} ficaria negativo")
+            }
+            undoStockMovement(w.inMovementId)
         }
         tomb(SyncTables.WARRANTIES, listOf(id))
         warranties.delete(id)
+    }
+
+    /** Quantas extras (custo zero) de um produto podem entrar numa venda; na edição, conta também as da própria venda. */
+    suspend fun freeExtraCount(productId: Long, saleId: Long? = null): Int =
+        warranties.getAll().count { it.isExtra && it.returnedProductId == productId && (it.saleId == null || it.saleId == saleId) }
+
+    private suspend fun availableExtras(productId: Long): List<WarrantyClaim> =
+        warranties.getAll().filter { it.isExtra && it.returnedProductId == productId && it.saleId == null }.sortedBy { it.createdAt }
+
+    private suspend fun useExtras(extras: List<WarrantyClaim>, saleId: Long) {
+        extras.forEach { warranties.update(it.copy(saleId = saleId, updatedAt = now(), dirty = true)) }
+    }
+
+    /** Devolve ao estoque de extras as que foram usadas na venda (cancelada, editada ou excluída). */
+    private suspend fun releaseExtras(saleId: Long) {
+        warranties.getAll().filter { it.isExtra && it.saleId == saleId }
+            .forEach { warranties.update(it.copy(saleId = null, updatedAt = now(), dirty = true)) }
     }
 
     // ----------------------------------------------------------------- Sucatas
@@ -881,7 +791,11 @@ class StoreRepository(
             totalCost = s.sale.totalCost,
             cardFee = s.sale.cardFee,
             items = s.items.map {
-                ReportItem(it.modelSnapshot, it.quantity, it.subtotal, it.unitCost * it.quantity)
+                // Venda de um item: usa o custo gravado na venda (já com as extras de custo zero).
+                ReportItem(
+                    it.modelSnapshot, it.quantity, it.subtotal,
+                    if (s.items.size == 1) s.sale.totalCost else it.unitCost * it.quantity,
+                )
             },
         )
     }

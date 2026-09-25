@@ -257,25 +257,26 @@ fun ReportsScreen() {
                     }
                 }
             }
-            item { SectionTitle("Garantias") }
+            item { SectionTitle("Garantias e extras") }
             item {
                 AppCard {
                     Column(Modifier.padding(horizontal = 16.dp, vertical = 8.dp)) {
                         val g = f.warranty
-                        Text("No período", style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.primary)
-                        InfoRow("Atendimentos", g.attended.toString())
-                        InfoRow("Trocas (bateria ruim)", g.exchanged.toString())
-                        InfoRow("Testadas sem defeito", g.noDefect.toString())
-                        InfoRow("Diferenças recebidas", Money.format(g.differenceTotal))
-                        InfoRow("Custo das baterias trocadas", Money.format(g.replacementCost))
-                        InfoRow("Repostas pela fábrica", g.replacedByFactory.toString())
-                        InfoRow("Garantias negadas", g.denied.toString())
-                        if (g.usedSoldValue > 0) InfoRow("Usadas vendidas", Money.format(g.usedSoldValue))
+                        Text(
+                            "Trocadas em garantia (${g.exchangedTotal})",
+                            style = MaterialTheme.typography.labelLarge,
+                            color = MaterialTheme.colorScheme.primary,
+                        )
+                        if (g.exchanged.isEmpty()) Text("Nenhuma no período.", style = MaterialTheme.typography.bodyMedium)
+                        g.exchanged.forEach { InfoRow(it.model, it.count.toString()) }
                         HorizontalDivider(Modifier.padding(vertical = 6.dp))
-                        Text("Situação atual", style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.primary)
-                        InfoRow("Aguardando recolha", g.awaitingPickupNow.toString())
-                        InfoRow("Na fábrica", g.atFactoryNow.toString())
-                        InfoRow("Usadas na loja", g.usedInShopNow.toString())
+                        Text(
+                            "Extras ganhadas (${g.extrasTotal})",
+                            style = MaterialTheme.typography.labelLarge,
+                            color = MaterialTheme.colorScheme.primary,
+                        )
+                        if (g.extras.isEmpty()) Text("Nenhuma no período.", style = MaterialTheme.typography.bodyMedium)
+                        g.extras.forEach { InfoRow(it.model, it.count.toString()) }
                     }
                 }
             }

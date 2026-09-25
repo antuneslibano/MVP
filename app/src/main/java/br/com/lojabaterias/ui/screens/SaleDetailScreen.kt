@@ -13,7 +13,6 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.ButtonDefaults
-import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.MaterialTheme
@@ -32,7 +31,6 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import br.com.lojabaterias.domain.Money
 import br.com.lojabaterias.domain.Periods
 import br.com.lojabaterias.domain.Scrap
-import br.com.lojabaterias.data.WarrantyStatus
 import br.com.lojabaterias.ui.components.AppCard
 import br.com.lojabaterias.ui.components.ConfirmDialog
 import br.com.lojabaterias.ui.components.EmptyState
@@ -49,12 +47,10 @@ fun SaleDetailScreen(
     saleId: Long,
     onEdit: () -> Unit,
     onBack: () -> Unit,
-    onWarranty: () -> Unit = {},
-    onOpenWarranty: (Long) -> Unit = {},
 ) {
     val vm = appViewModel(key = "sale-$saleId") { SaleDetailViewModel(it.repository, saleId) }
     val loaded by vm.sale.collectAsStateWithLifecycle()
-    val claims by vm.warranties.collectAsStateWithLifecycle()
+    val extras by vm.extras.collectAsStateWithLifecycle()
     ToastEffect(vm.messages)
     var confirmCancel by remember { mutableStateOf(false) }
     var confirmDelete by remember { mutableStateOf(false) }
@@ -117,41 +113,9 @@ fun SaleDetailScreen(
                             HorizontalDivider(Modifier.padding(vertical = 6.dp))
                             InfoRow("Valor final", Money.format(s.finalAmount), bold = true)
                             InfoRow("Custo", Money.format(s.totalCost))
+                            if (extras.isNotEmpty()) InfoRow("Extras usadas (custo zero)", "${extras.size} un.")
                             if (s.cardFee > 0) InfoRow("Taxa da maquininha", "-" + Money.format(s.cardFee))
                             InfoRow("Lucro bruto", Money.format(s.grossProfit), valueColor = moneyResultColor(s.grossProfit))
-                        }
-                    }
-
-                    SectionTitle("Garantia")
-                    AppCard {
-                        Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                            Text(
-                                "Vendida ${elapsedLabel(s.dateTime)}",
-                                style = MaterialTheme.typography.bodyMedium,
-                            )
-                            if (claims.isEmpty()) {
-                                Text(
-                                    "Nenhuma troca ou teste de garantia registrado.",
-                                    style = MaterialTheme.typography.bodySmall,
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                )
-                            }
-                            claims.forEach { w ->
-                                TextButton(onClick = { onOpenWarranty(w.id) }) {
-                                    Text(
-                                        "${Periods.formatDate(w.createdAt)}: ${WarrantyStatus.label(w.status)}" +
-                                            (w.replacementModel?.let { " (trocada por $it)" } ?: ""),
-                                    )
-                                }
-                            }
-                            if (!s.isCanceled) {
-                                FilledTonalButton(
-                                    onClick = onWarranty,
-                                    modifier = Modifier
-                                        .fillMaxWidth()
-                                        .heightIn(min = 52.dp),
-                                ) { Text("Garantia: testar / trocar bateria") }
-                            }
                         }
                     }
 

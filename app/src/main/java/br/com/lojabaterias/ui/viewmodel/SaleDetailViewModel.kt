@@ -32,8 +32,8 @@ class SaleDetailViewModel(private val repo: StoreRepository, private val saleId:
         }
     }
 
-    /** Atendimentos de garantia desta venda. */
-    val warranties: StateFlow<List<WarrantyClaim>> = repo.observeWarrantiesForSale(saleId)
+    /** Baterias extras (custo zero) que saíram nesta venda. */
+    val extras: StateFlow<List<WarrantyClaim>> = repo.observeWarrantiesForSale(saleId)
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
 
     fun cancel() {

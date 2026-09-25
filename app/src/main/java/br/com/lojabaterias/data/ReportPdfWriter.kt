@@ -74,7 +74,7 @@ object ReportPdfWriter {
                 scrapMovements(f.scrapMovements)
                 chapter("4. Baterias na carga")
                 chargesSection(f)
-                chapter("5. Garantias")
+                chapter("5. Garantias e extras")
                 warrantySection(f)
                 finish()
             }
@@ -354,39 +354,18 @@ object ReportPdfWriter {
 
         fun warrantySection(f: FullReport) {
             val g = f.warranty
-            sectionTitle("Resumo")
-            keyValueTable(
-                listOf(
-                    "Atendimentos no período" to g.attended.toString(),
-                    "Trocas (bateria ruim)" to g.exchanged.toString(),
-                    "Testadas sem defeito" to g.noDefect.toString(),
-                    "Diferenças recebidas" to Money.format(g.differenceTotal),
-                    "Custo das baterias novas entregues" to Money.format(g.replacementCost),
-                    "Repostas pela fábrica no período" to g.replacedByFactory.toString(),
-                    "Garantias negadas no período" to g.denied.toString(),
-                    "Usadas vendidas no período" to Money.format(g.usedSoldValue),
-                    "Aguardando recolha (agora)" to g.awaitingPickupNow.toString(),
-                    "Na fábrica (agora)" to g.atFactoryNow.toString(),
-                    "Usadas na loja (agora)" to g.usedInShopNow.toString(),
-                ),
-            )
-            sectionTitle("Atendimentos no período (${f.warrantiesInPeriod.size})")
-            if (f.warrantiesInPeriod.isEmpty()) return emptyLine("Nenhum atendimento de garantia no período.")
-            table(
-                listOf(Col(1.5f), Col(1.3f), Col(1.6f), Col(1.6f), Col(1.1f, true), Col(1.9f)),
-                listOf("Data", "Série (trouxe)", "Trouxe", "Entregue", "Diferença", "Situação"),
-                f.warrantiesInPeriod.map { w ->
-                    listOf(
-                        Periods.formatDate(w.createdAt),
-                        w.returnedSerial ?: "—",
-                        w.returnedModel,
-                        w.replacementModel ?: "—",
-                        if (w.differenceAmount > 0) Money.format(w.differenceAmount) else "",
-                        if (w.status == WarrantyStatus.DENIED) "Negada: " + UsedDestination.label(w.usedDestination)
-                        else WarrantyStatus.label(w.status),
-                    )
-                },
-            )
+            sectionTitle("Garantias trocadas no período (${g.exchangedTotal})")
+            if (g.exchanged.isEmpty()) {
+                emptyLine("Nenhuma troca em garantia no período.")
+            } else {
+                keyValueTable(g.exchanged.map { it.model to "${it.count}" })
+            }
+            sectionTitle("Extras ganhadas no período (${g.extrasTotal})")
+            if (g.extras.isEmpty()) {
+                emptyLine("Nenhuma bateria extra no período.")
+            } else {
+                keyValueTable(g.extras.map { it.model to "${it.count}" })
+            }
         }
 
         private fun sectionTitle(text: String) {

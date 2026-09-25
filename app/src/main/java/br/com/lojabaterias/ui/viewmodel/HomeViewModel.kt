@@ -27,8 +27,6 @@ data class HomeState(
     val date: LocalDate = LocalDate.now(),
     /** Baterias de clientes na carga (não entregues). */
     val chargesOpen: Int = 0,
-    /** Garantias aguardando a fábrica (recolha + na fábrica). */
-    val warrantiesPending: Int = 0,
 )
 
 /** Emite a data atual e muda automaticamente na virada do dia. */
@@ -49,13 +47,6 @@ class HomeViewModel(repo: StoreRepository) : ViewModel() {
             repo.observeSummary(Periods.range(PeriodType.MONTH, date)),
             repo.observeRecentSales(10),
         ) { d, w, m, recent -> HomeState(d, w, m, recent, date) }
-    }.combine(
-        combine(repo.observeCharges(), repo.observeWarranties()) { charges, warranties ->
-            charges.count { it.isOpen } to warranties.count {
-                it.status == br.com.lojabaterias.data.WarrantyStatus.AWAITING_PICKUP ||
-                    it.status == br.com.lojabaterias.data.WarrantyStatus.AT_FACTORY
-            }
-        }
-    ) { home, (charges, warranties) -> home.copy(chargesOpen = charges, warrantiesPending = warranties) }
+    }.combine(repo.observeCharges()) { home, charges -> home.copy(chargesOpen = charges.count { it.isOpen }) }
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), HomeState())
 }

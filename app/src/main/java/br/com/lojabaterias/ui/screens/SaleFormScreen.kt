@@ -285,6 +285,7 @@ private fun SaleDetailsForm(
                         HorizontalDivider(Modifier.padding(vertical = 6.dp))
                         InfoRow("Total", Money.format(totals.finalAmount), bold = true)
                         InfoRow("Custo", Money.format(totals.totalCost))
+                        if (form.freeUnits > 0) InfoRow("Extras (custo zero)", "${form.freeUnits} un.")
                         if (totals.cardFee > 0) {
                             InfoRow(
                                 "Taxa da maquininha (${CardFees.formatPercent(form.fees.rateFor(form.method))})",

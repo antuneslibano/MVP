@@ -200,24 +200,20 @@ class SyncEngineTest {
         assertEquals(5, a.product("BEP60D").stock)
         assertEquals("Carlos", a.repo.getCharge(chargeId)!!.customerName)
         assertEquals(true, a.repo.getCharge(chargeId)!!.hasLoan)
-        // A registra uma troca em garantia; B vê a pendência
-        val w = a.repo.createWarranty(
-            null, "", id, "BEP60D", true, id, 0, null, null,
-            returnedSerial = "ab123", returnedSaleDate = 1_000L, replacementSerial = "CD456",
-        )
+        // A registra uma troca em garantia (não mexe no estoque) e uma extra (entra no estoque); B vê as duas
+        a.repo.registerExchange(id, 1)
+        a.repo.registerExtra(id, 1)
         a.sync()
         b.sync()
-        assertEquals(4, b.product("BEP60D").stock)
-        val received = b.repo.observeWarranty(w).first()!!
-        assertEquals(br.com.lojabaterias.data.WarrantyStatus.AWAITING_PICKUP, received.status)
-        assertEquals("AB123", received.returnedSerial)
-        assertEquals(1_000L, received.returnedSaleDate)
-        assertEquals("CD456", received.replacementSerial)
+        assertEquals(6, b.product("BEP60D").stock)
+        val received = b.repo.observeWarranties().first()
+        assertEquals(2, received.size)
+        assertEquals(1, received.count { it.isExtra })
         // B entrega a carga; A vê a entrega
         b.repo.deliverCharge(chargeId, null)
         b.sync()
         a.sync()
-        assertEquals(4, a.product("BEP60D").stock)
+        assertEquals(6, a.product("BEP60D").stock)
         assertEquals(ChargeStatus.DELIVERED, a.repo.getCharge(chargeId)!!.status)
     }
 }

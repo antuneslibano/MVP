@@ -280,74 +280,49 @@ class StoreRepositoryTest {
     }
 
     @Test
-    fun warranty_fullFactoryFlow() = runBlocking {
-        val same = newProduct(stock = 4)
-        val other = repo.saveProduct(
-            Product(id = 0, model = "M60GD", cost = 30_000, pricePix = 45_000, priceDebit = 46_000, priceCredit = 48_000, stock = 2, amperage = 60)
-        )
-        val saleId = repo.registerSale(same, 1, PaymentMethod.PIX, 25_000, 0, 1_000, ScrapInput(1, 0, 60, 0))
-        assertEquals(3, repo.getProduct(same)!!.stock)
+    fun warrantyExchange_onlyCounts_withoutTouchingStock() = runBlocking {
+        val id = newProduct(stock = 4)
+        repo.registerExchange(id, 3)
+        assertEquals(4, repo.getProduct(id)!!.stock)
+        val all = repo.observeWarranties().first()
+        assertEquals(3, all.size)
+        assertTrue(all.all { it.status == WarrantyStatus.EXCHANGE && it.returnedModel == "BEP60D" })
+        assertEquals(listOf(ModelCount("BEP60D", 3)), WarrantyPeriodSummary.from(all).exchanged)
 
-        // Cliente volta, bateria ruim, troca pela mesma
-        val w1 = repo.createWarranty(saleId, "Ana", same, "BEP60D", true, same, 0, null, null)
-        assertEquals(2, repo.getProduct(same)!!.stock)
-        assertEquals(WarrantyStatus.AWAITING_PICKUP, repo.observeWarranty(w1).first()!!.status)
-
-        // Fábrica recolhe, oferece outra e recusamos, depois repõe com o M60GD (aceito)
-        repo.markWarrantiesCollected(listOf(w1))
-        repo.warrantyOfferRefused(w1, "Z50D", "amperagem menor")
-        repo.warrantyReplaced(w1, other)
-        val done = repo.observeWarranty(w1).first()!!
-        assertEquals(WarrantyStatus.REPLACED, done.status)
-        assertTrue(done.refusalNotes!!.contains("Z50D"))
-        assertEquals(3, repo.getProduct(other)!!.stock)
-
-        // Segunda troca: por bateria melhor com diferença; fábrica nega; vira sucata
-        val w2 = repo.createWarranty(saleId, "Ana", same, "BEP60D", true, other, 20_000, PaymentMethod.PIX, null)
-        assertEquals(2, repo.getProduct(other)!!.stock)
-        repo.markWarrantiesCollected(listOf(w2))
-        repo.warrantyDenied(w2)
-        assertTrue(repo.observeWarranty(w2).first()!!.isUsedInShop)
-        repo.setUsedDestination(w2, UsedDestination.SCRAP, 0, 60)
-        assertEquals(2, scrapStock(60)) // 1 da venda + 1 da garantia negada
-        assertEquals(false, repo.observeWarranty(w2).first()!!.isUsedInShop)
-
-        // Teste sem defeito: nada muda no estoque
-        repo.createWarranty(saleId, "", same, "BEP60D", false, null, 0, null, null)
-        assertEquals(2, repo.getProduct(same)!!.stock)
-
-        // Excluir a primeira garantia desfaz a saída e a reposição
-        repo.deleteWarranty(w1)
-        assertEquals(3, repo.getProduct(same)!!.stock)
-        assertEquals(1, repo.getProduct(other)!!.stock)
+        repo.deleteWarranty(all.first().id)
+        assertEquals(2, repo.observeWarranties().first().size)
+        assertEquals(4, repo.getProduct(id)!!.stock)
     }
 
     @Test
-    fun warranty_savesSerialNumbersAndDates() = runBlocking {
+    fun extra_entersStockAndIsSoldWithZeroCost() = runBlocking {
         val id = newProduct(stock = 2)
-        val soldAt = 1_000_000L
-        val exchangedAt = 2_000_000L
-        val w = repo.createWarranty(
-            null, "", id, "BEP60D", true, id, 0, null, null,
-            returnedSerial = " 12ab-34 ", returnedSaleDate = soldAt, replacementSerial = "99XY", at = exchangedAt,
-        )
-        val saved = repo.observeWarranty(w).first()!!
-        assertEquals("12AB-34", saved.returnedSerial)
-        assertEquals(soldAt, saved.returnedSaleDate)
-        assertEquals("99XY", saved.replacementSerial)
-        assertEquals(exchangedAt, saved.createdAt)
-        assertEquals(1, repo.getProduct(id)!!.stock)
+        repo.registerExtra(id, 1)
+        assertEquals(3, repo.getProduct(id)!!.stock)
+        assertEquals(1, repo.freeExtraCount(id))
 
-        // Data da venda depois da troca é recusada
-        expectBusinessError {
-            repo.createWarranty(null, "", id, "BEP60D", true, id, 0, null, null, returnedSaleDate = exchangedAt + 1, at = exchangedAt)
-        }
-    }
+        // Venda de 2: uma sai de graça (extra), a outra com o custo normal
+        val saleId = repo.registerSale(id, 2, PaymentMethod.PIX, 25_000, 0, 1_000, ScrapInput(2, 0, 60, 0))
+        assertEquals(18_990L, repo.getSale(saleId)!!.sale.totalCost)
+        assertEquals(0, repo.freeExtraCount(id))
+        assertEquals(1, repo.freeExtraCount(id, saleId))
+        val extra = repo.observeWarranties().first().single()
+        assertEquals(saleId, extra.saleId)
+        expectBusinessError { repo.deleteWarranty(extra.id) }
 
-    @Test
-    fun warranty_withoutStock_isRejected() = runBlocking {
-        val id = newProduct(stock = 0)
-        expectBusinessError { repo.createWarranty(null, "", id, "BEP60D", true, id, 0, null, null) }
+        // Editar a venda para 1 unidade: a extra continua nela, custo zero
+        repo.updateSale(saleId, 1, PaymentMethod.PIX, 25_000, 0, 1_000, ScrapInput(1, 0, 60, 0))
+        assertEquals(0L, repo.getSale(saleId)!!.sale.totalCost)
+
+        // Cancelar devolve a extra
+        repo.cancelSale(saleId)
+        assertEquals(1, repo.freeExtraCount(id))
+        assertEquals(3, repo.getProduct(id)!!.stock)
+
+        // Excluir a extra (ainda no estoque) tira a bateria do estoque
+        repo.deleteWarranty(extra.id)
+        assertEquals(2, repo.getProduct(id)!!.stock)
+        assertEquals(0, repo.freeExtraCount(id))
     }
 
     @Test

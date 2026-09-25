@@ -53,7 +53,11 @@ data class SaleFormState(
     val batteryAmperage: Int = 0,
     /** Taxas das maquininhas em vigor. */
     val fees: CardFees = CardFees.DEFAULT,
+    /** Baterias extras (custo zero) deste modelo que podem sair nesta venda. */
+    val freeAvailable: Int = 0,
 ) {
+    val freeUnits: Int get() = minOf(quantity, freeAvailable).coerceAtLeast(0)
+
     val hasSelection: Boolean get() = model.isNotEmpty()
 
     val scrapMissing: Int get() = if (scrapLegacy) 0 else (quantity - scrapReturned).coerceAtLeast(0)
@@ -72,7 +76,7 @@ data class SaleFormState(
 
     val totals: SaleTotals?
         get() = if (quantity > 0 && discount <= unitPrice * quantity) {
-            SaleCalculator.compute(unitPrice, quantity, discount, unitCost, scrapInput.charge, fees.rateFor(method))
+            SaleCalculator.compute(unitPrice, quantity, discount, unitCost, scrapInput.charge, fees.rateFor(method), freeUnits)
         } else {
             null
         }
@@ -147,6 +151,7 @@ class SaleFormViewModel(
             scrapChargeEdited = true,
             batteryAmperage = batteryAmperage(product, item?.modelSnapshot ?: ""),
             fees = repo.cardFees,
+            freeAvailable = item?.let { repo.freeExtraCount(it.productId, id) } ?: 0,
         )
     }
 
@@ -184,7 +189,12 @@ class SaleFormViewModel(
                 scrapCharge = 0,
                 scrapChargeEdited = false,
                 batteryAmperage = batteryAmperage(product, product.model),
+                freeAvailable = 0,
             ).withScrapDefaults()
+        }
+        viewModelScope.launch {
+            val free = repo.freeExtraCount(product.id)
+            _form.update { if (it.product?.id == product.id) it.copy(freeAvailable = free) else it }
         }
     }
 

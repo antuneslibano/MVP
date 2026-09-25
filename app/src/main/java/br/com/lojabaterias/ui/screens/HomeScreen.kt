@@ -55,7 +55,6 @@ fun HomeScreen(
     onSeeAllSales: () -> Unit,
     onBackup: () -> Unit,
     onCharges: () -> Unit = {},
-    onWarranties: () -> Unit = {},
 ) {
     val vm = appViewModel { HomeViewModel(it.repository) }
     val state by vm.state.collectAsStateWithLifecycle()
@@ -109,32 +108,16 @@ fun HomeScreen(
                     PeriodCard("Este mês", state.month, Modifier.weight(1f))
                 }
             }
-            if (state.chargesOpen > 0 || state.warrantiesPending > 0) {
+            if (state.chargesOpen > 0) {
                 item {
-                    Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                        if (state.chargesOpen > 0) {
-                            AppCard(onClick = onCharges, modifier = Modifier.weight(1f)) {
-                                Column(Modifier.padding(12.dp)) {
-                                    Text("Na carga", style = MaterialTheme.typography.labelMedium)
-                                    Text(
-                                        "${state.chargesOpen} bateria(s)",
-                                        style = MaterialTheme.typography.titleMedium,
-                                        fontWeight = FontWeight.Bold,
-                                    )
-                                }
-                            }
-                        }
-                        if (state.warrantiesPending > 0) {
-                            AppCard(onClick = onWarranties, modifier = Modifier.weight(1f)) {
-                                Column(Modifier.padding(12.dp)) {
-                                    Text("Garantias pendentes", style = MaterialTheme.typography.labelMedium)
-                                    Text(
-                                        "${state.warrantiesPending} com a fábrica",
-                                        style = MaterialTheme.typography.titleMedium,
-                                        fontWeight = FontWeight.Bold,
-                                    )
-                                }
-                            }
+                    AppCard(onClick = onCharges) {
+                        Column(Modifier.padding(12.dp)) {
+                            Text("Na carga", style = MaterialTheme.typography.labelMedium)
+                            Text(
+                                "${state.chargesOpen} bateria(s)",
+                                style = MaterialTheme.typography.titleMedium,
+                                fontWeight = FontWeight.Bold,
+                            )
                         }
                     }
                 }

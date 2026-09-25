@@ -46,8 +46,6 @@ import br.com.lojabaterias.ui.screens.ChargeDetailScreen
 import br.com.lojabaterias.ui.screens.ChargeFormScreen
 import br.com.lojabaterias.ui.screens.ChargesScreen
 import br.com.lojabaterias.ui.screens.WarrantiesScreen
-import br.com.lojabaterias.ui.screens.WarrantyDetailScreen
-import br.com.lojabaterias.ui.screens.WarrantyFormScreen
 import br.com.lojabaterias.ui.screens.HomeScreen
 import br.com.lojabaterias.ui.screens.MovementsScreen
 import br.com.lojabaterias.ui.screens.ProductDetailScreen
@@ -80,13 +78,9 @@ object Routes {
     const val CHARGE_EDIT = "chargeedit/{id}"
     const val CHARGE_DETAIL = "chargedetail/{id}"
     const val WARRANTIES = "warranties"
-    const val WARRANTY_NEW = "warrantynew?saleId={saleId}"
-    const val WARRANTY_DETAIL = "warrantydetail/{id}"
 
     fun chargeEdit(id: Long) = "chargeedit/$id"
     fun chargeDetail(id: Long) = "chargedetail/$id"
-    fun warrantyNew(saleId: Long? = null) = if (saleId == null) "warrantynew" else "warrantynew?saleId=$saleId"
-    fun warrantyDetail(id: Long) = "warrantydetail/$id"
 
     fun newSale(productId: Long? = null) = if (productId == null) "newsale" else "newsale?productId=$productId"
     fun saleDetail(id: Long) = "saledetail/$id"
@@ -115,7 +109,7 @@ private val menuEntries = listOf(
     MenuEntry("Vendas", Icons.Filled.ShoppingCart, Routes.SALES, true),
     MenuEntry("Estoque de baterias", AppIcons.Battery, Routes.STOCK, true),
     MenuEntry("Baterias na carga", Icons.Filled.Build, Routes.CHARGES, true),
-    MenuEntry("Garantias", Icons.Filled.CheckCircle, Routes.WARRANTIES, true),
+    MenuEntry("Garantias e extras", Icons.Filled.CheckCircle, Routes.WARRANTIES, true),
     MenuEntry("Sucatas", Icons.Filled.Refresh, Routes.SCRAPS, true),
     MenuEntry("Relatórios", AppIcons.BarChart, Routes.REPORTS, true),
     MenuEntry("Movimentações de estoque", Icons.AutoMirrored.Filled.List, Routes.MOVEMENTS, false),
@@ -171,7 +165,6 @@ fun LojaNavHost() {
                     onSeeAllSales = { nav.navigateTopLevel(Routes.SALES) },
                     onBackup = { nav.navigate(Routes.BACKUP) },
                     onCharges = { nav.navigateTopLevel(Routes.CHARGES) },
-                    onWarranties = { nav.navigateTopLevel(Routes.WARRANTIES) },
                 )
             }
             composable(Routes.SALES) {
@@ -207,8 +200,6 @@ fun LojaNavHost() {
                     saleId = id,
                     onEdit = { nav.navigate(Routes.saleEdit(id)) },
                     onBack = { nav.popBackStack() },
-                    onWarranty = { nav.navigate(Routes.warrantyNew(id)) },
-                    onOpenWarranty = { nav.navigate(Routes.warrantyDetail(it)) },
                 )
             }
             composable(Routes.PRODUCT_NEW) {
@@ -252,20 +243,7 @@ fun LojaNavHost() {
                 val id = entry.arguments?.getLong("id") ?: 0L
                 ChargeDetailScreen(chargeId = id, onEdit = { nav.navigate(Routes.chargeEdit(id)) }, onBack = { nav.popBackStack() })
             }
-            composable(Routes.WARRANTIES) {
-                WarrantiesScreen(onNew = { nav.navigate(Routes.warrantyNew()) }, onOpen = { nav.navigate(Routes.warrantyDetail(it)) })
-            }
-            composable(
-                Routes.WARRANTY_NEW,
-                arguments = listOf(navArgument("saleId") { type = NavType.LongType; defaultValue = -1L }),
-            ) { entry ->
-                val saleId = entry.arguments?.getLong("saleId")?.takeIf { it > 0 }
-                WarrantyFormScreen(saleId = saleId, onDone = { nav.popBackStack() }, onBack = { nav.popBackStack() })
-            }
-            composable(Routes.WARRANTY_DETAIL, arguments = listOf(navArgument("id") { type = NavType.LongType })) { entry ->
-                val id = entry.arguments?.getLong("id") ?: 0L
-                WarrantyDetailScreen(id = id, onOpenSale = { nav.navigate(Routes.saleDetail(it)) }, onBack = { nav.popBackStack() })
-            }
+            composable(Routes.WARRANTIES) { WarrantiesScreen() }
             composable(Routes.SCRAPS) {
                 ScrapsScreen(onPriceTable = { nav.navigate(Routes.SCRAP_PRICES) })
             }

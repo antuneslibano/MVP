@@ -134,12 +134,14 @@ object MovementType {
     const val LOAN_RETURN = "LOAN_RETURN"
     const val WARRANTY_OUT = "WARRANTY_OUT"
     const val WARRANTY_IN = "WARRANTY_IN"
+    const val EXTRA_IN = "EXTRA_IN"
 
     fun label(type: String): String = when (type) {
         LOAN_OUT -> "Emprestada (carga)"
         LOAN_RETURN -> "Devolvida (carga)"
         WARRANTY_OUT -> "Troca em garantia"
         WARRANTY_IN -> "Reposição da fábrica"
+        EXTRA_IN -> "Extra (ganhada)"
         INITIAL -> "Estoque inicial"
         ENTRY -> "Entrada"
         ADJUSTMENT -> "Ajuste"
@@ -299,49 +301,23 @@ data class ChargeService(
     val isOpen: Boolean get() = status != ChargeStatus.DELIVERED
 }
 
+/** Tipo de cada registro da tela de Garantias (cada registro = 1 bateria). */
 object WarrantyStatus {
-    /** Testada e sem defeito: não houve troca. */
-    const val NO_DEFECT = "NO_DEFECT"
-    /** Trocada; bateria do cliente aguardando a fábrica recolher. */
-    const val AWAITING_PICKUP = "AWAITING_PICKUP"
-    /** Recolhida pela fábrica (em análise / aguardando reposição). */
-    const val AT_FACTORY = "AT_FACTORY"
-    /** A fábrica repôs uma bateria. */
-    const val REPLACED = "REPLACED"
-    /** A fábrica negou a garantia: a bateria usada voltou para a loja. */
-    const val DENIED = "DENIED"
-
-    fun label(status: String): String = when (status) {
-        NO_DEFECT -> "Testada sem defeito"
-        AWAITING_PICKUP -> "Aguardando recolha"
-        AT_FACTORY -> "Na fábrica"
-        REPLACED -> "Reposta pela fábrica"
-        DENIED -> "Garantia negada (usada na loja)"
-        else -> status
-    }
-}
-
-object UsedDestination {
-    const val SCRAP = "SCRAP"
-    const val SOLD = "SOLD"
-    const val DISCARDED = "DISCARDED"
-
-    fun label(d: String?): String = when (d) {
-        SCRAP -> "Virou sucata"
-        SOLD -> "Vendida como usada"
-        DISCARDED -> "Descartada"
-        else -> "Na loja"
-    }
+    /** Bateria trocada em garantia (não mexe no estoque). */
+    const val EXCHANGE = "EXCHANGE"
+    /** Bateria extra ganhada: entra no estoque com custo zero. */
+    const val EXTRA = "EXTRA"
 }
 
 /**
- * Atendimento de garantia (uma bateria).
- * Guarda o teste, a troca, a ida para a fábrica e o desfecho.
+ * Registro da tela de Garantias: uma bateria trocada ([WarrantyStatus.EXCHANGE]) ou uma extra ganhada
+ * ([WarrantyStatus.EXTRA]). Usa só modelo, data e, na extra, a entrada no estoque ([inMovementId]) e a
+ * venda que a consumiu com custo zero ([saleId]). As demais colunas são de uma versão antiga e ficam vazias.
  */
 @Entity(tableName = "warranty_claims", indices = [Index("sale_id"), Index("status"), Index("created_at")])
 data class WarrantyClaim(
     @PrimaryKey(autoGenerate = true) val id: Long = IdGenerator.next(),
-    /** Venda original (null quando a venda não está no sistema). */
+    /** Extra: venda em que esta bateria saiu com custo zero (null = ainda no estoque). */
     @ColumnInfo(name = "sale_id") val saleId: Long? = null,
     @ColumnInfo(name = "created_at") val createdAt: Long,
     @ColumnInfo(name = "customer_name") val customerName: String = "",
@@ -384,7 +360,7 @@ data class WarrantyClaim(
     /** Controle de sincronização: alteração ainda não enviada para a nuvem. */
     @ColumnInfo(name = "dirty", defaultValue = "1") val dirty: Boolean = true,
 ) {
-    val isUsedInShop: Boolean get() = status == WarrantyStatus.DENIED && usedDestination == null
+    val isExtra: Boolean get() = status == WarrantyStatus.EXTRA
 }
 
 /** Registro de exclusão local, ainda não enviado para a nuvem. */
