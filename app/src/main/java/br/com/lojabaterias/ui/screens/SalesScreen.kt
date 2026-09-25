@@ -45,6 +45,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import br.com.lojabaterias.domain.Money
 import br.com.lojabaterias.domain.PaymentMethod
 import br.com.lojabaterias.domain.Periods
+import br.com.lojabaterias.ui.components.FitText
 import br.com.lojabaterias.ui.components.AppCard
 import br.com.lojabaterias.ui.components.DatePickerModal
 import br.com.lojabaterias.ui.components.EmptyState
@@ -97,7 +98,8 @@ fun SalesScreen(onNewSale: () -> Unit, onOpenSale: (Long) -> Unit) {
                             selected = filter.date == null && filter.tab == tab,
                             onClick = { vm.setTab(tab) },
                             shape = SegmentedButtonDefaults.itemShape(index, SalesTab.entries.size),
-                        ) { Text(tab.label, maxLines = 1) }
+                            icon = {},
+                        ) { FitText(tab.label, style = MaterialTheme.typography.labelLarge) }
                     }
                 }
             }
@@ -212,8 +214,8 @@ private fun SummaryCell(
     modifier: Modifier = Modifier,
     color: androidx.compose.ui.graphics.Color = androidx.compose.ui.graphics.Color.Unspecified,
 ) {
-    Column(modifier) {
-        Text(label, style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
-        Text(value, style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold, color = color)
+    Column(modifier.padding(end = 6.dp)) {
+        FitText(label, style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        FitText(value, style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold, color = color)
     }
 }

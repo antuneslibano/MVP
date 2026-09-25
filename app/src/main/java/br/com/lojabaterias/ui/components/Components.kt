@@ -32,14 +32,22 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableFloatStateOf
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.drawWithContent
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.layout.Layout
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.text.TextRange
+import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardCapitalization
@@ -47,6 +55,7 @@ import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.TextFieldValue
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.Constraints
 import androidx.compose.ui.unit.dp
 import br.com.lojabaterias.data.Product
 import br.com.lojabaterias.data.SaleWithItems
@@ -215,21 +224,63 @@ fun InfoRow(
     valueColor: Color = Color.Unspecified,
     bold: Boolean = false,
 ) {
-    Row(
+    // O rótulo ocupa no máximo pouco mais da metade da linha; o valor fica com o resto e quebra alinhado à direita.
+    Layout(
         modifier = modifier
             .fillMaxWidth()
             .padding(vertical = 4.dp),
-        horizontalArrangement = Arrangement.SpaceBetween,
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        Text(label, style = MaterialTheme.typography.bodyLarge, color = MaterialTheme.colorScheme.onSurfaceVariant)
-        Text(
-            value,
-            style = if (bold) MaterialTheme.typography.titleLarge else MaterialTheme.typography.bodyLarge,
-            fontWeight = if (bold) FontWeight.Bold else FontWeight.Medium,
-            color = valueColor,
-        )
+        content = {
+            Text(label, style = MaterialTheme.typography.bodyLarge, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            Text(
+                value,
+                style = if (bold) MaterialTheme.typography.titleLarge else MaterialTheme.typography.bodyLarge,
+                fontWeight = if (bold) FontWeight.Bold else FontWeight.Medium,
+                color = valueColor,
+                textAlign = TextAlign.End,
+            )
+        },
+    ) { measurables, constraints ->
+        val width = constraints.maxWidth
+        val gap = 12.dp.roundToPx()
+        val labelP = measurables[0].measure(Constraints(maxWidth = (width * 0.55f).toInt()))
+        val valueWidth = (width - labelP.width - gap).coerceAtLeast(0)
+        val valueP = measurables[1].measure(Constraints(minWidth = valueWidth, maxWidth = valueWidth))
+        val height = maxOf(labelP.height, valueP.height)
+        layout(width, height) {
+            labelP.placeRelative(0, (height - labelP.height) / 2)
+            valueP.placeRelative(width - valueWidth, (height - valueP.height) / 2)
+        }
     }
+}
+
+/**
+ * Texto de uma linha que diminui a fonte até caber (valores em R$, rótulos curtos, abas).
+ * Evita quebra no meio de números e palavras quando a fonte do celular está grande.
+ */
+@Composable
+fun FitText(
+    text: String,
+    style: TextStyle,
+    modifier: Modifier = Modifier,
+    color: Color = Color.Unspecified,
+    fontWeight: FontWeight? = null,
+    textAlign: TextAlign? = null,
+) {
+    var scale by remember(text, style) { mutableFloatStateOf(1f) }
+    var ready by remember(text, style) { mutableStateOf(false) }
+    Text(
+        text,
+        style = style.copy(fontSize = style.fontSize * scale),
+        color = color,
+        fontWeight = fontWeight,
+        textAlign = textAlign,
+        maxLines = 1,
+        softWrap = false,
+        modifier = modifier.drawWithContent { if (ready) drawContent() },
+        onTextLayout = { result ->
+            if (result.didOverflowWidth && scale > 0.5f) scale *= 0.9f else ready = true
+        },
+    )
 }
 
 @Composable

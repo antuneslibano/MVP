@@ -37,6 +37,7 @@ import br.com.lojabaterias.data.PeriodSummary
 import br.com.lojabaterias.domain.Labels
 import br.com.lojabaterias.domain.Money
 import br.com.lojabaterias.domain.Periods
+import br.com.lojabaterias.ui.components.FitText
 import br.com.lojabaterias.ui.components.AppCard
 import br.com.lojabaterias.ui.components.EmptyState
 import br.com.lojabaterias.ui.components.SaleRow
@@ -172,7 +173,7 @@ private fun TodayCard(summary: PeriodSummary) {
             Text("Hoje", style = MaterialTheme.typography.titleMedium, color = onPrimary.copy(alpha = 0.85f))
             Spacer(Modifier.height(4.dp))
             Text("Faturamento", style = MaterialTheme.typography.bodyMedium, color = onPrimary.copy(alpha = 0.8f))
-            Text(
+            FitText(
                 Money.format(summary.revenue),
                 style = MaterialTheme.typography.headlineMedium,
                 fontWeight = FontWeight.Bold,
@@ -180,21 +181,17 @@ private fun TodayCard(summary: PeriodSummary) {
             )
             Spacer(Modifier.height(12.dp))
             Row {
-                Column(Modifier.weight(1.3f)) {
-                    Text("Lucro", style = MaterialTheme.typography.bodyMedium, color = onPrimary.copy(alpha = 0.8f))
-                    Text(
-                        Money.format(summary.profit),
-                        style = MaterialTheme.typography.titleLarge,
-                        color = onPrimary,
-                    )
+                Column(Modifier.weight(1.3f).padding(end = 8.dp)) {
+                    FitText("Lucro", style = MaterialTheme.typography.bodyMedium, color = onPrimary.copy(alpha = 0.8f))
+                    FitText(Money.format(summary.profit), style = MaterialTheme.typography.titleLarge, color = onPrimary)
                 }
-                Column(Modifier.weight(0.7f)) {
-                    Text("Vendas", style = MaterialTheme.typography.bodyMedium, color = onPrimary.copy(alpha = 0.8f))
-                    Text(summary.count.toString(), style = MaterialTheme.typography.titleLarge, color = onPrimary)
+                Column(Modifier.weight(0.7f).padding(end = 8.dp)) {
+                    FitText("Vendas", style = MaterialTheme.typography.bodyMedium, color = onPrimary.copy(alpha = 0.8f))
+                    FitText(summary.count.toString(), style = MaterialTheme.typography.titleLarge, color = onPrimary)
                 }
                 Column(Modifier.weight(0.8f)) {
-                    Text("Baterias", style = MaterialTheme.typography.bodyMedium, color = onPrimary.copy(alpha = 0.8f))
-                    Text(summary.units.toString(), style = MaterialTheme.typography.titleLarge, color = onPrimary)
+                    FitText("Baterias", style = MaterialTheme.typography.bodyMedium, color = onPrimary.copy(alpha = 0.8f))
+                    FitText(summary.units.toString(), style = MaterialTheme.typography.titleLarge, color = onPrimary)
                 }
             }
         }
@@ -207,11 +204,11 @@ private fun PeriodCard(title: String, summary: PeriodSummary, modifier: Modifier
         Column(Modifier.padding(16.dp)) {
             Text(title, style = MaterialTheme.typography.titleSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
             Spacer(Modifier.height(6.dp))
-            Text("Faturamento", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
-            Text(Money.format(summary.revenue), style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+            FitText("Faturamento", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            FitText(Money.format(summary.revenue), style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
             Spacer(Modifier.height(6.dp))
             Text("Lucro", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
-            Text(
+            FitText(
                 Money.format(summary.profit),
                 style = MaterialTheme.typography.titleMedium,
                 color = if (summary.profit == 0L) Color.Unspecified else moneyResultColor(summary.profit),

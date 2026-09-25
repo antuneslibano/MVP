@@ -10,6 +10,7 @@ import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -50,6 +51,7 @@ import br.com.lojabaterias.data.ScrapStockRow
 import br.com.lojabaterias.domain.Money
 import br.com.lojabaterias.domain.Periods
 import br.com.lojabaterias.domain.Scrap
+import br.com.lojabaterias.ui.components.FitText
 import br.com.lojabaterias.ui.components.AppCard
 import br.com.lojabaterias.ui.components.ConfirmDialog
 import br.com.lojabaterias.ui.components.EmptyState
@@ -189,8 +191,8 @@ fun ScrapsScreen(onPriceTable: () -> Unit) {
 
 @Composable
 private fun ActionButton(text: String, modifier: Modifier, enabled: Boolean = true, onClick: () -> Unit) {
-    FilledTonalButton(onClick = onClick, enabled = enabled, modifier = modifier.height(52.dp)) {
-        Text(text, maxLines = 1)
+    FilledTonalButton(onClick = onClick, enabled = enabled, modifier = modifier.heightIn(min = 52.dp)) {
+        Text(text)
     }
 }
 
@@ -217,9 +219,9 @@ private fun SummaryCard(state: ScrapsState) {
     AppCard(containerColor = MaterialTheme.colorScheme.primary) {
         val on = MaterialTheme.colorScheme.onPrimary
         Row(Modifier.padding(20.dp)) {
-            Column(Modifier.weight(1f)) {
+            Column(Modifier.weight(1f).padding(end = 8.dp)) {
                 Text("Em estoque", style = MaterialTheme.typography.bodyMedium, color = on.copy(alpha = 0.8f))
-                Text(
+                FitText(
                     Scrap.units(state.totalQuantity),
                     style = MaterialTheme.typography.headlineSmall,
                     color = on,
@@ -227,7 +229,7 @@ private fun SummaryCard(state: ScrapsState) {
             }
             Column(Modifier.weight(1f)) {
                 Text("Valor estimado", style = MaterialTheme.typography.bodyMedium, color = on.copy(alpha = 0.8f))
-                Text(
+                FitText(
                     Money.format(state.totalValue),
                     style = MaterialTheme.typography.headlineSmall,
                     color = on,

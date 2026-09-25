@@ -3,7 +3,6 @@ package br.com.lojabaterias.ui.screens
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -107,20 +106,16 @@ fun ProductFormScreen(productId: Long?, onDone: () -> Unit, onDeleted: () -> Uni
                 label = "Preço PIX (também usado no dinheiro)",
                 supportingText = if (s.pricePix > 0) "Lucro no PIX: ${Money.format(s.pricePix - s.cost)}" else null,
             )
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                MoneyField(
-                    value = s.priceDebit,
-                    onValueChange = { v -> vm.update { it.copy(priceDebit = v) } },
-                    label = "Preço débito",
-                    modifier = Modifier.weight(1f),
-                )
-                MoneyField(
-                    value = s.priceCredit,
-                    onValueChange = { v -> vm.update { it.copy(priceCredit = v) } },
-                    label = "Preço crédito",
-                    modifier = Modifier.weight(1f),
-                )
-            }
+            MoneyField(
+                value = s.priceDebit,
+                onValueChange = { v -> vm.update { it.copy(priceDebit = v) } },
+                label = "Preço débito",
+            )
+            MoneyField(
+                value = s.priceCredit,
+                onValueChange = { v -> vm.update { it.copy(priceCredit = v) } },
+                label = "Preço crédito",
+            )
 
             SectionTitle("Estoque")
             if (!s.isEdit) {

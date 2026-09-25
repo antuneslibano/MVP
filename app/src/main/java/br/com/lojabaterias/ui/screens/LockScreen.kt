@@ -11,6 +11,7 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.safeDrawingPadding
@@ -204,7 +205,7 @@ private fun RecoverPin(onBack: () -> Unit) {
                 color = MaterialTheme.colorScheme.primary,
                 modifier = Modifier.padding(vertical = 12.dp),
             )
-            Button(onClick = onBack, modifier = Modifier.fillMaxWidth().height(56.dp)) { Text("Voltar e entrar") }
+            Button(onClick = onBack, modifier = Modifier.fillMaxWidth().heightIn(min = 56.dp)) { Text("Voltar e entrar") }
         } else {
             Text(
                 AccessControl.SECURITY_QUESTION,
@@ -231,7 +232,7 @@ private fun RecoverPin(onBack: () -> Unit) {
             Button(
                 onClick = { check() },
                 enabled = answer.isNotBlank(),
-                modifier = Modifier.fillMaxWidth().height(56.dp),
+                modifier = Modifier.fillMaxWidth().heightIn(min = 56.dp),
             ) { Text("Verificar resposta") }
             TextButton(onClick = onBack) { Text("Voltar") }
         }

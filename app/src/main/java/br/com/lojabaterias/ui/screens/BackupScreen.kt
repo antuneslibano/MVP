@@ -8,6 +8,7 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.text.KeyboardOptions
@@ -107,7 +108,7 @@ fun BackupScreen(onBack: () -> Unit) {
                             colors = ButtonDefaults.outlinedButtonColors(contentColor = dangerColor()),
                             modifier = Modifier
                                 .fillMaxWidth()
-                                .height(52.dp),
+                                .heightIn(min = 52.dp),
                         ) { Text("Apagar dados deste celular e baixar da nuvem") }
                     }
                 }
@@ -142,7 +143,7 @@ fun BackupScreen(onBack: () -> Unit) {
                         enabled = !busy,
                         modifier = Modifier
                             .fillMaxWidth()
-                            .height(52.dp),
+                            .heightIn(min = 52.dp),
                     ) { Text("Restaurar de um arquivo") }
                 }
             }

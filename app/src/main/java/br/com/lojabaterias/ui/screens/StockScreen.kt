@@ -26,6 +26,9 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.text.SpanStyle
+import androidx.compose.ui.text.buildAnnotatedString
+import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -75,27 +78,18 @@ fun StockScreen(onOpenProduct: (Long) -> Unit, onNewProduct: () -> Unit, onMovem
                 placeholder = "Buscar modelo...",
                 modifier = Modifier.padding(horizontal = 16.dp),
             )
-            Row(Modifier.padding(horizontal = 20.dp, vertical = 8.dp)) {
-                Text(
-                    "${state.totalModels} modelos • ${state.totalUnits} baterias",
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-                if (state.lowCount > 0) {
-                    Text(
-                        " • ${state.lowCount} baixo",
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = warningColor(),
-                    )
-                }
-                if (state.zeroCount > 0) {
-                    Text(
-                        " • ${state.zeroCount} zerado",
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = dangerColor(),
-                    )
-                }
-            }
+            val warning = warningColor()
+            val danger = dangerColor()
+            Text(
+                buildAnnotatedString {
+                    append("${state.totalModels} modelos • ${state.totalUnits} baterias")
+                    if (state.lowCount > 0) withStyle(SpanStyle(color = warning)) { append(" • ${state.lowCount} baixo") }
+                    if (state.zeroCount > 0) withStyle(SpanStyle(color = danger)) { append(" • ${state.zeroCount} zerado") }
+                },
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.padding(horizontal = 20.dp, vertical = 8.dp),
+            )
             LazyColumn(
                 contentPadding = PaddingValues(start = 16.dp, end = 16.dp, bottom = 96.dp),
                 verticalArrangement = Arrangement.spacedBy(8.dp),

@@ -10,6 +10,7 @@ import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -56,6 +57,7 @@ import br.com.lojabaterias.data.ChargeStatus
 import br.com.lojabaterias.domain.Money
 import br.com.lojabaterias.domain.PaymentMethod
 import br.com.lojabaterias.domain.Periods
+import br.com.lojabaterias.ui.components.FitText
 import br.com.lojabaterias.ui.components.AppCard
 import br.com.lojabaterias.ui.components.ConfirmDialog
 import br.com.lojabaterias.ui.components.DateTimeSelector
@@ -113,17 +115,17 @@ fun ChargesScreen(onNew: () -> Unit, onOpen: (Long) -> Unit) {
             item {
                 AppCard(containerColor = MaterialTheme.colorScheme.surfaceContainerHigh) {
                     Row(Modifier.padding(16.dp)) {
-                        Column(Modifier.weight(1f)) {
-                            Text("Na loja", style = MaterialTheme.typography.labelMedium)
-                            Text(state.openCount.toString(), style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
+                        Column(Modifier.weight(1f).padding(end = 6.dp)) {
+                            FitText("Na loja", style = MaterialTheme.typography.labelMedium)
+                            FitText(state.openCount.toString(), style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
                         }
-                        Column(Modifier.weight(1f)) {
-                            Text("Empréstimos", style = MaterialTheme.typography.labelMedium)
-                            Text(state.loansOut.toString(), style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
+                        Column(Modifier.weight(1f).padding(end = 6.dp)) {
+                            FitText("Empréstimos", style = MaterialTheme.typography.labelMedium)
+                            FitText(state.loansOut.toString(), style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
                         }
                         Column(Modifier.weight(1.4f)) {
-                            Text("A receber", style = MaterialTheme.typography.labelMedium)
-                            Text(
+                            FitText("A receber", style = MaterialTheme.typography.labelMedium)
+                            FitText(
                                 Money.format(state.unpaidOpenTotal),
                                 style = MaterialTheme.typography.titleLarge,
                                 fontWeight = FontWeight.Bold,
@@ -140,7 +142,8 @@ fun ChargesScreen(onNew: () -> Unit, onOpen: (Long) -> Unit) {
                             selected = state.tab == t,
                             onClick = { vm.setTab(t) },
                             shape = SegmentedButtonDefaults.itemShape(i, ChargeTab.entries.size),
-                        ) { Text(t.label) }
+                            icon = {},
+                        ) { FitText(t.label, style = MaterialTheme.typography.labelLarge) }
                     }
                 }
             }
@@ -358,18 +361,18 @@ fun ChargeDetailScreen(chargeId: Long, onEdit: () -> Unit, onBack: () -> Unit) {
                     PrimaryActionButton(text = "Entregar ao cliente", onClick = { askDeliver = true })
                     Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                         if (!c.paid) {
-                            FilledTonalButton(onClick = { askPay = true }, modifier = Modifier.weight(1f).height(52.dp)) {
+                            FilledTonalButton(onClick = { askPay = true }, modifier = Modifier.weight(1f).heightIn(min = 52.dp)) {
                                 Text("Registrar pagamento")
                             }
                         }
                         if (c.status == ChargeStatus.IN_SHOP) {
-                            FilledTonalButton(onClick = vm::markReady, modifier = Modifier.weight(1f).height(52.dp)) {
+                            FilledTonalButton(onClick = vm::markReady, modifier = Modifier.weight(1f).heightIn(min = 52.dp)) {
                                 Text("Marcar pronta")
                             }
                         }
                     }
                 } else if (!c.paid) {
-                    FilledTonalButton(onClick = { askPay = true }, modifier = Modifier.fillMaxWidth().height(52.dp)) {
+                    FilledTonalButton(onClick = { askPay = true }, modifier = Modifier.fillMaxWidth().heightIn(min = 52.dp)) {
                         Text("Registrar pagamento")
                     }
                 }

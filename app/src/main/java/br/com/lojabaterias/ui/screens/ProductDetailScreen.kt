@@ -9,6 +9,7 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
@@ -101,13 +102,13 @@ fun ProductDetailScreen(productId: Long, onEdit: () -> Unit, onSell: () -> Unit,
                             onClick = { showEntry = true },
                             modifier = Modifier
                                 .weight(1f)
-                                .height(52.dp),
+                                .heightIn(min = 52.dp),
                         ) { Text("+ Entrada") }
                         FilledTonalButton(
                             onClick = { showAdjust = true },
                             modifier = Modifier
                                 .weight(1f)
-                                .height(52.dp),
+                                .heightIn(min = 52.dp),
                         ) { Text("Ajustar estoque") }
                     }
                 }

@@ -14,6 +14,7 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
@@ -55,6 +56,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardCapitalization
 import androidx.compose.ui.text.input.KeyboardType
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import br.com.lojabaterias.data.Product
@@ -171,7 +173,7 @@ fun WarrantiesScreen(onNew: () -> Unit, onOpen: (Long) -> Unit) {
                     item {
                         FilledTonalButton(
                             onClick = { confirmCollectAll = true },
-                            modifier = Modifier.fillMaxWidth().height(52.dp),
+                            modifier = Modifier.fillMaxWidth().heightIn(min = 52.dp),
                         ) { Text("A fábrica recolheu todas (${state.list.size})") }
                     }
                 }
@@ -231,6 +233,8 @@ private fun WarrantyRow(w: WarrantyClaim, onClick: () -> Unit) {
             Text(
                 if (w.status == WarrantyStatus.DENIED) UsedDestination.label(w.usedDestination) else WarrantyStatus.label(w.status),
                 style = MaterialTheme.typography.labelMedium,
+                textAlign = TextAlign.End,
+                modifier = Modifier.padding(start = 8.dp).widthIn(max = 110.dp),
                 color = when (w.status) {
                     WarrantyStatus.REPLACED, WarrantyStatus.NO_DEFECT -> profitColor()
                     WarrantyStatus.DENIED -> dangerColor()
@@ -280,7 +284,7 @@ private fun DateField(label: String, date: LocalDate?, onPick: (LocalDate) -> Un
     var open by remember { mutableStateOf(false) }
     Column(modifier) {
         Text(label, style = MaterialTheme.typography.labelLarge, modifier = Modifier.padding(bottom = 4.dp))
-        OutlinedButton(onClick = { open = true }, modifier = Modifier.fillMaxWidth().height(52.dp)) {
+        OutlinedButton(onClick = { open = true }, modifier = Modifier.fillMaxWidth().heightIn(min = 52.dp)) {
             Text(date?.format(Periods.DATE) ?: "Escolher data")
         }
     }
@@ -580,16 +584,16 @@ fun WarrantyDetailScreen(id: Long, onOpenSale: (Long) -> Unit, onBack: () -> Uni
                     w.status == WarrantyStatus.AT_FACTORY -> {
                         Text("Próximo passo: registrar o que a fábrica fez.", style = MaterialTheme.typography.bodyMedium)
                         PrimaryActionButton(text = "Chegou a reposição (mesma bateria)", onClick = { dialog = WDialog.REPLACED_SAME })
-                        FilledTonalButton(onClick = { dialog = WDialog.REPLACED_OTHER }, modifier = Modifier.fillMaxWidth().height(52.dp)) {
+                        FilledTonalButton(onClick = { dialog = WDialog.REPLACED_OTHER }, modifier = Modifier.fillMaxWidth().heightIn(min = 52.dp)) {
                             Text("Chegou OUTRA bateria e aceitamos")
                         }
-                        FilledTonalButton(onClick = { dialog = WDialog.REFUSED }, modifier = Modifier.fillMaxWidth().height(52.dp)) {
+                        FilledTonalButton(onClick = { dialog = WDialog.REFUSED }, modifier = Modifier.fillMaxWidth().heightIn(min = 52.dp)) {
                             Text("Trouxeram outra e RECUSAMOS")
                         }
                         OutlinedButton(
                             onClick = { dialog = WDialog.DENIED },
                             colors = ButtonDefaults.outlinedButtonColors(contentColor = dangerColor()),
-                            modifier = Modifier.fillMaxWidth().height(52.dp),
+                            modifier = Modifier.fillMaxWidth().heightIn(min = 52.dp),
                         ) { Text("Fábrica negou a garantia (voltou usada)") }
                     }
                     w.isUsedInShop -> {

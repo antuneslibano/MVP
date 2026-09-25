@@ -49,6 +49,7 @@ import br.com.lojabaterias.domain.CardFees
 import br.com.lojabaterias.domain.Money
 import br.com.lojabaterias.domain.PaymentMethod
 import br.com.lojabaterias.domain.Scrap
+import br.com.lojabaterias.ui.components.FitText
 import br.com.lojabaterias.ui.components.AppCard
 import br.com.lojabaterias.ui.components.DateTimeSelector
 import br.com.lojabaterias.ui.components.EmptyState
@@ -352,12 +353,14 @@ private fun ScrapSection(vm: SaleFormViewModel, form: SaleFormState) {
             selected = left,
             onClick = { vm.setScrapLeft(true) },
             shape = SegmentedButtonDefaults.itemShape(0, 2),
-        ) { Text("Deixou sucata") }
+            icon = {},
+        ) { FitText("Deixou sucata", style = MaterialTheme.typography.labelLarge) }
         SegmentedButton(
             selected = !left,
             onClick = { vm.setScrapLeft(false) },
             shape = SegmentedButtonDefaults.itemShape(1, 2),
-        ) { Text("Sem sucata") }
+            icon = {},
+        ) { FitText("Sem sucata", style = MaterialTheme.typography.labelLarge) }
     }
     Spacer(Modifier.height(8.dp))
 

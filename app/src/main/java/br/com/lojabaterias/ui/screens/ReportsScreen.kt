@@ -41,6 +41,7 @@ import br.com.lojabaterias.domain.ModelStats
 import br.com.lojabaterias.domain.Labels
 import br.com.lojabaterias.domain.Money
 import br.com.lojabaterias.domain.PeriodType
+import br.com.lojabaterias.ui.components.FitText
 import br.com.lojabaterias.ui.components.AppCard
 import br.com.lojabaterias.ui.components.InfoRow
 import br.com.lojabaterias.ui.components.SectionTitle
@@ -96,7 +97,8 @@ fun ReportsScreen() {
                             selected = state.selection.type == type,
                             onClick = { vm.setType(type) },
                             shape = SegmentedButtonDefaults.itemShape(index, PeriodType.entries.size),
-                        ) { Text(type.label) }
+                            icon = {},
+                        ) { FitText(type.label, style = MaterialTheme.typography.labelLarge) }
                     }
                 }
             }
@@ -121,20 +123,20 @@ fun ReportsScreen() {
                     Column(Modifier.padding(20.dp)) {
                         val on = MaterialTheme.colorScheme.onPrimary
                         Text("Faturamento", style = MaterialTheme.typography.bodyMedium, color = on.copy(alpha = 0.8f))
-                        Text(
+                        FitText(
                             Money.format(r.revenue),
                             style = MaterialTheme.typography.headlineMedium,
                             color = on,
                             fontWeight = FontWeight.Bold,
                         )
                         Row(Modifier.padding(top = 12.dp)) {
-                            Column(Modifier.weight(1f)) {
+                            Column(Modifier.weight(1f).padding(end = 8.dp)) {
                                 Text("Custo", style = MaterialTheme.typography.bodyMedium, color = on.copy(alpha = 0.8f))
-                                Text(Money.format(r.cost), style = MaterialTheme.typography.titleMedium, color = on)
+                                FitText(Money.format(r.cost), style = MaterialTheme.typography.titleMedium, color = on)
                             }
                             Column(Modifier.weight(1f)) {
                                 Text("Lucro bruto", style = MaterialTheme.typography.bodyMedium, color = on.copy(alpha = 0.8f))
-                                Text(Money.format(r.profit), style = MaterialTheme.typography.titleMedium, color = on)
+                                FitText(Money.format(r.profit), style = MaterialTheme.typography.titleMedium, color = on)
                             }
                         }
                     }
@@ -294,14 +296,8 @@ fun ReportsScreen() {
 private fun MetricCard(label: String, value: String, modifier: Modifier = Modifier) {
     AppCard(modifier = modifier) {
         Column(Modifier.padding(12.dp)) {
-            Text(label, style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
-            Text(
-                value,
-                style = MaterialTheme.typography.titleMedium,
-                fontWeight = FontWeight.Bold,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
-            )
+            FitText(label, style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            FitText(value, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
         }
     }
 }

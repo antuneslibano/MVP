@@ -8,6 +8,7 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
@@ -148,7 +149,7 @@ fun SaleDetailScreen(
                                     onClick = onWarranty,
                                     modifier = Modifier
                                         .fillMaxWidth()
-                                        .height(52.dp),
+                                        .heightIn(min = 52.dp),
                                 ) { Text("Garantia: testar / trocar bateria") }
                             }
                         }
@@ -184,7 +185,7 @@ fun SaleDetailScreen(
                                 colors = ButtonDefaults.outlinedButtonColors(contentColor = dangerColor()),
                                 modifier = Modifier
                                     .fillMaxWidth()
-                                    .height(52.dp),
+                                    .heightIn(min = 52.dp),
                             ) { Text("Cancelar venda") }
                         }
                     }

@@ -3,7 +3,7 @@ package br.com.lojabaterias.ui.components
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.Button
 import androidx.compose.material3.LinearProgressIndicator
@@ -74,7 +74,7 @@ private fun UpdateContent(updater: AppUpdater, s: UpdateState, compact: Boolean)
             )
             Button(
                 onClick = { updater.downloadAndInstall(s.info) },
-                modifier = Modifier.fillMaxWidth().height(48.dp).padding(top = 4.dp),
+                modifier = Modifier.padding(top = 4.dp).fillMaxWidth().heightIn(min = 48.dp),
             ) { Text("Atualizar agora") }
         }
         is UpdateState.Downloading -> {
