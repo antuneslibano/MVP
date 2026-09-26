@@ -1,0 +1,9 @@
+# Regras padrão do Gitleaks, com exceções para o que é público de propósito.
+[extend]
+useDefault = true
+
+[allowlist]
+description = "Chave anônima (anon) do Supabase: é pública por natureza; os dados são protegidos pelo login e pelas regras RLS."
+regexes = [
+  '''eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9\.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im9nb2Rxcmh0YmJ3ZG5zbnVxcWZxIiwicm9sZSI6ImFub24i[A-Za-z0-9._-]*''',
+]

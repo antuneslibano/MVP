@@ -31,7 +31,10 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableLongStateOf
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
@@ -45,10 +48,32 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import br.com.lojabaterias.security.AccessControl
+import br.com.lojabaterias.security.Lockout
+import kotlinx.coroutines.delay
 import br.com.lojabaterias.ui.components.AppIcons
 import br.com.lojabaterias.ui.theme.dangerColor
 
 private const val MAX_PIN = 12
+
+/** Tempo de bloqueio restante, atualizado a cada segundo. */
+@Composable
+private fun rememberLockRemaining(lockout: Lockout): Long {
+    var remaining by remember { mutableLongStateOf(lockout.remainingMillis()) }
+    LaunchedEffect(remaining > 0) {
+        while (true) {
+            remaining = lockout.remainingMillis()
+            if (remaining <= 0) break
+            delay(1_000)
+        }
+    }
+    return remaining
+}
+
+/** "25 s" ou "3 min 10 s". */
+private fun lockLabel(millis: Long): String {
+    val total = (millis + 999) / 1000
+    return if (total >= 60) "${total / 60} min ${total % 60} s" else "$total s"
+}
 
 /** Tela de senha exibida ao abrir o app (e ao voltar depois de um tempo em segundo plano). */
 @Composable
@@ -96,16 +121,23 @@ private fun Header(subtitle: String) {
 private fun PinEntry(onUnlock: (String) -> Unit, onForgot: () -> Unit) {
     var pin by rememberSaveable { mutableStateOf("") }
     var error by rememberSaveable { mutableStateOf(false) }
+    val context = LocalContext.current
+    val lockout = remember { Lockout(context) }
+    val remaining = rememberLockRemaining(lockout)
+    val locked = remaining > 0
 
     fun submit() {
+        if (lockout.remainingMillis() > 0) return
         if (AccessControl.checkPin(pin)) {
             val ok = pin
             pin = ""
             error = false
+            lockout.reset()
             onUnlock(ok)
         } else {
             error = true
             pin = ""
+            lockout.registerFailure()
         }
     }
 
@@ -129,8 +161,13 @@ private fun PinEntry(onUnlock: (String) -> Unit, onForgot: () -> Unit) {
             }
         }
         Text(
-            if (error) "Senha incorreta" else " ",
+            when {
+                locked -> "Muitas tentativas. Aguarde ${lockLabel(remaining)}"
+                error -> "Senha incorreta"
+                else -> " "
+            },
             color = dangerColor(),
+            textAlign = TextAlign.Center,
             style = MaterialTheme.typography.bodyMedium,
             modifier = Modifier.padding(top = 8.dp),
         )
@@ -156,7 +193,7 @@ private fun PinEntry(onUnlock: (String) -> Unit, onForgot: () -> Unit) {
                             .weight(1f)
                             .height(64.dp)
                         if (isOk) {
-                            Button(onClick = onClick, enabled = pin.isNotEmpty(), modifier = mod) {
+                            Button(onClick = onClick, enabled = pin.isNotEmpty() && !locked, modifier = mod) {
                                 Text("OK", fontSize = 20.sp, fontWeight = FontWeight.Bold)
                             }
                         } else {
@@ -178,11 +215,16 @@ private fun RecoverPin(onBack: () -> Unit) {
     var answer by rememberSaveable { mutableStateOf("") }
     var revealed by rememberSaveable { mutableStateOf<String?>(null) }
     var wrong by rememberSaveable { mutableStateOf(false) }
+    val context = LocalContext.current
+    val lockout = remember { Lockout(context) }
+    val remaining = rememberLockRemaining(lockout)
 
     fun check() {
+        if (lockout.remainingMillis() > 0) return
         val pin = AccessControl.recoverPin(answer)
         revealed = pin
         wrong = pin == null
+        if (pin == null) lockout.registerFailure() else lockout.reset()
     }
 
     Column(
@@ -219,7 +261,9 @@ private fun RecoverPin(onBack: () -> Unit) {
                 label = { Text("Resposta") },
                 singleLine = true,
                 isError = wrong,
-                supportingText = if (wrong) {
+                supportingText = if (remaining > 0) {
+                    { Text("Muitas tentativas. Aguarde ${lockLabel(remaining)}") }
+                } else if (wrong) {
                     { Text("Resposta incorreta") }
                 } else {
                     null
@@ -231,7 +275,7 @@ private fun RecoverPin(onBack: () -> Unit) {
             Spacer(Modifier.height(12.dp))
             Button(
                 onClick = { check() },
-                enabled = answer.isNotBlank(),
+                enabled = answer.isNotBlank() && remaining <= 0,
                 modifier = Modifier.fillMaxWidth().heightIn(min = 56.dp),
             ) { Text("Verificar resposta") }
             TextButton(onClick = onBack) { Text("Voltar") }

@@ -1,0 +1,12 @@
+# Avisa (abrindo um PR) quando uma biblioteca do app ou uma ação do GitHub tem versão nova ou falha de segurança conhecida.
+version: 2
+updates:
+  - package-ecosystem: gradle
+    directory: /
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 5
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
