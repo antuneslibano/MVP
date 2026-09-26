@@ -266,6 +266,7 @@ class StoreRepository(
         val product = products.getById(productId) ?: throw BusinessException("Produto não encontrado")
         SaleCalculator.validate(unitPrice, quantity, discount, product.stock)?.let { throw BusinessException(it) }
         validateScrap(quantity, scrap)
+        rebuildOrphanExtras()
         val extras = availableExtras(product.id).take(quantity)
         val totals = SaleCalculator.compute(
             unitPrice, quantity, discount, product.cost, scrap.charge, cardFees.rateFor(method), extras.size,
@@ -369,6 +370,7 @@ class StoreRepository(
         }
         SaleCalculator.validate(unitPrice, quantity, discount, available)?.let { throw BusinessException(it) }
         validateScrap(quantity, scrap)
+        rebuildOrphanExtras()
         releaseExtras(saleId)
         val extras = availableExtras(item.productId).take(quantity)
         val totals = SaleCalculator.compute(
@@ -661,6 +663,8 @@ class StoreRepository(
             val moveId = moveStock(p.id, +1, MovementType.EXTRA_IN, "Bateria extra (ganhada)", at, 0)
             warranties.insert(
                 WarrantyClaim(
+                    // Mesmo ID da entrada no estoque: a recuperação (repairExtras) gera o mesmo registro em qualquer celular.
+                    id = moveId,
                     createdAt = at, returnedProductId = p.id, returnedModel = p.model,
                     defective = false, status = WarrantyStatus.EXTRA, inMovementId = moveId,
                 )
@@ -693,6 +697,61 @@ class StoreRepository(
     /** Quantas extras (custo zero) de um produto podem entrar numa venda; na edição, conta também as da própria venda. */
     suspend fun freeExtraCount(productId: Long, saleId: Long? = null): Int =
         warranties.getAll().count { it.isExtra && it.returnedProductId == productId && (it.saleId == null || it.saleId == saleId) }
+
+    /**
+     * Recria as extras cujo registro sumiu mas cuja entrada no estoque ("Extra (ganhada)") continua.
+     * As que já saíram numa venda com custo zero voltam ligadas a essa venda (não contam duas vezes).
+     */
+    suspend fun repairExtras() {
+        if (orphanExtraMovements().isEmpty()) return
+        write { rebuildOrphanExtras() }
+    }
+
+    private suspend fun orphanExtraMovements(): List<StockMovement> {
+        val known = warranties.getAll().mapNotNull { it.inMovementId }.toSet()
+        return movements.getAll().filter { it.type == MovementType.EXTRA_IN && it.quantity > 0 && it.id !in known }
+    }
+
+    private suspend fun rebuildOrphanExtras() {
+        val orphans = orphanExtraMovements()
+        if (orphans.isEmpty()) return
+        val claims = warranties.getAll()
+        val active = sales.getActiveWithItems()
+        for ((productId, moves) in orphans.groupBy { it.productId }) {
+            val product = products.getById(productId)
+            val pending = moves.sortedBy { it.dateTime }.toMutableList()
+            // Vendas deste produto que saíram com unidades de custo zero ainda sem extra ligada
+            val freeBySale = active.mapNotNull { s ->
+                val item = s.items.singleOrNull()?.takeIf { it.productId == productId } ?: return@mapNotNull null
+                if (item.unitCost <= 0) return@mapNotNull null
+                val free = ((item.unitCost * item.quantity - s.sale.totalCost) / item.unitCost).toInt()
+                    .coerceIn(0, item.quantity) - claims.count { it.isExtra && it.saleId == s.sale.id }
+                if (free > 0) s to free else null
+            }.sortedBy { it.first.sale.dateTime }
+            val assigned = HashMap<Long, Long?>()
+            for ((s, free) in freeBySale) {
+                repeat(free) {
+                    val m = pending.firstOrNull { it.dateTime <= s.sale.dateTime } ?: pending.firstOrNull() ?: return@repeat
+                    pending.remove(m)
+                    assigned[m.id] = s.sale.id
+                }
+            }
+            for (m in moves) {
+                sync.upsertWarranty(
+                    WarrantyClaim(
+                        id = m.id,
+                        createdAt = m.dateTime,
+                        returnedProductId = productId,
+                        returnedModel = product?.model ?: "(excluída)",
+                        defective = false,
+                        status = WarrantyStatus.EXTRA,
+                        inMovementId = m.id,
+                        saleId = assigned[m.id],
+                    )
+                )
+            }
+        }
+    }
 
     private suspend fun availableExtras(productId: Long): List<WarrantyClaim> =
         warranties.getAll().filter { it.isExtra && it.returnedProductId == productId && it.saleId == null }.sortedBy { it.createdAt }

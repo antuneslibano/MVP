@@ -182,15 +182,17 @@ abstract class AppDatabase : RoomDatabase() {
         /**
          * v6 → v7: garantias simplificadas (só modelo e quantidade) e baterias extras.
          * Apaga os atendimentos antigos (aqui e na nuvem). O estoque não muda.
+         * Só apaga o formato antigo: trocas e extras novas, vindas de outro celular já atualizado, ficam.
          */
         val MIGRATION_6_7 = object : Migration(6, 7) {
             override fun migrate(db: SupportSQLiteDatabase) {
                 val now = System.currentTimeMillis()
+                val old = "status NOT IN ('EXCHANGE', 'EXTRA')"
                 db.execSQL(
                     "INSERT INTO tombstones (table_name, record_id, deleted_at) " +
-                        "SELECT 'warranty_claims', id, $now FROM warranty_claims"
+                        "SELECT 'warranty_claims', id, $now FROM warranty_claims WHERE $old"
                 )
-                db.execSQL("DELETE FROM warranty_claims")
+                db.execSQL("DELETE FROM warranty_claims WHERE $old")
             }
         }
 

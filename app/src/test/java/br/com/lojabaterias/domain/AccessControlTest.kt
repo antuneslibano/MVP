@@ -21,7 +21,7 @@ class AccessControlTest {
     fun correctAnswerRevealsTheRealPin() {
         val pin = AccessControl.recoverPin("Baltazar")
         assertNotNull(pin)
-        assertEquals(6, pin!!.length)
+        assertEquals(8, pin!!.length)
         assertTrue(AccessControl.checkPin(pin))
         // variações de digitação aceitas
         assertEquals(pin, AccessControl.recoverPin("  baltazar "))

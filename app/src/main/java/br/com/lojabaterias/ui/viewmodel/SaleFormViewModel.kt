@@ -126,6 +126,7 @@ class SaleFormViewModel(
     }
 
     private suspend fun loadSale(id: Long) {
+        runCatching { repo.repairExtras() }
         val sale = repo.getSale(id)
         if (sale == null) {
             message("Venda não encontrada")
@@ -198,6 +199,7 @@ class SaleFormViewModel(
             ).withScrapDefaults()
         }
         viewModelScope.launch {
+            runCatching { repo.repairExtras() }
             val free = repo.freeExtraCount(product.id)
             _form.update { if (it.product?.id == product.id) it.copy(freeAvailable = free) else it }
         }

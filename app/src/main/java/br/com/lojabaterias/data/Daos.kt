@@ -88,6 +88,10 @@ interface SaleDao {
     )
     fun observeActiveInRange(start: Long, end: Long): Flow<List<SaleWithItems>>
 
+    @Transaction
+    @Query("SELECT * FROM sales WHERE status = 'ACTIVE' ORDER BY date_time")
+    suspend fun getActiveWithItems(): List<SaleWithItems>
+
     @Query(
         "SELECT COUNT(*) AS count, COALESCE(SUM(final_amount), 0) AS revenue, " +
             "COALESCE(SUM(gross_profit), 0) AS profit, " +

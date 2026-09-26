@@ -72,6 +72,10 @@ class WarrantiesViewModel(private val repo: StoreRepository) : MessageViewModel(
             )
         }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), WarrantiesState())
 
+    init {
+        viewModelScope.launch { runCatching { repo.repairExtras() } }
+    }
+
     fun setTab(t: WarrantyTab) { tab.value = t }
     fun previousMonth() = offset.update { it - 1 }
     fun nextMonth() = offset.update { if (it < 0) it + 1 else it }

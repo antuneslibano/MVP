@@ -326,6 +326,30 @@ class StoreRepositoryTest {
     }
 
     @Test
+    fun lostExtras_areRebuiltFromStock_withoutCountingTwice() = runBlocking {
+        val id = newProduct(stock = 2)
+        repo.registerExtra(id, 2)
+        val saleId = repo.registerSale(id, 1, PaymentMethod.PIX, 25_000, 0, 1_000, ScrapInput(1, 0, 60, 0))
+        assertEquals(0L, repo.getSale(saleId)!!.sale.totalCost)
+
+        // Os registros das extras somem (a entrada no estoque e a venda continuam)
+        db.warrantyDao().deleteAll()
+        assertEquals(0, repo.freeExtraCount(id))
+
+        repo.repairExtras()
+        val extras = repo.observeWarranties().first()
+        assertEquals(2, extras.size)
+        assertTrue(extras.all { it.isExtra && it.returnedModel == "BEP60D" })
+        assertEquals(1, extras.count { it.saleId == saleId })
+        assertEquals(1, repo.freeExtraCount(id))
+        assertEquals(3, repo.getProduct(id)!!.stock)
+
+        // Rodar de novo não duplica
+        repo.repairExtras()
+        assertEquals(2, repo.observeWarranties().first().size)
+    }
+
+    @Test
     fun scrapVoucher_isPaidWhenCustomerBringsTheCasco() = runBlocking {
         val id = newProduct(stock = 4)
         // Sem vale: o casco fica pago e não aparece nos vales
