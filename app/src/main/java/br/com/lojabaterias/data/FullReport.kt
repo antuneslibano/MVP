@@ -95,7 +95,15 @@ data class FullReport(
     val charges: ChargePeriodSummary = ChargePeriodSummary(),
     val chargesInPeriod: List<ChargeService> = emptyList(),
     val warranty: WarrantyPeriodSummary = WarrantyPeriodSummary(),
+    // Despesas pagas no período
+    val expenses: List<Expense> = emptyList(),
 ) {
+    val expensesTotal: Long get() = expenses.sumOf { it.amount }
+    /** Total por categoria, da maior para a menor. */
+    val expensesByCategory: List<Pair<String, Long>>
+        get() = expenses.groupBy { it.category }.map { (c, l) -> c to l.sumOf { it.amount } }.sortedByDescending { it.second }
+    /** Lucro líquido = lucro bruto das vendas − despesas. */
+    val netProfit: Long get() = sales.profit - expensesTotal
     val canceledAmount: Long get() = canceledSales.sumOf { it.sale.finalAmount }
     val stockUnits: Int get() = stockRows.sumOf { it.stock.coerceAtLeast(0) }
     val stockValueAtCost: Long get() = stockRows.sumOf { it.valueAtCost.coerceAtLeast(0) }
@@ -115,6 +123,7 @@ data class FullReport(
             scrapPrices: Map<Int, Long>,
             allCharges: List<ChargeService> = emptyList(),
             allWarranties: List<WarrantyClaim> = emptyList(),
+            expenses: List<Expense> = emptyList(),
             range: br.com.lojabaterias.domain.DateRange? = null,
         ): FullReport {
             fun inRange(t: Long?) = t != null && (range == null || t in range)
@@ -160,6 +169,7 @@ data class FullReport(
                 charges = chargeSummary,
                 chargesInPeriod = periodCharges,
                 warranty = WarrantyPeriodSummary.from(periodClaims),
+                expenses = expenses.filter { it.kind == ExpenseKind.PAYMENT && inRange(it.date) },
             )
         }
     }

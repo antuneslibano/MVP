@@ -17,7 +17,8 @@ object SaleCalculator {
     /**
      * Valor bruto = preço unitário × quantidade
      * Valor final = valor bruto − desconto + cobrança de sucata faltante
-     * Custo total = custo unitário (histórico) × (quantidade − extras de custo zero)
+     * Custo total = custo unitário (histórico) × (quantidade − extras de custo zero) + casco cobrado
+     *   (o valor do casco entra no faturamento, mas é custo: serve para repor o casco que o cliente não deixou)
      * Taxa da maquininha = valor final × taxa da forma de pagamento
      * Lucro bruto = valor final − custo total − taxa da maquininha
      */
@@ -37,7 +38,7 @@ object SaleCalculator {
         val gross = unitPrice * quantity
         require(discount <= gross) { "Desconto maior que o valor da venda" }
         val final = gross - discount + scrapCharge
-        val cost = unitCost * (quantity - freeUnits.coerceIn(0, quantity))
+        val cost = unitCost * (quantity - freeUnits.coerceIn(0, quantity)) + scrapCharge
         val fee = CardFees.feeOf(final, feeBps)
         return SaleTotals(
             grossAmount = gross,

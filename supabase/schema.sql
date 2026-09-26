@@ -138,6 +138,22 @@ create table if not exists public.warranty_claims (
   server_updated_at timestamptz not null default now()
 );
 
+create table if not exists public.expenses (
+  id bigint primary key,
+  kind text not null,
+  category text not null,
+  description text not null default '',
+  amount bigint not null default 0,
+  date bigint not null,
+  due_day integer,
+  bill_id bigint,
+  bill_month integer,
+  active boolean not null default true,
+  note text,
+  updated_at bigint not null default 0,
+  server_updated_at timestamptz not null default now()
+);
+
 -- Exclusões (para apagar também nos outros celulares)
 create table if not exists public.deletions (
   table_name text not null,
@@ -163,6 +179,7 @@ create index if not exists scrap_movements_sua on public.scrap_movements (server
 create index if not exists deletions_sua on public.deletions (server_updated_at);
 create index if not exists charge_services_sua on public.charge_services (server_updated_at);
 create index if not exists warranty_claims_sua on public.warranty_claims (server_updated_at);
+create index if not exists expenses_sua on public.expenses (server_updated_at);
 
 -- ---------- Gatilhos ----------
 -- Marca o horário do servidor em cada gravação (usado para saber o que mudou).
@@ -187,7 +204,7 @@ end $$;
 create or replace function public.apply_deletion()
 returns trigger language plpgsql security definer set search_path = public as $$
 begin
-  if new.table_name in ('products','sales','sale_items','stock_movements','scrap_prices','scrap_movements','charge_services','warranty_claims') then
+  if new.table_name in ('products','sales','sale_items','stock_movements','scrap_prices','scrap_movements','charge_services','warranty_claims','expenses') then
     execute format('delete from public.%I where id = $1', new.table_name) using new.record_id;
   end if;
   return new;
@@ -196,11 +213,11 @@ end $$;
 do $$
 declare t text;
 begin
-  foreach t in array array['products','sales','sale_items','stock_movements','scrap_prices','scrap_movements','charge_services','warranty_claims','deletions'] loop
+  foreach t in array array['products','sales','sale_items','stock_movements','scrap_prices','scrap_movements','charge_services','warranty_claims','expenses','deletions'] loop
     execute format('drop trigger if exists touch_%1$s on public.%1$I', t);
     execute format('create trigger touch_%1$s before insert or update on public.%1$I for each row execute function public.touch_server_updated_at()', t);
   end loop;
-  foreach t in array array['products','sales','sale_items','stock_movements','scrap_prices','scrap_movements','charge_services','warranty_claims'] loop
+  foreach t in array array['products','sales','sale_items','stock_movements','scrap_prices','scrap_movements','charge_services','warranty_claims','expenses'] loop
     execute format('drop trigger if exists skip_deleted_%1$s on public.%1$I', t);
     execute format('create trigger skip_deleted_%1$s before insert on public.%1$I for each row execute function public.skip_if_deleted()', t);
   end loop;
@@ -214,7 +231,7 @@ create trigger apply_deletion after insert or update on public.deletions
 do $$
 declare t text;
 begin
-  foreach t in array array['products','sales','sale_items','stock_movements','scrap_prices','scrap_movements','charge_services','warranty_claims','deletions'] loop
+  foreach t in array array['products','sales','sale_items','stock_movements','scrap_prices','scrap_movements','charge_services','warranty_claims','expenses','deletions'] loop
     execute format('alter table public.%I enable row level security', t);
     execute format('drop policy if exists loja_acesso on public.%I', t);
     execute format('create policy loja_acesso on public.%I for all to authenticated using (true) with check (true)', t);
@@ -243,6 +260,7 @@ as $$
     'scrap_movements', coalesce((select json_agg(x) from scrap_movements x, c where x.server_updated_at > c.t), '[]'::json),
     'charge_services', coalesce((select json_agg(x) from charge_services x, c where x.server_updated_at > c.t), '[]'::json),
     'warranty_claims', coalesce((select json_agg(x) from warranty_claims x, c where x.server_updated_at > c.t), '[]'::json),
+    'expenses',        coalesce((select json_agg(x) from expenses x, c where x.server_updated_at > c.t), '[]'::json),
     'deletions',       coalesce((select json_agg(x) from deletions x, c where x.server_updated_at > c.t), '[]'::json)
   );
 $$;
@@ -250,4 +268,4 @@ $$;
 revoke all on function public.pull_changes(timestamptz) from public, anon;
 grant execute on function public.pull_changes(timestamptz) to authenticated;
 
--- Pronto! Confira em Table Editor: devem aparecer 9 tabelas.
+-- Pronto! Confira em Table Editor: devem aparecer 10 tabelas.

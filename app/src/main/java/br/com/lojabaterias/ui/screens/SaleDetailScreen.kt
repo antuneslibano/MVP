@@ -112,7 +112,7 @@ fun SaleDetailScreen(
                             if (s.scrapCharge > 0) InfoRow("Sucata faltante", Money.format(s.scrapCharge))
                             HorizontalDivider(Modifier.padding(vertical = 6.dp))
                             InfoRow("Valor final", Money.format(s.finalAmount), bold = true)
-                            InfoRow("Custo", Money.format(s.totalCost))
+                            InfoRow(if (s.scrapCharge > 0) "Custo (inclui o casco)" else "Custo", Money.format(s.totalCost))
                             if (extras.isNotEmpty()) InfoRow("Extras usadas (custo zero)", "${extras.size} un.")
                             if (s.cardFee > 0) InfoRow("Taxa da maquininha", "-" + Money.format(s.cardFee))
                             InfoRow("Lucro bruto", Money.format(s.grossProfit), valueColor = moneyResultColor(s.grossProfit))

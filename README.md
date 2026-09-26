@@ -59,6 +59,10 @@ pois todos os APKs são assinados com a mesma chave (`app/signing/loja-baterias.
   (a venda usa primeiro as extras disponíveis do modelo; cancelar/excluir a venda devolve a extra).
 - **Vales de casco** (Menu ☰): na venda sem sucata, com o casco cobrado, "Deixou vale? Sim" cria um vale em aberto (valor = casco). Quando o
   cliente traz o casco, "Pagar vale" registra o valor devolvido no dia e o casco entra no estoque de sucatas.
+- **Despesas** (Menu ☰): contas fixas do mês (cadastradas uma vez; aparecem como "a pagar" e é só tocar
+  em "Paguei") e despesas avulsas por categoria. Mostra entrou × saiu × sobrou (lucro líquido); os Relatórios
+  e o PDF também trazem as despesas e o lucro líquido.
+- **Casco cobrado**: entra no faturamento, mas também no custo (serve para repor o casco), então não vira lucro.
 - **Atualização automática**: cada build vira uma Release no GitHub; o app avisa no Início e instala
   com um toque (Menu > Backup e sincronização > Atualizações).
 - **Menu ☰**: acesso a todas as áreas (Início, Nova venda, Vendas, Estoque, Sucatas, Relatórios,

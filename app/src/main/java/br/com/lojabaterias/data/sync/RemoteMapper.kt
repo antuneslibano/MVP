@@ -1,6 +1,7 @@
 package br.com.lojabaterias.data.sync
 
 import br.com.lojabaterias.data.ChargeService
+import br.com.lojabaterias.data.Expense
 import br.com.lojabaterias.data.Product
 import br.com.lojabaterias.data.Sale
 import br.com.lojabaterias.data.SaleItem
@@ -216,6 +217,29 @@ object RemoteMapper {
         returnedSerial = o.stringOrNull("returned_serial"),
         returnedSaleDate = o.longOrNull("returned_sale_date"),
         replacementSerial = o.stringOrNull("replacement_serial"),
+        updatedAt = o.optLong("updated_at", 0),
+        dirty = false,
+    )
+
+    fun toJson(e: Expense) = JSONObject().apply {
+        put("id", e.id); put("kind", e.kind); put("category", e.category); put("description", e.description)
+        put("amount", e.amount); put("date", e.date); put("due_day", e.dueDay.orNull()); put("bill_id", e.billId.orNull())
+        put("bill_month", e.billMonth.orNull()); put("active", e.active); put("note", e.note.orNull())
+        put("updated_at", e.updatedAt)
+    }
+
+    fun expense(o: JSONObject) = Expense(
+        id = o.getLong("id"),
+        kind = o.getString("kind"),
+        category = o.optString("category", "Outros"),
+        description = o.optString("description", ""),
+        amount = o.optLong("amount", 0),
+        date = o.getLong("date"),
+        dueDay = o.intOrNull("due_day"),
+        billId = o.longOrNull("bill_id"),
+        billMonth = o.intOrNull("bill_month"),
+        active = o.optBoolean("active", true),
+        note = o.stringOrNull("note"),
         updatedAt = o.optLong("updated_at", 0),
         dirty = false,
     )

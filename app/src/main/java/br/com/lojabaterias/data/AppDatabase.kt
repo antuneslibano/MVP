@@ -18,8 +18,9 @@ import androidx.sqlite.db.SupportSQLiteDatabase
         Tombstone::class,
         ChargeService::class,
         WarrantyClaim::class,
+        Expense::class,
     ],
-    version = 8,
+    version = 9,
     exportSchema = true,
 )
 abstract class AppDatabase : RoomDatabase() {
@@ -30,6 +31,7 @@ abstract class AppDatabase : RoomDatabase() {
     abstract fun syncDao(): SyncDao
     abstract fun chargeDao(): ChargeDao
     abstract fun warrantyDao(): WarrantyDao
+    abstract fun expenseDao(): ExpenseDao
 
     companion object {
         const val NAME = "loja_baterias.db"
@@ -213,8 +215,62 @@ abstract class AppDatabase : RoomDatabase() {
             }
         }
 
+        /**
+         * v8 → v9: despesas da loja e o casco cobrado passa a ser custo (não lucro).
+         * O ajuste das vendas antigas confere os números de cada venda e só corrige as que ainda estão
+         * no cálculo antigo, então rodar de novo (ou receber a venda já corrigida de outro celular) não soma duas vezes.
+         */
+        val MIGRATION_8_9 = object : Migration(8, 9) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL(
+                    "CREATE TABLE IF NOT EXISTS `expenses` (`id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, " +
+                        "`kind` TEXT NOT NULL, `category` TEXT NOT NULL, `description` TEXT NOT NULL, " +
+                        "`amount` INTEGER NOT NULL, `date` INTEGER NOT NULL, `due_day` INTEGER, `bill_id` INTEGER, " +
+                        "`bill_month` INTEGER, `active` INTEGER NOT NULL, `note` TEXT, " +
+                        "`updated_at` INTEGER NOT NULL DEFAULT 0, `dirty` INTEGER NOT NULL DEFAULT 1)"
+                )
+                db.execSQL("CREATE INDEX IF NOT EXISTS `index_expenses_date` ON `expenses` (`date`)")
+                db.execSQL("CREATE INDEX IF NOT EXISTS `index_expenses_kind` ON `expenses` (`kind`)")
+                db.execSQL("CREATE INDEX IF NOT EXISTS `index_expenses_bill_id` ON `expenses` (`bill_id`)")
+
+                val now = System.currentTimeMillis()
+                val toFix = mutableListOf<Pair<Long, Long>>()
+                db.query(
+                    "SELECT s.id, s.total_cost, s.scrap_charge, i.unit_cost, i.quantity FROM sales s " +
+                        "JOIN sale_items i ON i.sale_id = s.id WHERE s.scrap_charge > 0 " +
+                        "AND (SELECT COUNT(*) FROM sale_items x WHERE x.sale_id = s.id) = 1"
+                ).use { c ->
+                    while (c.moveToNext()) {
+                        val id = c.getLong(0)
+                        val total = c.getLong(1)
+                        val charge = c.getLong(2)
+                        val full = c.getLong(3) * c.getLong(4)
+                        if (isOldCost(total, charge, c.getLong(3), full)) toFix += id to charge
+                    }
+                }
+                toFix.forEach { (id, charge) ->
+                    db.execSQL(
+                        "UPDATE sales SET total_cost = total_cost + $charge, gross_profit = gross_profit - $charge, " +
+                            "updated_at = $now, dirty = 1 WHERE id = $id"
+                    )
+                }
+            }
+        }
+
+        /**
+         * Venda ainda no cálculo antigo (casco fora do custo)?
+         * Antigo: custo = unitário × (qtd − extras). Novo: o mesmo + casco. Na dúvida, não mexe.
+         */
+        internal fun isOldCost(total: Long, charge: Long, unitCost: Long, full: Long): Boolean {
+            if (unitCost <= 0) return total == 0L
+            val old = total <= full && (full - total) % unitCost == 0L
+            val new = total >= charge && total - charge <= full && (full - (total - charge)) % unitCost == 0L
+            return old && !new
+        }
+
         val ALL_MIGRATIONS = arrayOf(
             MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5, MIGRATION_5_6, MIGRATION_6_7, MIGRATION_7_8,
+            MIGRATION_8_9,
         )
 
         fun build(context: Context): AppDatabase =

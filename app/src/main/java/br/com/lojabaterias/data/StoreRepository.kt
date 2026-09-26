@@ -45,6 +45,7 @@ object SyncTables {
     const val SCRAP_MOVEMENTS = "scrap_movements"
     const val CHARGES = "charge_services"
     const val WARRANTIES = "warranty_claims"
+    const val EXPENSES = "expenses"
 }
 
 /**
@@ -66,6 +67,7 @@ class StoreRepository(
     private val sync = db.syncDao()
     private val charges = db.chargeDao()
     private val warranties = db.warrantyDao()
+    private val expenses = db.expenseDao()
 
     /** Executa uma alteração em transação e avisa a sincronização. */
     private suspend fun <T> write(block: suspend () -> T): T {
@@ -764,6 +766,64 @@ class StoreRepository(
     private suspend fun releaseExtras(saleId: Long) {
         warranties.getAll().filter { it.isExtra && it.saleId == saleId }
             .forEach { warranties.update(it.copy(saleId = null, updatedAt = now(), dirty = true)) }
+    }
+
+    // ---------------------------------------------------------------- Despesas
+
+    fun observeExpenses(): Flow<List<Expense>> = expenses.observeAll()
+    fun observeExpensePayments(range: DateRange): Flow<List<Expense>> = expenses.observePaymentsInRange(range.start, range.end)
+
+    /** Despesa avulsa (já paga). */
+    suspend fun addExpense(category: String, description: String, amount: Long, date: Long, note: String? = null): Unit = write {
+        if (amount <= 0) throw BusinessException("Informe o valor da despesa")
+        expenses.insert(
+            Expense(
+                kind = ExpenseKind.PAYMENT, category = category, description = description.trim().ifEmpty { category },
+                amount = amount, date = date, note = note?.trim()?.ifEmpty { null },
+            )
+        )
+    }
+
+    /** Cria ou altera uma conta fixa mensal. */
+    suspend fun saveBill(id: Long?, description: String, category: String, amount: Long, dueDay: Int): Unit = write {
+        val name = description.trim()
+        if (name.isEmpty()) throw BusinessException("Informe o nome da conta")
+        if (dueDay !in 1..31) throw BusinessException("Dia de vencimento inválido (1 a 31)")
+        if (amount < 0) throw BusinessException("Valor inválido")
+        val current = id?.let { expenses.getById(it) }
+        if (current == null) {
+            expenses.insert(
+                Expense(kind = ExpenseKind.BILL, category = category, description = name, amount = amount, date = now(), dueDay = dueDay)
+            )
+        } else {
+            expenses.update(
+                current.copy(category = category, description = name, amount = amount, dueDay = dueDay, updatedAt = now(), dirty = true)
+            )
+        }
+    }
+
+    /** Tira a conta fixa dos próximos meses (os pagamentos já feitos continuam). */
+    suspend fun deactivateBill(id: Long): Unit = write {
+        val bill = expenses.getById(id) ?: return@write
+        expenses.update(bill.copy(active = false, updatedAt = now(), dirty = true))
+    }
+
+    /** Paga a conta fixa [billId] referente ao mês [month] (AAAAMM). */
+    suspend fun payBill(billId: Long, month: Int, amount: Long, date: Long): Unit = write {
+        if (amount <= 0) throw BusinessException("Informe o valor pago")
+        val bill = expenses.getById(billId) ?: throw BusinessException("Conta não encontrada")
+        expenses.insert(
+            Expense(
+                kind = ExpenseKind.PAYMENT, category = bill.category, description = bill.description,
+                amount = amount, date = date, billId = bill.id, billMonth = month,
+            )
+        )
+    }
+
+    /** Exclui uma despesa paga (a conta fixa volta a ficar "a pagar" naquele mês). */
+    suspend fun deleteExpense(id: Long): Unit = write {
+        tomb(SyncTables.EXPENSES, listOf(id))
+        expenses.delete(id)
     }
 
     // ----------------------------------------------------------------- Sucatas

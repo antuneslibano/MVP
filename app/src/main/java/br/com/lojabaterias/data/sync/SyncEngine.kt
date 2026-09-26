@@ -101,6 +101,14 @@ class SyncEngine(
             list.forEach { dao.cleanWarranty(it.id, it.updatedAt) }
             count += list.size
         }
+        // Despesas por último e à parte: se a tabela ainda não existir na nuvem, o resto sincroniza normalmente.
+        runCatching {
+            dao.dirtyExpenses().let { list ->
+                send(token, SyncTables.EXPENSES, list.map { RemoteMapper.toJson(it) })
+                list.forEach { dao.cleanExpense(it.id, it.updatedAt) }
+                count += list.size
+            }
+        }
         val tombstones = dao.tombstones()
         if (tombstones.isNotEmpty()) {
             send(
@@ -203,6 +211,14 @@ class SyncEngine(
                     count++
                 }
             }
+            data.rows(SyncTables.EXPENSES).forEach { o ->
+                val r = RemoteMapper.expense(o)
+                val local = dao.expense(r.id)
+                if (local == null || !local.dirty || local.updatedAt <= r.updatedAt) {
+                    dao.upsertExpense(r)
+                    count++
+                }
+            }
             data.rows(DELETIONS).forEach { o ->
                 val id = o.getLong("record_id")
                 when (o.getString("table_name")) {
@@ -214,6 +230,7 @@ class SyncEngine(
                     SyncTables.SCRAP_MOVEMENTS -> dao.deleteScrapMovement(id)
                     SyncTables.CHARGES -> dao.deleteCharge(id)
                     SyncTables.WARRANTIES -> dao.deleteWarranty(id)
+                    SyncTables.EXPENSES -> dao.deleteExpense(id)
                 }
                 count++
             }
@@ -234,7 +251,7 @@ class SyncEngine(
         private val TABLES = listOf(
             SyncTables.PRODUCTS, SyncTables.SALES, SyncTables.SALE_ITEMS,
             SyncTables.STOCK_MOVEMENTS, SyncTables.SCRAP_PRICES, SyncTables.SCRAP_MOVEMENTS,
-            SyncTables.CHARGES, SyncTables.WARRANTIES,
+            SyncTables.CHARGES, SyncTables.WARRANTIES, SyncTables.EXPENSES,
         )
     }
 }

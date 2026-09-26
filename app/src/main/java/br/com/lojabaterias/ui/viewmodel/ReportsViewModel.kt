@@ -39,6 +39,13 @@ data class ReportsState(
 }
 
 @OptIn(ExperimentalCoroutinesApi::class)
+private data class PeriodData(
+    val sales: List<br.com.lojabaterias.data.SaleWithItems>,
+    val stockMoves: List<br.com.lojabaterias.data.MovementWithModel>,
+    val scrapMoves: List<br.com.lojabaterias.data.ScrapMovement>,
+    val expenses: List<br.com.lojabaterias.data.Expense>,
+)
+
 class ReportsViewModel(private val container: AppContainer) : MessageViewModel() {
 
     private val repo = container.repository
@@ -63,8 +70,9 @@ class ReportsViewModel(private val container: AppContainer) : MessageViewModel()
                 repo.observeSales(range),
                 repo.observeStockMovementsInRange(range),
                 repo.observeScrapMovementsInRange(range),
-            ) { sales, stockMoves, scrapMoves -> Triple(sales, stockMoves, scrapMoves) }
-            combine(period, snapshot, services) { (sales, stockMoves, scrapMoves), (products, scrapStock, prices), (charges, claims) ->
+                repo.observeExpensePayments(range),
+            ) { sales, stockMoves, scrapMoves, expenses -> PeriodData(sales, stockMoves, scrapMoves, expenses) }
+            combine(period, snapshot, services) { (sales, stockMoves, scrapMoves, expenses), (products, scrapStock, prices), (charges, claims) ->
                 ReportsState(
                     selection = sel,
                     today = today,
@@ -73,6 +81,7 @@ class ReportsViewModel(private val container: AppContainer) : MessageViewModel()
                         sales, stockMoves, scrapMoves, products, scrapStock, prices,
                         allCharges = charges,
                         allWarranties = claims,
+                        expenses = expenses,
                         range = range,
                     ),
                     loading = false,

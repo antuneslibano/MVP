@@ -156,8 +156,29 @@ fun ReportsScreen() {
                         InfoRow("Valor bruto", Money.format(f.grossTotal))
                         InfoRow("Descontos concedidos", Money.format(f.discountTotal))
                         InfoRow("Taxas das maquininhas", Money.format(r.fees))
-                        InfoRow("Cobrado por sucata faltante", Money.format(f.scrap.charged))
+                        InfoRow("Casco cobrado (faturamento, entra como custo)", Money.format(f.scrap.charged))
                         InfoRow("Vendas canceladas", "${f.canceledSales.size} • ${Money.format(f.canceledAmount)}")
+                    }
+                }
+            }
+
+            item { SectionTitle("Resultado (vendas − despesas)") }
+            item {
+                AppCard {
+                    Column(Modifier.padding(horizontal = 16.dp, vertical = 8.dp)) {
+                        InfoRow("Lucro bruto das vendas", Money.format(r.profit), valueColor = moneyResultColor(r.profit))
+                        InfoRow("Despesas pagas", "-" + Money.format(f.expensesTotal), valueColor = if (f.expensesTotal > 0) dangerColor() else Color.Unspecified)
+                        HorizontalDivider(Modifier.padding(vertical = 6.dp))
+                        InfoRow("Lucro líquido", Money.format(f.netProfit), bold = true, valueColor = moneyResultColor(f.netProfit))
+                        if (f.expensesByCategory.isNotEmpty()) {
+                            Text(
+                                "Despesas por categoria",
+                                style = MaterialTheme.typography.labelLarge,
+                                color = MaterialTheme.colorScheme.primary,
+                                modifier = Modifier.padding(top = 8.dp),
+                            )
+                            f.expensesByCategory.forEach { (cat, total) -> InfoRow(cat, Money.format(total)) }
+                        }
                     }
                 }
             }

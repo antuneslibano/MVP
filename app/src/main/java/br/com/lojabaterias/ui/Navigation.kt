@@ -9,6 +9,7 @@ import androidx.compose.material.icons.automirrored.filled.List
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Build
 import androidx.compose.material.icons.filled.CheckCircle
+import androidx.compose.material.icons.filled.DateRange
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.Home
 import androidx.compose.material.icons.filled.Menu
@@ -46,6 +47,7 @@ import br.com.lojabaterias.ui.screens.BackupScreen
 import br.com.lojabaterias.ui.screens.ChargeDetailScreen
 import br.com.lojabaterias.ui.screens.ChargeFormScreen
 import br.com.lojabaterias.ui.screens.ChargesScreen
+import br.com.lojabaterias.ui.screens.ExpensesScreen
 import br.com.lojabaterias.ui.screens.VouchersScreen
 import br.com.lojabaterias.ui.screens.WarrantiesScreen
 import br.com.lojabaterias.ui.screens.HomeScreen
@@ -81,6 +83,7 @@ object Routes {
     const val CHARGE_DETAIL = "chargedetail/{id}"
     const val WARRANTIES = "warranties"
     const val VOUCHERS = "vouchers"
+    const val EXPENSES = "expenses"
 
     fun chargeEdit(id: Long) = "chargeedit/$id"
     fun chargeDetail(id: Long) = "chargedetail/$id"
@@ -102,7 +105,7 @@ private val topLevel = listOf(
 )
 
 /** Telas principais que exibem a barra inferior mas ficam no menu (não têm botão próprio). */
-private val menuOnlyTopLevel = setOf(Routes.SCRAPS, Routes.CHARGES, Routes.WARRANTIES, Routes.VOUCHERS)
+private val menuOnlyTopLevel = setOf(Routes.SCRAPS, Routes.CHARGES, Routes.WARRANTIES, Routes.VOUCHERS, Routes.EXPENSES)
 
 private data class MenuEntry(val label: String, val icon: ImageVector, val route: String, val topLevel: Boolean)
 
@@ -115,6 +118,7 @@ private val menuEntries = listOf(
     MenuEntry("Garantias e extras", Icons.Filled.CheckCircle, Routes.WARRANTIES, true),
     MenuEntry("Sucatas", Icons.Filled.Refresh, Routes.SCRAPS, true),
     MenuEntry("Vales de casco", Icons.Filled.Star, Routes.VOUCHERS, true),
+    MenuEntry("Despesas", Icons.Filled.DateRange, Routes.EXPENSES, true),
     MenuEntry("Relatórios", AppIcons.BarChart, Routes.REPORTS, true),
     MenuEntry("Movimentações de estoque", Icons.AutoMirrored.Filled.List, Routes.MOVEMENTS, false),
     MenuEntry("Tabela de sucatas", Icons.Filled.Edit, Routes.SCRAP_PRICES, false),
@@ -249,6 +253,7 @@ fun LojaNavHost() {
             }
             composable(Routes.WARRANTIES) { WarrantiesScreen() }
             composable(Routes.VOUCHERS) { VouchersScreen() }
+            composable(Routes.EXPENSES) { ExpensesScreen() }
             composable(Routes.SCRAPS) {
                 ScrapsScreen(onPriceTable = { nav.navigate(Routes.SCRAP_PRICES) })
             }

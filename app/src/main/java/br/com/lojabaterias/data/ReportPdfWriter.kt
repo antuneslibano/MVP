@@ -76,6 +76,8 @@ object ReportPdfWriter {
                 chargesSection(f)
                 chapter("5. Garantias e extras")
                 warrantySection(f)
+                chapter("6. Despesas e resultado")
+                expensesSection(f)
                 finish()
             }
             pdf.writeTo(output)
@@ -187,7 +189,7 @@ object ReportPdfWriter {
                 listOf(
                     "Valor bruto (preço × quantidade)" to Money.format(f.grossTotal),
                     "Descontos concedidos" to Money.format(f.discountTotal),
-                    "Cobrado por sucata faltante" to Money.format(f.scrap.charged),
+                    "Casco cobrado (faturamento, entra como custo)" to Money.format(f.scrap.charged),
                     "Faturamento (valor final)" to Money.format(f.sales.revenue),
                     "Taxas das maquininhas (descontadas do lucro)" to Money.format(f.sales.fees),
                     "Vendas canceladas no período" to "${f.canceledSales.size} • ${Money.format(f.canceledAmount)}",
@@ -349,6 +351,32 @@ object ReportPdfWriter {
                     )
                 },
                 rowColors = { i -> listOf(null, null, null, null, if (f.chargesInPeriod[i].paid) GREEN else RED, null) },
+            )
+        }
+
+        fun expensesSection(f: FullReport) {
+            sectionTitle("Resultado do período")
+            keyValueTable(
+                listOf(
+                    "Lucro bruto das vendas" to Money.format(f.sales.profit),
+                    "Despesas pagas" to "-" + Money.format(f.expensesTotal),
+                    "Lucro líquido" to Money.format(f.netProfit),
+                ),
+                colors = mapOf(2 to if (f.netProfit < 0) RED else GREEN),
+            )
+            sectionTitle("Despesas por categoria")
+            if (f.expensesByCategory.isEmpty()) {
+                emptyLine("Nenhuma despesa paga no período.")
+                return
+            }
+            keyValueTable(f.expensesByCategory.map { (c, v) -> c to Money.format(v) })
+            sectionTitle("Despesas pagas no período (${f.expenses.size})")
+            table(
+                listOf(Col(1.3f), Col(1.8f), Col(2.8f), Col(1.3f, true)),
+                listOf("Data", "Categoria", "Descrição", "Valor"),
+                f.expenses.sortedBy { it.date }.map { e ->
+                    listOf(Periods.formatDate(e.date), e.category, e.description, Money.format(e.amount))
+                },
             )
         }
 

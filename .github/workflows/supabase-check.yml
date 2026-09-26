@@ -23,7 +23,7 @@ jobs:
           curl -sS -o /dev/null -w "HTTP %{http_code}\n" "$URL/auth/v1/health" -H "apikey: $KEY"
 
           echo "== Tabelas (acesso anônimo deve ser BLOQUEADO) =="
-          for t in products sales sale_items stock_movements scrap_prices scrap_movements charge_services warranty_claims deletions; do
+          for t in products sales sale_items stock_movements scrap_prices scrap_movements charge_services warranty_claims expenses deletions; do
             col=id
             [ "$t" = "deletions" ] && col=record_id
             [ "$t" = "sales" ] && col=id,card_fee

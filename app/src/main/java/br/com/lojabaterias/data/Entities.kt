@@ -387,3 +387,47 @@ data class PeriodSummary(
     val revenue: Long = 0,
     val profit: Long = 0,
 )
+
+/** Tipos de registro da tela de Despesas. */
+object ExpenseKind {
+    /** Conta fixa (modelo que aparece todo mês como "a pagar"). */
+    const val BILL = "BILL"
+    /** Despesa paga (avulsa ou pagamento de uma conta fixa). */
+    const val PAYMENT = "PAYMENT"
+}
+
+/** Categorias das despesas, na ordem em que aparecem. */
+object ExpenseCategory {
+    val ALL = listOf(
+        "Aluguel", "Água", "Luz", "Internet/Telefone", "Funcionários", "Impostos/Taxas",
+        "Fornecedores/Boletos", "Manutenção", "Transporte/Combustível", "Material/Limpeza", "Outros",
+    )
+}
+
+/**
+ * Despesa da loja. [ExpenseKind.BILL] = conta fixa mensal (vence no dia [dueDay]);
+ * [ExpenseKind.PAYMENT] = dinheiro que saiu na data [date] (avulsa, ou a conta [billId] do mês [billMonth]).
+ */
+@Entity(tableName = "expenses", indices = [Index("date"), Index("kind"), Index("bill_id")])
+data class Expense(
+    @PrimaryKey(autoGenerate = true) val id: Long = IdGenerator.next(),
+    val kind: String,
+    val category: String,
+    val description: String,
+    /** Valor em centavos. */
+    val amount: Long,
+    val date: Long,
+    @ColumnInfo(name = "due_day") val dueDay: Int? = null,
+    @ColumnInfo(name = "bill_id") val billId: Long? = null,
+    /** Mês pago da conta fixa, no formato AAAAMM (ex.: 202609). */
+    @ColumnInfo(name = "bill_month") val billMonth: Int? = null,
+    /** Conta fixa ativa (as desativadas deixam de aparecer nos próximos meses). */
+    val active: Boolean = true,
+    val note: String? = null,
+    /** Controle de sincronização: momento da última alteração local. */
+    @ColumnInfo(name = "updated_at", defaultValue = "0") val updatedAt: Long = System.currentTimeMillis(),
+    /** Controle de sincronização: alteração ainda não enviada para a nuvem. */
+    @ColumnInfo(name = "dirty", defaultValue = "1") val dirty: Boolean = true,
+) {
+    val isBill: Boolean get() = kind == ExpenseKind.BILL
+}

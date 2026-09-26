@@ -263,6 +263,7 @@ interface SyncDao {
             "(SELECT COUNT(*) FROM sale_items WHERE dirty = 1) + (SELECT COUNT(*) FROM stock_movements WHERE dirty = 1) + " +
             "(SELECT COUNT(*) FROM scrap_prices WHERE dirty = 1) + (SELECT COUNT(*) FROM scrap_movements WHERE dirty = 1) + " +
             "(SELECT COUNT(*) FROM charge_services WHERE dirty = 1) + (SELECT COUNT(*) FROM warranty_claims WHERE dirty = 1) + " +
+            "(SELECT COUNT(*) FROM expenses WHERE dirty = 1) + " +
             "(SELECT COUNT(*) FROM tombstones)"
     )
     suspend fun pendingCount(): Int
@@ -293,6 +294,15 @@ interface SyncDao {
     @Query("SELECT id FROM warranty_claims") suspend fun allWarrantyIds(): List<Long>
     @Query("DELETE FROM charge_services") suspend fun wipeCharges()
     @Query("DELETE FROM warranty_claims") suspend fun wipeWarranties()
+
+    @Query("SELECT * FROM expenses WHERE dirty = 1") suspend fun dirtyExpenses(): List<Expense>
+    @Query("UPDATE expenses SET dirty = 0 WHERE id = :id AND updated_at = :updatedAt")
+    suspend fun cleanExpense(id: Long, updatedAt: Long)
+    @Query("SELECT * FROM expenses WHERE id = :id") suspend fun expense(id: Long): Expense?
+    @Upsert suspend fun upsertExpense(e: Expense)
+    @Query("DELETE FROM expenses WHERE id = :id") suspend fun deleteExpense(id: Long)
+    @Query("SELECT id FROM expenses") suspend fun allExpenseIds(): List<Long>
+    @Query("DELETE FROM expenses") suspend fun wipeExpenses()
 
     // ----- Marcar como enviado (só se não mudou durante o envio)
     @Query("UPDATE products SET dirty = 0 WHERE id = :id AND updated_at = :updatedAt")
@@ -416,4 +426,25 @@ interface WarrantyDao {
 
     @Query("DELETE FROM warranty_claims WHERE id = :id") suspend fun delete(id: Long)
     @Query("DELETE FROM warranty_claims") suspend fun deleteAll()
+}
+
+@Dao
+interface ExpenseDao {
+    @Query("SELECT * FROM expenses ORDER BY date DESC")
+    fun observeAll(): Flow<List<Expense>>
+
+    @Query("SELECT * FROM expenses WHERE kind = 'PAYMENT' AND date >= :start AND date < :end ORDER BY date DESC")
+    fun observePaymentsInRange(start: Long, end: Long): Flow<List<Expense>>
+
+    @Query("SELECT * FROM expenses WHERE id = :id")
+    suspend fun getById(id: Long): Expense?
+
+    @Query("SELECT * FROM expenses ORDER BY id")
+    suspend fun getAll(): List<Expense>
+
+    @Insert suspend fun insert(e: Expense)
+    @Insert suspend fun insertAll(list: List<Expense>)
+    @Update suspend fun update(e: Expense)
+    @Query("DELETE FROM expenses WHERE id = :id") suspend fun delete(id: Long)
+    @Query("DELETE FROM expenses") suspend fun deleteAll()
 }

@@ -17,10 +17,11 @@ class ScrapTest {
     }
 
     @Test
-    fun scrapChargeIsPartOfSaleTotal() {
+    fun scrapChargeIsRevenueButNotProfit() {
         val t = SaleCalculator.compute(unitPrice = 25_000, quantity = 1, discount = 0, unitCost = 18_990, scrapCharge = 5_000)
         assertEquals(30_000L, t.finalAmount)
-        assertEquals(11_010L, t.grossProfit)
+        assertEquals(23_990L, t.totalCost)
+        assertEquals(6_010L, t.grossProfit)
     }
 
     @Test

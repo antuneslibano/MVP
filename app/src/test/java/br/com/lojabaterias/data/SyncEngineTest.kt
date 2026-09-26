@@ -51,7 +51,7 @@ private class FakeCloud : RemoteApi {
     override suspend fun pull(token: String, since: String?): JSONObject {
         val s = since?.toLong() ?: -1L
         val result = JSONObject().put("now", clock.toString())
-        for (t in listOf("products", "sales", "sale_items", "stock_movements", "scrap_prices", "scrap_movements", "charge_services", "warranty_claims")) {
+        for (t in listOf("products", "sales", "sale_items", "stock_movements", "scrap_prices", "scrap_movements", "charge_services", "warranty_claims", "expenses")) {
             result.put(t, JSONArray(tables[t].orEmpty().values.filter { it.getLong("_v") > s }))
         }
         result.put("deletions", JSONArray(deletions.values.filter { it.getLong("_v") > s }))
@@ -209,6 +209,11 @@ class SyncEngineTest {
         val received = b.repo.observeWarranties().first()
         assertEquals(2, received.size)
         assertEquals(1, received.count { it.isExtra })
+        // A lança uma despesa; B vê
+        a.repo.addExpense("Luz", "Conta de luz", 25_000, 1_000)
+        a.sync()
+        b.sync()
+        assertEquals(25_000L, b.repo.observeExpenses().first().single().amount)
         // B entrega a carga; A vê a entrega
         b.repo.deliverCharge(chargeId, null)
         b.sync()

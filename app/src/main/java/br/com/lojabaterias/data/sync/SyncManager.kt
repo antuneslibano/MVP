@@ -161,6 +161,7 @@ class SyncManager(
             db.withTransaction {
                 dao.wipeCharges()
                 dao.wipeWarranties()
+                dao.wipeExpenses()
                 dao.wipeScrapMovements()
                 dao.wipeScrapPrices()
                 dao.wipeStockMovements()

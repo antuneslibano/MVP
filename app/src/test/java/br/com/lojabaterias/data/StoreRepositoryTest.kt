@@ -74,7 +74,9 @@ class StoreRepositoryTest {
         val saleId = repo.registerSale(id, 1, PaymentMethod.PIX, 25_000, 0, 1_000, ScrapInput(0, 1, 0, 5_000))
         val sale = repo.getSale(saleId)!!.sale
         assertEquals(30_000L, sale.finalAmount)
-        assertEquals(30_000L - 18_990L, sale.grossProfit)
+        // O casco cobrado é faturamento, mas também custo (repor o casco): não vira lucro
+        assertEquals(18_990L + 5_000L, sale.totalCost)
+        assertEquals(25_000L - 18_990L, sale.grossProfit)
         assertEquals(0, scrapStock(60))
     }
 
@@ -379,6 +381,36 @@ class StoreRepositoryTest {
             .filter { it.type == ScrapMovementType.VOUCHER_PAID }
         assertEquals(6_000L, paid.sumOf { it.amount })
         expectBusinessError { repo.payVoucher(saleId, 1, 60) }
+    }
+
+    @Test
+    fun expenses_billsArePaidPerMonth() = runBlocking {
+        repo.saveBill(null, "Aluguel", "Aluguel", 150_000, 5)
+        val bill = repo.observeExpenses().first().single()
+        assertTrue(bill.isBill)
+        repo.payBill(bill.id, 202609, 150_000, 2_000)
+        repo.addExpense("Luz", "", 30_000, 3_000)
+        val payments = repo.observeExpensePayments(br.com.lojabaterias.domain.DateRange(0, 10_000)).first()
+        assertEquals(180_000L, payments.sumOf { it.amount })
+        assertEquals(listOf(202609), payments.mapNotNull { it.billMonth })
+        assertEquals("Luz", payments.first { it.billId == null }.description)
+
+        // Remover a conta fixa não apaga o que já foi pago
+        repo.deactivateBill(bill.id)
+        assertEquals(false, repo.observeExpenses().first().first { it.isBill }.active)
+        assertEquals(2, repo.observeExpensePayments(br.com.lojabaterias.domain.DateRange(0, 10_000)).first().size)
+        expectBusinessError { repo.addExpense("Outros", "", 0, 1_000) }
+    }
+
+    @Test
+    fun cascoCharge_oldSalesAreDetectedOnlyOnce() {
+        // Venda antiga: custo 18.990, casco 5.000 fora do custo -> corrige
+        assertTrue(AppDatabase.isOldCost(total = 18_990, charge = 5_000, unitCost = 18_990, full = 18_990))
+        // Já corrigida (ou vinda corrigida de outro celular) -> não mexe
+        assertEquals(false, AppDatabase.isOldCost(total = 23_990, charge = 5_000, unitCost = 18_990, full = 18_990))
+        // Antiga com 1 extra de custo zero em 2 unidades
+        assertTrue(AppDatabase.isOldCost(total = 18_990, charge = 5_000, unitCost = 18_990, full = 37_980))
+        assertEquals(false, AppDatabase.isOldCost(total = 23_990, charge = 5_000, unitCost = 18_990, full = 37_980))
     }
 
     @Test
