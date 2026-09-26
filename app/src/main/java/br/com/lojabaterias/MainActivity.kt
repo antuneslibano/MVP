@@ -31,9 +31,9 @@ class MainActivity : ComponentActivity() {
                     // A navegação continua por baixo, preservando a tela onde o usuário estava.
                     LojaNavHost()
                     if (locked) {
-                        LockScreen(onUnlock = { pin ->
+                        LockScreen(onUnlock = { _ ->
                             locked = false
-                            (application as LojaApp).container.syncManager.onUnlocked(pin)
+                            (application as LojaApp).container.syncManager.onUnlocked()
                             (application as LojaApp).container.updater.check()
                         })
                     }

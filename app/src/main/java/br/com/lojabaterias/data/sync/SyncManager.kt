@@ -20,7 +20,7 @@ import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import java.io.IOException
 
-enum class SyncState { DISABLED, WAITING_LOGIN, SYNCING, OK, OFFLINE, ERROR, CONFLICT }
+enum class SyncState { DISABLED, WAITING_LOGIN, NEEDS_PASSWORD, SYNCING, OK, OFFLINE, ERROR, CONFLICT }
 
 data class SyncStatus(
     val state: SyncState = SyncState.WAITING_LOGIN,
@@ -44,8 +44,6 @@ class SyncManager(
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
     private val mutex = Mutex()
 
-    /** Senha da nuvem (derivada da senha do app); só em memória. */
-    @Volatile private var password: String? = null
     private var loopJob: Job? = null
     private var debounceJob: Job? = null
 
@@ -65,10 +63,24 @@ class SyncManager(
     )
     val status: StateFlow<SyncStatus> = _status.asStateFlow()
 
-    /** Chamado quando a senha correta é digitada. */
-    fun onUnlocked(pin: String) {
-        password = AccessControl.cloudPassword(pin)
+    /** Chamado quando a senha do app é digitada. */
+    fun onUnlocked() {
         requestSync(0)
+    }
+
+    /**
+     * Senha da conta da loja na nuvem. É digitada uma vez em cada celular (Backup e sincronização)
+     * e fica só neste aparelho: não está no código do app nem vai para o backup do Android.
+     */
+    val hasCloudPassword: Boolean get() = !prefs.getString(KEY_CLOUD_PASSWORD, null).isNullOrEmpty()
+
+    /** Salva a senha da nuvem e entra de novo na conta. Retorna true se conectou. */
+    suspend fun setCloudPassword(value: String): Boolean {
+        prefs.edit()
+            .putString(KEY_CLOUD_PASSWORD, value.trim())
+            .remove(KEY_ACCESS).remove(KEY_REFRESH).putLong(KEY_EXPIRES, 0)
+            .apply()
+        return syncNow()
     }
 
     /** App visível: sincroniza periodicamente. */
@@ -114,7 +126,7 @@ class SyncManager(
                 return@withLock false
             }
             if (session == null) {
-                setStatus(SyncState.WAITING_LOGIN, "Digite a senha do app para conectar à nuvem.")
+                setStatus(SyncState.NEEDS_PASSWORD, "Digite a senha da nuvem abaixo (uma vez neste celular).")
                 return@withLock false
             }
             _status.update { it.copy(state = SyncState.SYNCING) }
@@ -190,7 +202,7 @@ class SyncManager(
                 prefs.edit().remove(KEY_REFRESH).remove(KEY_ACCESS).apply()
             }
         }
-        val pwd = password ?: return null
+        val pwd = prefs.getString(KEY_CLOUD_PASSWORD, null)?.takeIf { it.isNotEmpty() } ?: return null
         return api.signIn(AccessControl.CLOUD_EMAIL, pwd).also { save(it) }
     }
 
@@ -211,7 +223,7 @@ class SyncManager(
 
     private fun explain(e: RemoteException): String = when {
         e.code == 400 && e.message.orEmpty().contains("Invalid login", ignoreCase = true) ->
-            "A conta da loja na nuvem não aceitou a senha. Confira o usuário criado no Supabase."
+            "Senha da nuvem incorreta. Confira em Menu > Backup e sincronização."
         e.code == 404 || e.message.orEmpty().contains("pull_changes") || e.message.orEmpty().contains("does not exist") ->
             "O banco na nuvem ainda não foi configurado (execute o script SQL no Supabase)."
         e.code == 401 || e.code == 403 -> "Acesso negado pela nuvem (${e.message})."
@@ -225,5 +237,6 @@ class SyncManager(
         private const val KEY_REFRESH = "refresh_token"
         private const val KEY_EXPIRES = "expires_at"
         private const val KEY_LAST_SUCCESS = "last_success"
+        private const val KEY_CLOUD_PASSWORD = "cloud_password"
     }
 }

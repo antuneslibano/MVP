@@ -32,6 +32,7 @@ fun syncLabel(s: SyncStatus): String {
     return when (s.state) {
         SyncState.DISABLED -> "Nuvem desativada"
         SyncState.WAITING_LOGIN -> "Conectando à nuvem..."
+        SyncState.NEEDS_PASSWORD -> "Falta a senha da nuvem"
         SyncState.SYNCING -> "Sincronizando..."
         SyncState.OK -> "Sincronizado" + (s.lastSuccessAt?.let { " às ${Periods.formatTime(it)}" } ?: "") + pending
         SyncState.OFFLINE -> "Sem internet$pending"
@@ -45,7 +46,7 @@ fun syncColor(s: SyncStatus): Color = when (s.state) {
     SyncState.OK -> profitColor()
     SyncState.SYNCING, SyncState.WAITING_LOGIN, SyncState.DISABLED -> MaterialTheme.colorScheme.onSurfaceVariant
     SyncState.OFFLINE -> warningColor()
-    SyncState.ERROR, SyncState.CONFLICT -> dangerColor()
+    SyncState.ERROR, SyncState.CONFLICT, SyncState.NEEDS_PASSWORD -> dangerColor()
 }
 
 @Composable

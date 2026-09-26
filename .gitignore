@@ -9,3 +9,7 @@ build/
 .cxx/
 *.apk
 *.aab
+
+# Chaves de assinatura nunca vão para o repositório
+*.jks
+*.keystore

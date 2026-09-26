@@ -15,7 +15,8 @@ vendas, estoque, faturamento, custo e lucro por dia, semana e mês.
    O Android pode pedir para permitir "instalar apps desta fonte".
 
 As novas versões podem ser instaladas por cima da anterior **sem perder os dados**,
-pois todos os APKs são assinados com a mesma chave (`app/signing/loja-baterias.jks`).
+pois todos os APKs são assinados com a mesma chave (guardada só nos Secrets do GitHub).
+As versões publicadas ficam no repositório público **antuneslibano/art-das-baterias-app** (só o APK).
 
 > Requisitos: Android 8.0 ou superior.
 
@@ -90,7 +91,8 @@ Vários celulares da mesma loja compartilham os dados por um banco na nuvem (Sup
 O app funciona **offline primeiro**: cada celular tem seu banco local e sincroniza a cada 30 s,
 logo após cada alteração e ao abrir. Sem internet, as alterações ficam pendentes e são enviadas depois.
 
-- Não há login: a senha do app libera o acesso a uma conta interna da loja na nuvem.
+- Conta única da loja na nuvem: a **senha da nuvem** é digitada uma vez em cada celular
+  (Menu > Backup e sincronização) e fica guardada só no aparelho. Ela não vem da senha do app nem está no código.
 - O estoque é a soma das movimentações, então vendas simultâneas em celulares diferentes são somadas corretamente.
 - Exclusões também são sincronizadas. Em edições simultâneas do mesmo registro, vale a mais recente.
 - Um celular que já tem dados próprios não mistura com a nuvem: o app avisa e oferece baixar os dados da nuvem.
@@ -140,15 +142,20 @@ em pull requests e manualmente (`workflow_dispatch`). Ele:
 4. compila o APK de release assinado;
 5. publica `art-das-baterias.apk` como Artifact.
 
-### Assinatura própria (opcional)
+### Secrets obrigatórios (Settings → Secrets and variables → Actions)
 
-Por padrão o APK é assinado com a chave incluída no projeto. Para usar uma chave privada,
-cadastre em *Settings → Secrets and variables → Actions*:
+- `SIGNING_KEYSTORE_BASE64` (arquivo .jks em base64), `SIGNING_STORE_PASSWORD`, `SIGNING_KEY_ALIAS`,
+  `SIGNING_KEY_PASSWORD`: chave de assinatura do app. Sem eles o build falha (a chave nunca fica no código).
+- `RELEASES_TOKEN`: token do GitHub com permissão de escrita (Contents) só no repositório
+  `art-das-baterias-app`, onde as versões são publicadas para a atualização automática.
 
-- `SIGNING_KEYSTORE_BASE64` (arquivo .jks em base64)
-- `SIGNING_STORE_PASSWORD`, `SIGNING_KEY_ALIAS`, `SIGNING_KEY_PASSWORD`
+Atenção: trocar a chave de assinatura exige desinstalar a versão anterior do app (os dados voltam da nuvem).
 
-Atenção: trocar a chave exige desinstalar a versão anterior do app (faça um backup antes).
+### Segurança
+
+O workflow **Segurança** procura senhas/chaves vazadas (Gitleaks) e analisa o código (CodeQL, só em
+repositório público). O Dependabot avisa sobre bibliotecas com falhas conhecidas. O app bloqueia por
+tempo crescente depois de 5 senhas erradas.
 
 ## Compilar localmente (opcional)
 

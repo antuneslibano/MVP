@@ -35,6 +35,19 @@ class BackupViewModel(private val container: AppContainer) : MessageViewModel() 
         message(if (ok) "Sincronizado com a nuvem" else "Não foi possível sincronizar agora")
     }
 
+    /** A senha da nuvem já foi digitada neste celular? */
+    val hasCloudPassword: Boolean get() = container.syncManager.hasCloudPassword
+
+    /** Salva a senha da nuvem deste celular e tenta conectar. */
+    fun saveCloudPassword(value: String, onDone: () -> Unit) {
+        if (value.isBlank()) return message("Digite a senha da nuvem")
+        runTask(null) {
+            val ok = container.syncManager.setCloudPassword(value)
+            message(if (ok) "Conectado à nuvem" else "Senha salva, mas não conectou. Veja a mensagem na tela.")
+            onDone()
+        }
+    }
+
     /** Apaga os dados deste celular e baixa tudo da nuvem. */
     fun wipeAndDownload() = runTask(null) {
         val ok = container.syncManager.wipeLocalAndDownload()

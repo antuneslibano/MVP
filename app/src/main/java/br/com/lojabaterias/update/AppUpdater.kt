@@ -205,7 +205,8 @@ class AppUpdater(private val context: Context) {
     }
 
     companion object {
-        private const val LATEST_URL = "https://api.github.com/repos/antuneslibano/MVP/releases/latest"
+        // Repositório público só com os APKs: o código fica em repositório privado.
+        private const val LATEST_URL = "https://api.github.com/repos/antuneslibano/art-das-baterias-app/releases/latest"
         private const val KEY_LAST_CHECK = "last_check"
         private const val CHECK_INTERVAL_MS = 3 * 60 * 60 * 1000L
     }

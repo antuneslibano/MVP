@@ -19,13 +19,17 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.input.KeyboardType
+import androidx.compose.ui.text.input.PasswordVisualTransformation
+import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import br.com.lojabaterias.data.sync.SyncState
@@ -79,6 +83,12 @@ fun BackupScreen(onBack: () -> Unit) {
             AppCard {
                 Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                     Text("Sincronização com a nuvem", style = MaterialTheme.typography.titleMedium)
+                    CloudPasswordField(
+                        needsPassword = sync.state == SyncState.NEEDS_PASSWORD || !vm.hasCloudPassword ||
+                            sync.message.orEmpty().contains("Senha da nuvem incorreta"),
+                        busy = busy,
+                        onSave = { value, done -> vm.saveCloudPassword(value, done) },
+                    )
                     Text(syncLabel(sync), style = MaterialTheme.typography.bodyLarge, color = syncColor(sync))
                     sync.lastSuccessAt?.let {
                         Text(
@@ -216,4 +226,37 @@ private fun FeesCard(current: CardFees, onSave: (String, String) -> Unit) {
             OutlinedButton(onClick = { onSave(credit, debit) }, modifier = Modifier.fillMaxWidth()) { Text("Salvar taxas") }
         }
     }
+}
+
+/** Campo da senha da nuvem: aparece aberto quando falta a senha; senão, fica um botão para trocar. */
+@Composable
+private fun CloudPasswordField(needsPassword: Boolean, busy: Boolean, onSave: (String, () -> Unit) -> Unit) {
+    var editing by rememberSaveable { mutableStateOf(false) }
+    var value by rememberSaveable { mutableStateOf("") }
+    var visible by rememberSaveable { mutableStateOf(false) }
+    if (!needsPassword && !editing) {
+        TextButton(onClick = { editing = true }) { Text("Trocar a senha da nuvem deste celular") }
+        return
+    }
+    Text(
+        "Digite a senha da nuvem (a mesma em todos os celulares da loja). Ela fica guardada só neste celular.",
+        style = MaterialTheme.typography.bodyMedium,
+    )
+    OutlinedTextField(
+        value = value,
+        onValueChange = { value = it.take(100) },
+        label = { Text("Senha da nuvem") },
+        singleLine = true,
+        visualTransformation = if (visible) VisualTransformation.None else PasswordVisualTransformation(),
+        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password),
+        trailingIcon = {
+            TextButton(onClick = { visible = !visible }) { Text(if (visible) "Ocultar" else "Mostrar") }
+        },
+        modifier = Modifier.fillMaxWidth(),
+    )
+    PrimaryActionButton(
+        text = "Salvar senha e conectar",
+        enabled = !busy && value.isNotBlank(),
+        onClick = { onSave(value) { value = ""; editing = false } },
+    )
 }

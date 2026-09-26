@@ -29,6 +29,8 @@ jobs:
 
   codigo:
     name: Análise do código (CodeQL)
+    # CodeQL é gratuito só em repositório público; com o repositório privado este passo é pulado.
+    if: ${{ !github.event.repository.private }}
     runs-on: ubuntu-latest
     timeout-minutes: 45
     permissions:
