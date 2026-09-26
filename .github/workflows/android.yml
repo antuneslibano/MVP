@@ -98,7 +98,7 @@ jobs:
       # Precisa do secret RELEASES_TOKEN (token com permissão de escrita só naquele repositório).
       - name: Publicar versão para atualização automática (GitHub Release)
         if: github.event_name != 'pull_request'
-        uses: softprops/action-gh-release@v2
+        uses: softprops/action-gh-release@v3
         with:
           repository: antuneslibano/art-das-baterias-app
           token: ${{ secrets.RELEASES_TOKEN }}
