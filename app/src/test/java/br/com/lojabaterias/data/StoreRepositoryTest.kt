@@ -384,21 +384,20 @@ class StoreRepositoryTest {
     }
 
     @Test
-    fun expenses_billsArePaidPerMonth() = runBlocking {
-        repo.saveBill(null, "Aluguel", "Aluguel", 150_000, 5)
-        val bill = repo.observeExpenses().first().single()
-        assertTrue(bill.isBill)
-        repo.payBill(bill.id, 202609, 150_000, 2_000)
-        repo.addExpense("Luz", "", 30_000, 3_000)
-        val payments = repo.observeExpensePayments(br.com.lojabaterias.domain.DateRange(0, 10_000)).first()
-        assertEquals(180_000L, payments.sumOf { it.amount })
-        assertEquals(listOf(202609), payments.mapNotNull { it.billMonth })
-        assertEquals("Luz", payments.first { it.billId == null }.description)
-
-        // Remover a conta fixa não apaga o que já foi pago
-        repo.deactivateBill(bill.id)
-        assertEquals(false, repo.observeExpenses().first().first { it.isBill }.active)
-        assertEquals(2, repo.observeExpensePayments(br.com.lojabaterias.domain.DateRange(0, 10_000)).first().size)
+    fun expenses_fixedBillsAreRemoved() = runBlocking {
+        // Conta fixa antiga (Aluguel) com um pagamento, e uma despesa avulsa (Água)
+        val bill = Expense(kind = ExpenseKind.BILL, category = "Aluguel", description = "Aluguel", amount = 100_000, date = 1_000, dueDay = 20)
+        db.expenseDao().insert(bill)
+        db.expenseDao().insert(
+            Expense(kind = ExpenseKind.PAYMENT, category = "Aluguel", description = "Aluguel", amount = 100_000, date = 2_000, billId = bill.id, billMonth = 202609)
+        )
+        repo.addExpense("Água", "", 38_500, 3_000)
+        repo.removeFixedBills()
+        val left = repo.observeExpenses().first()
+        assertEquals(1, left.size)
+        assertEquals("Água", left.single().category)
+        repo.removeFixedBills() // de novo: não faz nada
+        assertEquals(1, repo.observeExpenses().first().size)
         expectBusinessError { repo.addExpense("Outros", "", 0, 1_000) }
     }
 

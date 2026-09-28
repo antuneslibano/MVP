@@ -56,7 +56,7 @@ relacionadas. O **Menu ☰** mostra tudo agrupado pelas mesmas áreas, com atalh
   - **Lucro**: quanto sobrou, para onde foi cada R$ 100 (custo, despesas, taxas, lucro), gráfico dia a dia / mês a mês,
     a conta completa até o lucro líquido, formas de pagamento, despesas por categoria e modelos que mais dão lucro.
   - **Caixa**: o dinheiro de verdade. **Caixa agora** (saldo informado + o que entrou − o que saiu), quanto **pode
-    retirar com segurança** (descontando boletos dos próximos 30 dias e contas fixas do mês), entradas e saídas do
+    retirar com segurança** (descontando os boletos vencidos e dos próximos 30 dias), entradas e saídas do
     período, **retiradas dos sócios** e o que a loja tem (estoque, sucatas, a receber, dívidas com fornecedores).
   - **Extras**: quanto as baterias extras renderam (valor de venda e lucro), no período e desde o começo.
   - Botão **"? Entenda"**: glossário dos termos.
@@ -66,7 +66,7 @@ relacionadas. O **Menu ☰** mostra tudo agrupado pelas mesmas áreas, com atalh
   nota; dá para desligar). "Ainda não chegaram" desfaz a entrada. Nota antiga (baterias que já estavam no estoque):
   marque ao lançar e ela não mexe no estoque. Aba de boletos a pagar/pagos com "Paguei".
   Boletos pagos **não saem do lucro** (o custo já sai na venda), mas saem do **caixa**.
-- **Despesas**: contas fixas do mês ("Paguei") e despesas avulsas por categoria.
+- **Despesas**: despesas pagas no mês, por categoria.
 - **Relatórios e PDF**: diário, semanal e mensal, com o **PDF completo** do período.
 
 ### Geral

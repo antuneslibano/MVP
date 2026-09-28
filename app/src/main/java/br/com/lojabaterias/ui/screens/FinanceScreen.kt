@@ -577,13 +577,13 @@ private fun GlossaryContent() {
             "Casco cobrado" to "Entra no faturamento, mas também como custo, porque serve para repor o casco. Não vira lucro.",
             "Taxas das maquininhas" to "O que a maquininha desconta nas vendas no débito e no crédito.",
             "Lucro das vendas" to "Entrou − custo − casco − taxas.",
-            "Despesas" to "Contas fixas e despesas avulsas pagas no período.",
+            "Despesas" to "Despesas da loja pagas no período (aluguel, água, luz...).",
             "Lucro líquido" to "O que sobrou de verdade: lucro das vendas − despesas.",
             "Resultado geral" to "Lucro líquido + carga recebida + sucatas vendidas − sucatas compradas.",
             "Ticket médio" to "Quanto, em média, cada venda rendeu.",
             "Caixa" to "O dinheiro de verdade da loja (gaveta + banco). É diferente do lucro: o dinheiro do custo das baterias fica no caixa até pagar os boletos.",
             "Retirada" to "Dinheiro que um sócio tira para si. Não é despesa (não muda o lucro), mas sai do caixa.",
-            "Pode retirar com segurança" to "Caixa menos os boletos que vencem em 30 dias e as contas fixas do mês ainda não pagas.",
+            "Pode retirar com segurança" to "Caixa menos os boletos vencidos e os que vencem nos próximos 30 dias.",
         ).forEachIndexed { i, (term, meaning) ->
             if (i > 0) HorizontalDivider(Modifier.padding(vertical = 6.dp))
             Text(term, style = MaterialTheme.typography.titleSmall)
@@ -676,7 +676,6 @@ private fun CashNowCard(cash: CashPosition, onSetOpening: () -> Unit) {
             )
             HorizontalDivider(Modifier.padding(vertical = 10.dp), color = on.copy(alpha = 0.2f))
             CashLine("Boletos vencidos e dos próximos 30 dias (${cash.upcomingBillsCount})", "-" + Money.format(cash.upcomingBills), on)
-            CashLine("Contas fixas deste mês a pagar (${cash.fixedBillsCount})", "-" + Money.format(cash.fixedBillsDue), on)
             HorizontalDivider(Modifier.padding(vertical = 10.dp), color = on.copy(alpha = 0.2f))
             if (safe >= 0) {
                 Text("✅ Pode retirar com segurança", style = MaterialTheme.typography.titleSmall, color = on)

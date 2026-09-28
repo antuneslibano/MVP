@@ -221,7 +221,7 @@ data class FinanceReport(
 
         /**
          * Caixa agora = saldo inicial + tudo o que entrou − tudo o que saiu desde a data do saldo inicial.
-         * Pode retirar = caixa − boletos vencidos e dos próximos 30 dias − contas fixas do mês ainda não pagas.
+         * Pode retirar = caixa − boletos vencidos e dos próximos 30 dias.
          */
         internal fun cashPosition(
             expenses: List<Expense>,
@@ -235,9 +235,6 @@ data class FinanceReport(
             val flow = summary(DateRange(from, Long.MAX_VALUE))
             val limit = Periods.toMillis(today.plusDays(31), zone)
             val upcoming = invoiceBills.filter { !it.isPaid && it.dueDate < limit }
-            val month = today.year * 100 + today.monthValue
-            val paidBillIds = expenses.filter { it.kind == ExpenseKind.PAYMENT && it.billMonth == month }.mapNotNull { it.billId }.toSet()
-            val fixed = expenses.filter { it.kind == ExpenseKind.BILL && it.active && it.id !in paidBillIds }
             return CashPosition(
                 hasOpening = opening != null,
                 openingAmount = opening?.amount ?: 0,
@@ -245,8 +242,6 @@ data class FinanceReport(
                 now = (opening?.amount ?: 0) + flow.cashResult,
                 upcomingBills = upcoming.sumOf { it.amount },
                 upcomingBillsCount = upcoming.size,
-                fixedBillsDue = fixed.sumOf { it.amount },
-                fixedBillsCount = fixed.size,
             )
         }
 
@@ -337,10 +332,7 @@ data class CashPosition(
     /** Boletos vencidos e que vencem nos próximos 30 dias. */
     val upcomingBills: Long = 0,
     val upcomingBillsCount: Int = 0,
-    /** Contas fixas deste mês ainda não pagas. */
-    val fixedBillsDue: Long = 0,
-    val fixedBillsCount: Int = 0,
 ) {
     /** Positivo: pode retirar; negativo: falta dinheiro para os compromissos. */
-    val safeToWithdraw: Long get() = now - upcomingBills - fixedBillsDue
+    val safeToWithdraw: Long get() = now - upcomingBills
 }

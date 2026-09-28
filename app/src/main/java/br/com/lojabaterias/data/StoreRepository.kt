@@ -848,40 +848,17 @@ class StoreRepository(
         )
     }
 
-    /** Cria ou altera uma conta fixa mensal. */
-    suspend fun saveBill(id: Long?, description: String, category: String, amount: Long, dueDay: Int): Unit = write {
-        val name = description.trim()
-        if (name.isEmpty()) throw BusinessException("Informe o nome da conta")
-        if (dueDay !in 1..31) throw BusinessException("Dia de vencimento inválido (1 a 31)")
-        if (amount < 0) throw BusinessException("Valor inválido")
-        val current = id?.let { expenses.getById(it) }
-        if (current == null) {
-            expenses.insert(
-                Expense(kind = ExpenseKind.BILL, category = category, description = name, amount = amount, date = now(), dueDay = dueDay)
-            )
-        } else {
-            expenses.update(
-                current.copy(category = category, description = name, amount = amount, dueDay = dueDay, updatedAt = now(), dirty = true)
-            )
+    /**
+     * Contas fixas deixaram de existir: apaga as contas fixas e os pagamentos delas
+     * (aqui e na nuvem). O valor pago volta para o lucro. Não faz nada se não houver nenhuma.
+     */
+    suspend fun removeFixedBills() {
+        val ids = expenses.getAll().filter { it.kind == ExpenseKind.BILL || (it.kind == ExpenseKind.PAYMENT && it.billId != null) }.map { it.id }
+        if (ids.isEmpty()) return
+        write {
+            tomb(SyncTables.EXPENSES, ids)
+            ids.forEach { expenses.delete(it) }
         }
-    }
-
-    /** Tira a conta fixa dos próximos meses (os pagamentos já feitos continuam). */
-    suspend fun deactivateBill(id: Long): Unit = write {
-        val bill = expenses.getById(id) ?: return@write
-        expenses.update(bill.copy(active = false, updatedAt = now(), dirty = true))
-    }
-
-    /** Paga a conta fixa [billId] referente ao mês [month] (AAAAMM). */
-    suspend fun payBill(billId: Long, month: Int, amount: Long, date: Long): Unit = write {
-        if (amount <= 0) throw BusinessException("Informe o valor pago")
-        val bill = expenses.getById(billId) ?: throw BusinessException("Conta não encontrada")
-        expenses.insert(
-            Expense(
-                kind = ExpenseKind.PAYMENT, category = bill.category, description = bill.description,
-                amount = amount, date = date, billId = bill.id, billMonth = month,
-            )
-        )
     }
 
     /** Retirada de um sócio (divisão do lucro: não é despesa, só sai do caixa). */
@@ -915,7 +892,7 @@ class StoreRepository(
         }
     }
 
-    /** Exclui uma despesa paga (a conta fixa volta a ficar "a pagar" naquele mês). */
+    /** Exclui uma despesa paga. */
     suspend fun deleteExpense(id: Long): Unit = write {
         tomb(SyncTables.EXPENSES, listOf(id))
         expenses.delete(id)

@@ -32,6 +32,11 @@ class FinanceViewModel(container: AppContainer) : MessageViewModel() {
     private val selection = MutableStateFlow(FinanceSelection())
     private val everything = DateRange(0, Long.MAX_VALUE)
 
+    init {
+        // Contas fixas não são mais usadas: apaga as que existirem (o valor pago volta para o lucro).
+        viewModelScope.launch { runCatching { repo.removeFixedBills() } }
+    }
+
     private val money = combine(
         repo.observeSales(everything),
         repo.observeExpenses(),
