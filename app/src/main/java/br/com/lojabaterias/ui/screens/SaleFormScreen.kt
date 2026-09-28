@@ -443,7 +443,7 @@ private fun ScrapSection(vm: SaleFormViewModel, form: SaleFormState) {
         }
         if (form.scrapCharge > 0) {
             Text(
-                "Deixou vale?",
+                "Levou vale?",
                 style = MaterialTheme.typography.titleSmall,
                 modifier = Modifier.padding(top = 8.dp, bottom = 4.dp),
             )

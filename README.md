@@ -57,7 +57,7 @@ pois todos os APKs são assinados com a mesma chave (`app/signing/loja-baterias.
   *Garantias*: baterias trocadas; só conta modelo e quantidade, o estoque não muda.
   *Extras*: baterias que a loja ganhou; entram no estoque com custo zero e, na venda, saem com lucro de 100%
   (a venda usa primeiro as extras disponíveis do modelo; cancelar/excluir a venda devolve a extra).
-- **Vales de casco** (Menu ☰): na venda sem sucata, com o casco cobrado, "Deixou vale? Sim" cria um vale em aberto (valor = casco). Quando o
+- **Vales de casco** (Menu ☰): na venda sem sucata, com o casco cobrado, "Levou vale? Sim" cria um vale em aberto (valor = casco). Quando o
   cliente traz o casco, "Pagar vale" registra o valor devolvido no dia e o casco entra no estoque de sucatas.
 - **Despesas** (Menu ☰): contas fixas do mês (cadastradas uma vez; aparecem como "a pagar" e é só tocar
   em "Paguei") e despesas avulsas por categoria. Mostra entrou × saiu × sobrou (lucro líquido); os Relatórios
@@ -70,7 +70,7 @@ pois todos os APKs são assinados com a mesma chave (`app/signing/loja-baterias.
 - **Pagamento dividido** (Nova venda > "Dividir o pagamento"): várias formas na mesma venda (ex.: R$ 100 no
   dinheiro + o resto no crédito). A loja decide quanto em cada forma; o app sugere quanto falta pelo preço à vista,
   pelo preço do cartão ou proporcional. A taxa da maquininha incide só na parte no cartão.
-- **Desbloqueio**: ao completar a senha o app entra sozinho. **Puxar a tela para baixo** sincroniza com a nuvem.
+- **Desbloqueio**: com a opção "Entrar sem apertar OK" ligada (fica salva no celular), o app entra sozinho ao completar a senha; desligada, é preciso apertar OK. **Puxar a tela para baixo** sincroniza com a nuvem.
 - **Casco cobrado**: entra no faturamento, mas também no custo (serve para repor o casco), então não vira lucro.
 - **Atualização automática**: cada build vira uma Release no GitHub; o app avisa no Início e instala
   com um toque (Menu > Backup e sincronização > Atualizações).

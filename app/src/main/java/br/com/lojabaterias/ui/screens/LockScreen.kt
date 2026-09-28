@@ -18,6 +18,7 @@ import androidx.compose.foundation.layout.safeDrawingPadding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.selection.toggleable
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
@@ -28,6 +29,7 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Surface
+import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -41,6 +43,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardCapitalization
@@ -125,6 +128,9 @@ private fun PinEntry(onUnlock: (String) -> Unit, onForgot: () -> Unit) {
     val lockout = remember { Lockout(context) }
     val remaining = rememberLockRemaining(lockout)
     val locked = remaining > 0
+    // Preferência guardada no celular: entrar sozinho ao completar a senha (ligada por padrão).
+    val prefs = remember { context.getSharedPreferences("lock_prefs", android.content.Context.MODE_PRIVATE) }
+    var autoSubmit by remember { mutableStateOf(prefs.getBoolean("auto_submit", true)) }
 
     fun submit() {
         if (lockout.remainingMillis() > 0) return
@@ -185,8 +191,8 @@ private fun PinEntry(onUnlock: (String) -> Unit, onForgot: () -> Unit) {
                                 else -> if (pin.length < MAX_PIN && !locked) {
                                     pin += key
                                     error = false
-                                    // Senha completa: confere sozinho, sem precisar apertar OK.
-                                    if (pin.length == AccessControl.PIN_LENGTH) submit()
+                                    // Senha completa: confere sozinho, sem precisar apertar OK (se a opção estiver ligada).
+                                    if (autoSubmit && pin.length == AccessControl.PIN_LENGTH) submit()
                                 }
                             }
                             Unit
@@ -208,6 +214,28 @@ private fun PinEntry(onUnlock: (String) -> Unit, onForgot: () -> Unit) {
             }
         }
         Spacer(Modifier.height(16.dp))
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            modifier = Modifier
+                .widthIn(max = 320.dp)
+                .fillMaxWidth()
+                .toggleable(
+                    value = autoSubmit,
+                    role = Role.Switch,
+                    onValueChange = {
+                        autoSubmit = it
+                        prefs.edit().putBoolean("auto_submit", it).apply()
+                    },
+                )
+                .padding(vertical = 8.dp),
+        ) {
+            Text(
+                "Entrar sem apertar OK",
+                style = MaterialTheme.typography.bodyLarge,
+                modifier = Modifier.weight(1f).padding(end = 12.dp),
+            )
+            Switch(checked = autoSubmit, onCheckedChange = null)
+        }
         TextButton(onClick = onForgot) { Text("Esqueci a senha") }
     }
 }
