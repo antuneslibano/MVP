@@ -110,7 +110,6 @@ data class InvoiceFormState(
     val extras: Long = 0,
     val bills: List<BillDraftUi> = emptyList(),
     val received: Boolean = false,
-    val updateCosts: Boolean = false,
     val note: String = "",
     val loading: Boolean = false,
     val saving: Boolean = false,
@@ -222,7 +221,6 @@ class InvoiceFormViewModel(private val repo: StoreRepository, private val invoic
                     bills = s.bills.sortedBy { it.dueDate }.map { BillDraft(it.id, Periods.toMillis(it.dueDate), it.amount, it.paidAt) },
                     alreadyReceived = s.received,
                     note = s.note,
-                    updateCosts = s.updateCosts,
                 )
                 message(if (s.isEdit) "Nota atualizada" else "Nota lançada")
                 _state.update { it.copy(saving = false, done = true) }

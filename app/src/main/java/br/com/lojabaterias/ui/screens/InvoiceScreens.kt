@@ -629,15 +629,11 @@ fun InvoiceFormScreen(invoiceId: Long?, onDone: () -> Unit, onBack: () -> Unit) 
                     InfoRow("Total da nota", Money.format(s.total), bold = true)
                 }
             }
-            if (s.items.any { it.productId != null }) {
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Checkbox(checked = s.updateCosts, onCheckedChange = { v -> vm.update { it.copy(updateCosts = v) } })
-                    Text(
-                        "Atualizar o custo dessas baterias no estoque com os valores desta nota",
-                        style = MaterialTheme.typography.bodyMedium,
-                    )
-                }
-            }
+            Text(
+                "Quando as baterias chegarem, o custo de cada uma no estoque passa a ser o valor com desconto desta nota.",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
 
             SectionTitle("3. Boletos")
             BillGenerator(enabled = s.total > 0, default = s.issueDate.plusDays(30)) { count, first, interval ->
@@ -744,7 +740,7 @@ private fun ReceiveDialog(inv: InvoiceWithBills, onConfirm: (String, List<Int>, 
                         .toggleable(value = toStock, role = Role.Switch, onValueChange = { toStock = it }),
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
-                    Text("Dar entrada no estoque", style = MaterialTheme.typography.bodyLarge, modifier = Modifier.weight(1f))
+                    Text("Dar entrada no estoque (e atualizar o custo)", style = MaterialTheme.typography.bodyLarge, modifier = Modifier.weight(1f))
                     Switch(checked = toStock, onCheckedChange = null)
                 }
                 OutlinedTextField(

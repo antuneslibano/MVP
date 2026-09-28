@@ -45,15 +45,15 @@ class InvoiceTest {
             items = listOf(InvoiceItem("BE50D", 10, 31_000, pid)),
             total = 310_000,
             bills = listOf(BillDraft(dueDate = 2_000, amount = 155_000), BillDraft(dueDate = 3_000, amount = 155_000)),
-            note = null, updateCosts = true,
+            note = null,
         )
         val inv = repo.observeInvoice(id).first()!!
         assertEquals(2, inv.bills.size)
         assertEquals(310_000L, inv.openAmount)
         assertEquals(10, inv.invoice.items.single().quantity)
-        // Lançar a nota não mexe no estoque; o custo foi atualizado
+        // Lançar a nota não mexe no estoque nem no custo
         assertEquals(5, repo.getProduct(pid)!!.stock)
-        assertEquals(31_000L, repo.getProduct(pid)!!.cost)
+        assertEquals(30_000L, repo.getProduct(pid)!!.cost)
 
         repo.setInvoiceBillPaid(inv.sortedBills.first().id, true)
         // Chegaram 9 das 10: entram 9 no estoque
@@ -63,6 +63,8 @@ class InvoiceTest {
         assertTrue(after.invoice.isReceived)
         assertEquals("Faltou: 1 BE50D • caixa amassada", after.invoice.receivedNote)
         assertEquals(14, repo.getProduct(pid)!!.stock)
+        // Na chegada, o custo passa a ser o da nota
+        assertEquals(31_000L, repo.getProduct(pid)!!.cost)
         assertEquals(9, after.invoice.items.single().received)
 
         // Não dá para trocar as baterias de uma nota que já entrou no estoque

@@ -905,7 +905,6 @@ class StoreRepository(
      * Cria ou altera uma nota fiscal com seus boletos. Nota nova fica "aguardando baterias"; com [alreadyReceived]
      * (nota antiga, baterias que chegaram antes) fica recebida sem mexer no estoque.
      * Na edição, a situação da chegada é mantida (muda-se pela tela da nota).
-     * Com [updateCosts], o custo das baterias no cadastro passa a ser o valor desta nota.
      */
     suspend fun saveInvoice(
         id: Long?,
@@ -916,7 +915,6 @@ class StoreRepository(
         total: Long,
         bills: List<BillDraft>,
         note: String?,
-        updateCosts: Boolean = false,
         alreadyReceived: Boolean = false,
     ): Long = write {
         val num = number.trim()
@@ -980,18 +978,13 @@ class StoreRepository(
                 )
             )
         }
-        if (updateCosts) {
-            list.forEach { item ->
-                val p = item.productId?.let { products.getById(it) } ?: return@forEach
-                if (p.cost != item.unitCost) products.update(p.copy(cost = item.unitCost, updatedAt = now(), dirty = true))
-            }
-        }
         invoice.id
     }
 
     /**
      * As baterias da nota chegaram. [receivedQty] diz quantas chegaram de cada item (na ordem da nota;
-     * vazio = todas). Com [addToStock], as que chegaram entram no estoque com o custo da nota.
+     * vazio = todas). Com [addToStock], as que chegaram entram no estoque e o custo de cada bateria
+     * no cadastro passa a ser o da nota (valor unitário − desconto).
      */
     suspend fun markInvoiceReceived(
         id: Long,
@@ -1007,6 +1000,10 @@ class StoreRepository(
             val qty = receivedQty.getOrNull(k)?.coerceAtLeast(0) ?: item.quantity
             val product = item.productId?.let { products.getById(it) }
             val moveId = if (addToStock && qty > 0 && product != null) {
+                // O custo da bateria no cadastro passa a ser o desta nota (já com o desconto)
+                if (item.unitCost > 0 && product.cost != item.unitCost) {
+                    products.update(product.copy(cost = item.unitCost, updatedAt = now(), dirty = true))
+                }
                 moveStock(product.id, qty, MovementType.ENTRY, label, at, item.unitCost)
             } else {
                 null
