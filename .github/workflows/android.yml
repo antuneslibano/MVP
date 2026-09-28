@@ -37,7 +37,7 @@ jobs:
           yes | "$SDKMANAGER" --licenses > /dev/null || true
 
       - name: Configurar Gradle (com cache)
-        uses: gradle/actions/setup-gradle@v4
+        uses: gradle/actions/setup-gradle@v6
 
       - name: Permissão de execução do Gradle Wrapper
         run: chmod +x gradlew
