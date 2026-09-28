@@ -108,4 +108,34 @@ class FinanceReportTest {
         assertEquals(90_000L - 909, r.extrasAllTime.profit)
         assertEquals(1, r.extrasInStock)
     }
+
+    @Test
+    fun cashFlowAndPosition() {
+        val opening = Expense(id = 50, kind = ExpenseKind.OPENING, category = "Caixa", description = "", amount = 100_000, date = at(today.withDayOfMonth(1)))
+        val withdrawal = Expense(id = 51, kind = ExpenseKind.WITHDRAWAL, category = "João", description = "", amount = 5_000, date = at(today))
+        val oldSale = sale(9, today.minusMonths(2), 1, 99_000, 1) // antes do saldo inicial: não conta no caixa
+        val bills = listOf(
+            InvoiceBill(id = 60, invoiceId = 1, dueDate = at(today.minusDays(3)), amount = 30_000, paidAt = at(today)),
+            InvoiceBill(id = 61, invoiceId = 1, dueDate = at(today.plusDays(10)), amount = 20_000),
+            InvoiceBill(id = 62, invoiceId = 1, dueDate = at(today.plusDays(60)), amount = 40_000),
+        )
+        val r = FinanceReport.build(
+            FinancePeriod.MONTH, 0, today,
+            listOf(sale(1, today, 1, 50_000, 30_000, fee = 1_000), oldSale),
+            listOf(expense(2, today, 8_000), opening, withdrawal),
+            emptyList(), emptyList(), emptyList(), emptyList(), emptyList(), emptyMap(), zone,
+            invoiceBills = bills,
+        )
+        val c = r.current
+        assertEquals(49_000L, c.cashIn)
+        assertEquals(38_000L, c.cashOut)
+        assertEquals(5_000L, c.withdrawals)
+        assertEquals(6_000L, c.cashResult)
+        // Lucro não muda com boletos nem retiradas
+        assertEquals(11_000L, c.netProfit)
+        assertEquals(106_000L, r.cash.now)
+        assertEquals(20_000L, r.cash.upcomingBills)
+        assertEquals(86_000L, r.cash.safeToWithdraw)
+        assertEquals(listOf("João"), r.partners)
+    }
 }

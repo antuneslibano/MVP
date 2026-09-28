@@ -419,6 +419,10 @@ object ExpenseKind {
     const val BILL = "BILL"
     /** Despesa paga (avulsa ou pagamento de uma conta fixa). */
     const val PAYMENT = "PAYMENT"
+    /** Retirada de sócio (divisão do lucro, não é despesa). O nome do sócio fica em [Expense.category]. */
+    const val WITHDRAWAL = "WITHDRAWAL"
+    /** Saldo inicial do caixa (gaveta + banco) na data [Expense.date]. Só existe um. */
+    const val OPENING = "OPENING"
 }
 
 /** Categorias das despesas, na ordem em que aparecem. */

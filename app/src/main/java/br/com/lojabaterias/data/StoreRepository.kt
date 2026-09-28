@@ -858,6 +858,37 @@ class StoreRepository(
         )
     }
 
+    /** Retirada de um sócio (divisão do lucro: não é despesa, só sai do caixa). */
+    suspend fun addWithdrawal(partner: String, amount: Long, date: Long, note: String? = null): Unit = write {
+        val name = partner.trim()
+        if (name.isEmpty()) throw BusinessException("Informe quem retirou")
+        if (amount <= 0) throw BusinessException("Informe o valor da retirada")
+        expenses.insert(
+            Expense(
+                kind = ExpenseKind.WITHDRAWAL, category = name, description = "Retirada de $name",
+                amount = amount, date = date, note = note?.trim()?.ifEmpty { null },
+            )
+        )
+    }
+
+    /** Define o saldo inicial do caixa (gaveta + banco) no começo do dia [date]. Substitui o anterior. */
+    suspend fun setOpeningBalance(amount: Long, date: Long): Unit = write {
+        if (amount < 0) throw BusinessException("Valor inválido")
+        val current = expenses.getAll().filter { it.kind == ExpenseKind.OPENING }
+        val keep = current.maxByOrNull { it.updatedAt }
+        current.filter { it.id != keep?.id }.forEach {
+            tomb(SyncTables.EXPENSES, listOf(it.id))
+            expenses.delete(it.id)
+        }
+        if (keep == null) {
+            expenses.insert(
+                Expense(kind = ExpenseKind.OPENING, category = "Caixa", description = "Saldo inicial do caixa", amount = amount, date = date)
+            )
+        } else {
+            expenses.update(keep.copy(amount = amount, date = date, updatedAt = now(), dirty = true))
+        }
+    }
+
     /** Exclui uma despesa paga (a conta fixa volta a ficar "a pagar" naquele mês). */
     suspend fun deleteExpense(id: Long): Unit = write {
         tomb(SyncTables.EXPENSES, listOf(id))

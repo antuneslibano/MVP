@@ -53,6 +53,9 @@ data class FinanceSummary(
     val vouchersPaid: Long = 0,
     /** Boletos de notas fiscais pagos no período (não entram no lucro: o custo já sai nas vendas). */
     val supplierPaid: Long = 0,
+    /** Retiradas dos sócios no período (divisão do lucro). */
+    val withdrawals: Long = 0,
+    val withdrawalList: List<Expense> = emptyList(),
     val byPayment: List<PaymentStats> = emptyList(),
     val expensesByCategory: List<Pair<String, Long>> = emptyList(),
     val topModels: List<ModelStats> = emptyList(),
@@ -68,6 +71,16 @@ data class FinanceSummary(
     val marginPercent: Int? get() = if (revenue > 0) (netProfit * 100 / revenue).toInt() else null
     /** Resultado geral = lucro líquido + carga recebida + sucatas vendidas − sucatas compradas. */
     val generalResult: Long get() = netProfit + chargesPaid + scrapSold - scrapPurchased
+
+    // ----- Caixa (o dinheiro de verdade que entrou e saiu)
+    /** Vendas já sem a taxa da maquininha. */
+    val salesCashIn: Long get() = revenue - fees
+    val cashIn: Long get() = salesCashIn + chargesPaid + scrapSold
+    /** Boletos pagos, despesas, sucatas compradas e vales de casco devolvidos. */
+    val cashOut: Long get() = supplierPaid + expenses + scrapPurchased + vouchersPaid
+    val cashBeforeWithdrawals: Long get() = cashIn - cashOut
+    /** O que ficou na loja depois das retiradas dos sócios. */
+    val cashResult: Long get() = cashBeforeWithdrawals - withdrawals
 }
 
 data class FinanceReport(
@@ -89,6 +102,9 @@ data class FinanceReport(
     val toReceive: Long = 0,
     /** Boletos de fornecedor ainda não pagos. */
     val supplierDebt: SupplierDebt = SupplierDebt(),
+    val cash: CashPosition = CashPosition(),
+    /** Nomes já usados nas retiradas (sugestões). */
+    val partners: List<String> = emptyList(),
 ) {
     companion object {
         private val MONTHS = listOf(
@@ -138,7 +154,8 @@ data class FinanceReport(
                 FinancePeriod.YEAR -> startOf(p, today, off).let { DateRange(millis(it), millis(it.plusYears(1))) }
                 FinancePeriod.ALL -> DateRange(Long.MIN_VALUE, Long.MAX_VALUE)
             }
-            fun summary(range: DateRange) = summarize(range, sales, payments, scrapMovements, charges, invoiceBills)
+            val withdrawals = expenses.filter { it.kind == ExpenseKind.WITHDRAWAL }
+            fun summary(range: DateRange) = summarize(range, sales, payments, scrapMovements, charges, invoiceBills, withdrawals)
 
             val range = rangeOf(period, offset)
             val start = startOf(period, today, offset)
@@ -195,6 +212,39 @@ data class FinanceReport(
                 scrapStockValue = scrapStock.sumOf { (scrapPrices[it.amperage] ?: 0L) * it.quantity.coerceAtLeast(0) },
                 toReceive = charges.filter { !it.paid }.sumOf { it.price },
                 supplierDebt = SupplierDebt.from(invoiceBills, today, zone),
+                cash = cashPosition(expenses, invoiceBills, today, zone) { r -> summary(r) },
+                partners = withdrawals.sortedByDescending { it.date }.map { it.category }.distinct(),
+            )
+        }
+
+        /**
+         * Caixa agora = saldo inicial + tudo o que entrou − tudo o que saiu desde a data do saldo inicial.
+         * Pode retirar = caixa − boletos vencidos e dos próximos 30 dias − contas fixas do mês ainda não pagas.
+         */
+        internal fun cashPosition(
+            expenses: List<Expense>,
+            invoiceBills: List<InvoiceBill>,
+            today: LocalDate,
+            zone: ZoneId,
+            summary: (DateRange) -> FinanceSummary,
+        ): CashPosition {
+            val opening = expenses.filter { it.kind == ExpenseKind.OPENING }.maxByOrNull { it.updatedAt }
+            val from = opening?.date ?: Long.MIN_VALUE
+            val flow = summary(DateRange(from, Long.MAX_VALUE))
+            val limit = Periods.toMillis(today.plusDays(31), zone)
+            val upcoming = invoiceBills.filter { !it.isPaid && it.dueDate < limit }
+            val month = today.year * 100 + today.monthValue
+            val paidBillIds = expenses.filter { it.kind == ExpenseKind.PAYMENT && it.billMonth == month }.mapNotNull { it.billId }.toSet()
+            val fixed = expenses.filter { it.kind == ExpenseKind.BILL && it.active && it.id !in paidBillIds }
+            return CashPosition(
+                hasOpening = opening != null,
+                openingAmount = opening?.amount ?: 0,
+                openingDate = opening?.date,
+                now = (opening?.amount ?: 0) + flow.cashResult,
+                upcomingBills = upcoming.sumOf { it.amount },
+                upcomingBillsCount = upcoming.size,
+                fixedBillsDue = fixed.sumOf { it.amount },
+                fixedBillsCount = fixed.size,
             )
         }
 
@@ -205,6 +255,7 @@ data class FinanceReport(
             scrapMovements: List<ScrapMovement>,
             charges: List<ChargeService>,
             invoiceBills: List<InvoiceBill> = emptyList(),
+            withdrawals: List<Expense> = emptyList(),
         ): FinanceSummary {
             val sales = activeSales.filter { it.sale.dateTime in range }
             val report = ReportCalculator.build(sales.map { StoreRepository.toReportSale(it) })
@@ -225,6 +276,8 @@ data class FinanceReport(
                 scrapPurchased = scrap.purchasedAmount,
                 vouchersPaid = scrap.voucherPaidAmount,
                 supplierPaid = invoiceBills.filter { it.paidAt != null && it.paidAt in range }.sumOf { it.amount },
+                withdrawals = withdrawals.filter { it.date in range }.sumOf { it.amount },
+                withdrawalList = withdrawals.filter { it.date in range }.sortedByDescending { it.date },
                 byPayment = report.byPayment,
                 expensesByCategory = exp.groupBy { it.category }
                     .map { (c, l) -> c to l.sumOf { it.amount } }
@@ -270,4 +323,22 @@ data class FinanceReport(
             )
         }
     }
+}
+
+/** Dinheiro da loja agora (gaveta + banco) e quanto dá para retirar sem faltar para os compromissos. */
+data class CashPosition(
+    val hasOpening: Boolean = false,
+    val openingAmount: Long = 0,
+    val openingDate: Long? = null,
+    /** Quanto deveria ter em caixa agora, pelas contas do app. */
+    val now: Long = 0,
+    /** Boletos vencidos e que vencem nos próximos 30 dias. */
+    val upcomingBills: Long = 0,
+    val upcomingBillsCount: Int = 0,
+    /** Contas fixas deste mês ainda não pagas. */
+    val fixedBillsDue: Long = 0,
+    val fixedBillsCount: Int = 0,
+) {
+    /** Positivo: pode retirar; negativo: falta dinheiro para os compromissos. */
+    val safeToWithdraw: Long get() = now - upcomingBills - fixedBillsDue
 }

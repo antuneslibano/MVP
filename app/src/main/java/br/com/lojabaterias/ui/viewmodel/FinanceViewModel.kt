@@ -15,6 +15,9 @@ import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
+import kotlinx.coroutines.launch
+import br.com.lojabaterias.domain.Periods
+import java.time.LocalDate
 
 data class FinanceSelection(val period: FinancePeriod = FinancePeriod.MONTH, val offset: Int = 0)
 
@@ -24,7 +27,7 @@ data class FinanceState(
     val loading: Boolean = true,
 )
 
-class FinanceViewModel(container: AppContainer) : ViewModel() {
+class FinanceViewModel(container: AppContainer) : MessageViewModel() {
 
     private val repo = container.repository
     private val selection = MutableStateFlow(FinanceSelection())
@@ -67,6 +70,25 @@ class FinanceViewModel(container: AppContainer) : ViewModel() {
     }
         .flowOn(Dispatchers.Default)
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), FinanceState())
+
+    private fun act(success: String, block: suspend () -> Unit) {
+        viewModelScope.launch {
+            try {
+                block()
+                message(success)
+            } catch (e: Exception) {
+                message(errorMessage(e))
+            }
+        }
+    }
+
+    fun addWithdrawal(partner: String, amount: Long, date: LocalDate) =
+        act("Retirada registrada") { repo.addWithdrawal(partner, amount, Periods.toMillis(date) + 12 * 3_600_000L) }
+
+    fun deleteWithdrawal(id: Long) = act("Retirada excluída") { repo.deleteExpense(id) }
+
+    fun setOpeningBalance(amount: Long, date: LocalDate) =
+        act("Saldo inicial salvo") { repo.setOpeningBalance(amount, Periods.toMillis(date)) }
 
     fun setPeriod(period: FinancePeriod) = selection.update { FinanceSelection(period, 0) }
     fun previous() = selection.update { it.copy(offset = it.offset - 1) }

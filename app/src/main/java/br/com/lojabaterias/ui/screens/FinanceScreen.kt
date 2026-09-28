@@ -1,6 +1,26 @@
 package br.com.lojabaterias.ui.screens
 
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.FlowRow
+import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.FilledTonalButton
+import androidx.compose.material3.FilterChip
+import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.TextButton
+import androidx.compose.runtime.mutableLongStateOf
+import androidx.compose.ui.text.input.KeyboardCapitalization
+import br.com.lojabaterias.data.CashPosition
+import br.com.lojabaterias.data.Expense
+import br.com.lojabaterias.domain.Periods
+import br.com.lojabaterias.ui.components.ConfirmDialog
+import br.com.lojabaterias.ui.components.DatePickerModal
+import br.com.lojabaterias.ui.components.MoneyField
+import br.com.lojabaterias.ui.components.ToastEffect
+import java.time.LocalDate
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
@@ -61,6 +81,10 @@ fun FinanceScreen() {
     val vm = appViewModel { FinanceViewModel(it) }
     val state by vm.state.collectAsStateWithLifecycle()
     val f = state.report
+    ToastEffect(vm.messages)
+    var askWithdrawal by remember { mutableStateOf(false) }
+    var askOpening by remember { mutableStateOf(false) }
+    var deleting by remember { mutableStateOf<Expense?>(null) }
     val c = f.current
 
     Scaffold(
@@ -120,6 +144,13 @@ fun FinanceScreen() {
 
             item { SectionTitle("A conta completa") }
             item { StatementCard(c) }
+
+            item { SectionTitle("Caixa: o dinheiro de verdade") }
+            item { CashFlowCard(c, f.period) }
+            item { CashNowCard(f.cash, onSetOpening = { askOpening = true }) }
+
+            item { SectionTitle("Retiradas dos sócios") }
+            item { WithdrawalsCard(c, onAdd = { askWithdrawal = true }, onDelete = { deleting = it }) }
 
             item { SectionTitle("Baterias extras (ganhadas)") }
             item { ExtrasCard(f) }
@@ -201,6 +232,39 @@ fun FinanceScreen() {
             item { SectionTitle("Entenda os termos") }
             item { GlossaryCard() }
         }
+    }
+    if (askWithdrawal) {
+        WithdrawalDialog(
+            partners = f.partners,
+            onConfirm = { name, amount, date ->
+                vm.addWithdrawal(name, amount, date)
+                askWithdrawal = false
+            },
+            onDismiss = { askWithdrawal = false },
+        )
+    }
+    if (askOpening) {
+        OpeningDialog(
+            current = f.cash,
+            onConfirm = { amount, date ->
+                vm.setOpeningBalance(amount, date)
+                askOpening = false
+            },
+            onDismiss = { askOpening = false },
+        )
+    }
+    deleting?.let { w ->
+        ConfirmDialog(
+            title = "Excluir retirada?",
+            text = "${w.category} • ${Money.format(w.amount)} em ${Periods.formatDate(w.date)}",
+            confirmLabel = "Excluir",
+            destructive = true,
+            onConfirm = {
+                vm.deleteWithdrawal(w.id)
+                deleting = null
+            },
+            onDismiss = { deleting = null },
+        )
     }
 }
 
@@ -470,6 +534,9 @@ private fun GlossaryCard() {
             "Lucro líquido" to "O que sobrou de verdade: lucro das vendas − despesas.",
             "Resultado geral" to "Lucro líquido + carga recebida + sucatas vendidas − sucatas compradas.",
             "Ticket médio" to "Quanto, em média, cada venda rendeu.",
+            "Caixa" to "O dinheiro de verdade da loja (gaveta + banco). É diferente do lucro: o dinheiro do custo das baterias fica no caixa até pagar os boletos.",
+            "Retirada" to "Dinheiro que um sócio tira para si. Não é despesa (não muda o lucro), mas sai do caixa.",
+            "Pode retirar com segurança" to "Caixa menos os boletos que vencem em 30 dias e as contas fixas do mês ainda não pagas.",
         ).forEachIndexed { i, (term, meaning) ->
             if (i > 0) HorizontalDivider(Modifier.padding(vertical = 6.dp))
             Text(term, style = MaterialTheme.typography.titleSmall)
@@ -503,4 +570,189 @@ private fun Empty(text: String) {
         color = MaterialTheme.colorScheme.onSurfaceVariant,
         modifier = Modifier.padding(vertical = 8.dp),
     )
+}
+
+// ------------------------------------------------------------------ Caixa
+
+@Composable
+private fun CashFlowCard(c: FinanceSummary, period: FinancePeriod) {
+    ChartCard {
+        Text(
+            "Aqui não é lucro: é o dinheiro que entrou e saiu de verdade" +
+                if (period == FinancePeriod.ALL) "." else " no período.",
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+        Text("Entrou", style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.primary, modifier = Modifier.padding(top = 8.dp))
+        InfoRow("Vendas (já sem a taxa da maquininha)", Money.format(c.salesCashIn))
+        if (c.chargesPaid > 0) InfoRow("Carga de baterias", Money.format(c.chargesPaid))
+        if (c.scrapSold > 0) InfoRow("Sucatas vendidas", Money.format(c.scrapSold))
+        InfoRow("Total que entrou", Money.format(c.cashIn), bold = true)
+
+        Text("Saiu", style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.primary, modifier = Modifier.padding(top = 12.dp))
+        InfoRow("Boletos de fornecedor pagos", minus(c.supplierPaid))
+        InfoRow("Despesas pagas", minus(c.expenses))
+        if (c.scrapPurchased > 0) InfoRow("Sucatas compradas", minus(c.scrapPurchased))
+        if (c.vouchersPaid > 0) InfoRow("Vales de casco devolvidos", minus(c.vouchersPaid))
+        InfoRow("Total que saiu", minus(c.cashOut), bold = true)
+
+        HorizontalDivider(Modifier.padding(vertical = 8.dp))
+        InfoRow("Sobrou antes das retiradas", Money.format(c.cashBeforeWithdrawals), valueColor = moneyResultColor(c.cashBeforeWithdrawals))
+        InfoRow("(−) Retiradas dos sócios", minus(c.withdrawals))
+        InfoRow("= Ficou na loja", Money.format(c.cashResult), bold = true, valueColor = moneyResultColor(c.cashResult))
+        Text(
+            "Por que é diferente do lucro? O lucro desconta o custo das baterias no dia da venda; o caixa só " +
+                "desconta quando o boleto é pago. Vendas no cartão contam no dia da venda, mesmo que a maquininha deposite depois.",
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier.padding(top = 8.dp),
+        )
+    }
+}
+
+@Composable
+private fun CashNowCard(cash: CashPosition, onSetOpening: () -> Unit) {
+    val safe = cash.safeToWithdraw
+    AppCard(containerColor = MaterialTheme.colorScheme.secondaryContainer) {
+        Column(Modifier.padding(20.dp)) {
+            val on = MaterialTheme.colorScheme.onSecondaryContainer
+            Text("Caixa agora (gaveta + banco)", style = MaterialTheme.typography.bodyMedium, color = on)
+            FitText(Money.format(cash.now), style = MaterialTheme.typography.headlineMedium, color = on, fontWeight = FontWeight.Bold)
+            Text(
+                if (cash.hasOpening) {
+                    "Saldo inicial de ${Money.format(cash.openingAmount)} em ${cash.openingDate?.let { Periods.formatDate(it) }}, mais tudo o que entrou e saiu depois."
+                } else {
+                    "Ainda sem saldo inicial: a conta começa do zero. Conte o dinheiro da loja e informe abaixo para ficar exato."
+                },
+                style = MaterialTheme.typography.bodySmall,
+                color = on,
+            )
+            HorizontalDivider(Modifier.padding(vertical = 10.dp), color = on.copy(alpha = 0.2f))
+            CashLine("Boletos vencidos e dos próximos 30 dias (${cash.upcomingBillsCount})", "-" + Money.format(cash.upcomingBills), on)
+            CashLine("Contas fixas deste mês a pagar (${cash.fixedBillsCount})", "-" + Money.format(cash.fixedBillsDue), on)
+            HorizontalDivider(Modifier.padding(vertical = 10.dp), color = on.copy(alpha = 0.2f))
+            if (safe >= 0) {
+                Text("✅ Pode retirar com segurança", style = MaterialTheme.typography.titleSmall, color = on)
+                FitText(Money.format(safe), style = MaterialTheme.typography.headlineSmall, color = on, fontWeight = FontWeight.Bold)
+            } else {
+                Text("⚠️ Falta dinheiro para os compromissos", style = MaterialTheme.typography.titleSmall, color = dangerColor())
+                FitText(Money.format(-safe), style = MaterialTheme.typography.headlineSmall, color = dangerColor(), fontWeight = FontWeight.Bold)
+                Text("Segure as retiradas até vender mais ou pagar menos.", style = MaterialTheme.typography.bodySmall, color = on)
+            }
+            OutlinedButton(onClick = onSetOpening, modifier = Modifier.fillMaxWidth().padding(top = 12.dp)) {
+                Text(if (cash.hasOpening) "Conferir / corrigir o saldo do caixa" else "Informar o saldo do caixa")
+            }
+        }
+    }
+}
+
+@Composable
+private fun CashLine(label: String, value: String, color: androidx.compose.ui.graphics.Color) {
+    Row(Modifier.fillMaxWidth().padding(vertical = 2.dp), verticalAlignment = Alignment.CenterVertically) {
+        Text(label, style = MaterialTheme.typography.bodyMedium, color = color, modifier = Modifier.weight(1f).padding(end = 8.dp))
+        Text(value, style = MaterialTheme.typography.bodyLarge, color = color, fontWeight = FontWeight.SemiBold)
+    }
+}
+
+@Composable
+private fun WithdrawalsCard(c: FinanceSummary, onAdd: () -> Unit, onDelete: (Expense) -> Unit) {
+    ChartCard {
+        Text(
+            "Dinheiro que os sócios tiraram para si. Não muda o lucro, mas sai do caixa.",
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+        if (c.withdrawalList.isEmpty()) Empty("Nenhuma retirada no período.")
+        c.withdrawalList.forEach { w ->
+            Row(Modifier.fillMaxWidth().padding(vertical = 4.dp), verticalAlignment = Alignment.CenterVertically) {
+                Column(Modifier.weight(1f)) {
+                    Text(w.category, style = MaterialTheme.typography.titleSmall)
+                    Text(Periods.formatDate(w.date), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                }
+                Text(Money.format(w.amount), style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold)
+                IconButton(onClick = { onDelete(w) }) {
+                    Icon(Icons.Filled.Delete, contentDescription = "Excluir retirada", tint = MaterialTheme.colorScheme.onSurfaceVariant)
+                }
+            }
+        }
+        if (c.withdrawalList.isNotEmpty()) {
+            HorizontalDivider(Modifier.padding(vertical = 6.dp))
+            val byPartner = c.withdrawalList.groupBy { it.category }.mapValues { (_, l) -> l.sumOf { it.amount } }
+            if (byPartner.size > 1) byPartner.forEach { (name, total) -> InfoRow(name, Money.format(total)) }
+            InfoRow("Total retirado", Money.format(c.withdrawals), bold = true)
+            val over = c.withdrawals - c.netProfit.coerceAtLeast(0)
+            Text(
+                if (over > 0) "⚠️ Retiraram ${Money.format(over)} a mais que o lucro líquido do período (${Money.format(c.netProfit)})."
+                else "Retiraram ${Money.format(c.withdrawals)} de um lucro líquido de ${Money.format(c.netProfit)}.",
+                style = MaterialTheme.typography.bodyMedium,
+                color = if (over > 0) dangerColor() else MaterialTheme.colorScheme.onSurface,
+                modifier = Modifier.padding(top = 4.dp),
+            )
+        }
+        FilledTonalButton(onClick = onAdd, modifier = Modifier.fillMaxWidth().padding(top = 8.dp)) { Text("Registrar retirada") }
+    }
+}
+
+@OptIn(ExperimentalLayoutApi::class)
+@Composable
+private fun WithdrawalDialog(partners: List<String>, onConfirm: (String, Long, LocalDate) -> Unit, onDismiss: () -> Unit) {
+    var name by remember { mutableStateOf(partners.firstOrNull().orEmpty()) }
+    var amount by remember { mutableLongStateOf(0L) }
+    var date by remember { mutableStateOf(LocalDate.now()) }
+    var pickDate by remember { mutableStateOf(false) }
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("Retirada de sócio") },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                OutlinedTextField(
+                    value = name,
+                    onValueChange = { name = it.take(40) },
+                    label = { Text("Quem retirou") },
+                    singleLine = true,
+                    keyboardOptions = KeyboardOptions(capitalization = KeyboardCapitalization.Words),
+                    modifier = Modifier.fillMaxWidth(),
+                )
+                if (partners.isNotEmpty()) {
+                    FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                        partners.take(6).forEach { p -> FilterChip(selected = name == p, onClick = { name = p }, label = { Text(p) }) }
+                    }
+                }
+                MoneyField(value = amount, onValueChange = { amount = it }, label = "Valor")
+                OutlinedButton(onClick = { pickDate = true }, modifier = Modifier.fillMaxWidth()) {
+                    Text("Data: ${date.format(Periods.DATE)}")
+                }
+            }
+        },
+        confirmButton = { TextButton(onClick = { onConfirm(name, amount, date) }) { Text("Registrar") } },
+        dismissButton = { TextButton(onClick = onDismiss) { Text("Voltar") } },
+    )
+    if (pickDate) DatePickerModal(initial = date, onPick = { date = it }, onDismiss = { pickDate = false })
+}
+
+@Composable
+private fun OpeningDialog(current: CashPosition, onConfirm: (Long, LocalDate) -> Unit, onDismiss: () -> Unit) {
+    var amount by remember { mutableLongStateOf(if (current.hasOpening) current.openingAmount else 0L) }
+    var date by remember { mutableStateOf(LocalDate.now()) }
+    var pickDate by remember { mutableStateOf(false) }
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("Saldo do caixa") },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                Text(
+                    "Conte todo o dinheiro da loja (gaveta + conta do banco) no começo do dia escolhido e informe aqui. " +
+                        "A partir desse dia o app soma o que entra e tira o que sai. Pode corrigir sempre que conferir o caixa.",
+                    style = MaterialTheme.typography.bodyMedium,
+                )
+                MoneyField(value = amount, onValueChange = { amount = it }, label = "Dinheiro da loja")
+                OutlinedButton(onClick = { pickDate = true }, modifier = Modifier.fillMaxWidth()) {
+                    Text("No começo do dia: ${date.format(Periods.DATE)}")
+                }
+            }
+        },
+        confirmButton = { TextButton(onClick = { onConfirm(amount, date) }) { Text("Salvar") } },
+        dismissButton = { TextButton(onClick = onDismiss) { Text("Voltar") } },
+    )
+    if (pickDate) DatePickerModal(initial = date, onPick = { date = it }, onDismiss = { pickDate = false })
 }
