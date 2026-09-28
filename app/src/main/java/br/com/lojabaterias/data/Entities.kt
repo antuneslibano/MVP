@@ -479,19 +479,23 @@ data class InvoiceItem(
     val received: Int? = null,
     /** Entrada no estoque criada na chegada (null = não entrou no estoque). */
     val movementId: Long? = null,
-    /** Subtotal da linha, exatamente como na nota (null = valor unitário × quantidade). */
-    val lineTotal: Long? = null,
+    /** Valor unitário na nota, antes do desconto (null = sem desconto informado). */
+    val listPrice: Long? = null,
+    /** Desconto por bateria na nota. */
+    val unitDiscount: Long = 0,
 ) {
-    val subtotal: Long get() = lineTotal ?: (unitCost * quantity)
+    /** [unitCost] já é o valor de cada bateria com o desconto (é o custo que entra no estoque). */
+    val subtotal: Long get() = unitCost * quantity
 
     companion object {
-        /** Linha da nota pelo subtotal: o valor de cada bateria é o subtotal dividido pela quantidade (arredondado). */
-        fun fromSubtotal(model: String, quantity: Int, subtotal: Long, productId: Long? = null) = InvoiceItem(
+        /** Linha da nota: valor unitário − desconto unitário = custo de cada bateria. */
+        fun withDiscount(model: String, quantity: Int, listPrice: Long, unitDiscount: Long, productId: Long? = null) = InvoiceItem(
             model = model,
             quantity = quantity,
-            unitCost = if (quantity > 0) (subtotal + quantity / 2) / quantity else 0,
+            unitCost = (listPrice - unitDiscount).coerceAtLeast(0),
             productId = productId,
-            lineTotal = subtotal,
+            listPrice = listPrice,
+            unitDiscount = unitDiscount,
         )
     }
 }

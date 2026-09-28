@@ -80,9 +80,19 @@ class InvoicesViewModel(private val repo: StoreRepository) : MessageViewModel() 
 }
 
 /** Bateria no formulário da nota. */
-data class ItemDraft(val key: Long, val productId: Long?, val model: String, val quantity: Int, val subtotal: Long) {
-    /** Valor de cada bateria (subtotal ÷ quantidade, arredondado). */
-    val unitCost: Long get() = if (quantity > 0) (subtotal + quantity / 2) / quantity else 0
+data class ItemDraft(
+    val key: Long,
+    val productId: Long?,
+    val model: String,
+    val quantity: Int,
+    /** Valor unitário na nota. */
+    val unitPrice: Long,
+    /** Desconto por bateria. */
+    val unitDiscount: Long = 0,
+) {
+    /** Valor de cada bateria com o desconto. */
+    val unitCost: Long get() = (unitPrice - unitDiscount).coerceAtLeast(0)
+    val subtotal: Long get() = unitCost * quantity
 }
 
 /** Boleto no formulário da nota. */
@@ -140,7 +150,7 @@ class InvoiceFormViewModel(private val repo: StoreRepository, private val invoic
                 return@launch
             }
             val i = inv.invoice
-            val items = i.items.map { ItemDraft(key(), it.productId, it.model, it.quantity, it.subtotal) }
+            val items = i.items.map { ItemDraft(key(), it.productId, it.model, it.quantity, it.listPrice ?: it.unitCost, it.unitDiscount) }
             _state.value = InvoiceFormState(
                 id = i.id,
                 number = i.number,
@@ -162,7 +172,7 @@ class InvoiceFormViewModel(private val repo: StoreRepository, private val invoic
     fun addItem(p: Product) = _state.update { s ->
         val existing = s.items.firstOrNull { it.productId == p.id }
         if (existing != null) {
-            s.copy(items = s.items.map { if (it.key == existing.key) it.copy(quantity = it.quantity + 1, subtotal = it.subtotal + p.cost) else it })
+            s.copy(items = s.items.map { if (it.key == existing.key) it.copy(quantity = it.quantity + 1) else it })
         } else {
             s.copy(items = s.items + ItemDraft(key(), p.id, p.model, 1, p.cost))
         }
@@ -207,7 +217,7 @@ class InvoiceFormViewModel(private val repo: StoreRepository, private val invoic
                     number = s.number,
                     supplier = s.supplier,
                     issueDate = Periods.toMillis(s.issueDate),
-                    items = s.items.map { InvoiceItem.fromSubtotal(it.model, it.quantity, it.subtotal, it.productId) },
+                    items = s.items.map { InvoiceItem.withDiscount(it.model, it.quantity, it.unitPrice, it.unitDiscount, it.productId) },
                     total = s.total,
                     bills = s.bills.sortedBy { it.dueDate }.map { BillDraft(it.id, Periods.toMillis(it.dueDate), it.amount, it.paidAt) },
                     alreadyReceived = s.received,

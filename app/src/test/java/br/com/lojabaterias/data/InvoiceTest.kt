@@ -146,14 +146,13 @@ class InvoiceTest {
     }
 
     @Test
-    fun itemFromSubtotal() {
-        val a = InvoiceItem.fromSubtotal("M100QD", 4, 282_664)
-        assertEquals(70_666L, a.unitCost)
-        assertEquals(282_664L, a.subtotal)
-        val b = InvoiceItem.fromSubtotal("BE50D", 3, 100_000)
-        assertEquals(33_333L, b.unitCost)
-        assertEquals(100_000L, b.subtotal) // o total da nota continua exato
-        val decoded = InvoiceItems.decode(InvoiceItems.encode(listOf(b))).single()
-        assertEquals(100_000L, decoded.subtotal)
+    fun itemWithUnitDiscount() {
+        val a = InvoiceItem.withDiscount("M100QD", 4, 70_666, 5_653)
+        assertEquals(65_013L, a.unitCost)
+        assertEquals(260_052L, a.subtotal)
+        val decoded = InvoiceItems.decode(InvoiceItems.encode(listOf(a))).single()
+        assertEquals(70_666L, decoded.listPrice)
+        assertEquals(5_653L, decoded.unitDiscount)
+        assertEquals(260_052L, decoded.subtotal)
     }
 }
