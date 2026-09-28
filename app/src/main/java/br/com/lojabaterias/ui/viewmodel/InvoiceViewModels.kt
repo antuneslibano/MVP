@@ -10,6 +10,7 @@ import br.com.lojabaterias.data.Product
 import br.com.lojabaterias.data.StoreRepository
 import br.com.lojabaterias.data.SupplierDebt
 import br.com.lojabaterias.data.items
+import br.com.lojabaterias.domain.PeriodType
 import br.com.lojabaterias.domain.Periods
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
@@ -36,6 +37,16 @@ data class InvoicesState(
     val debt: SupplierDebt = SupplierDebt(),
     val today: LocalDate = LocalDate.now(),
     val waitingCount: Int = 0,
+    /** Boletos já pagos (todos). */
+    val paidBillsCount: Int = 0,
+    val paidBillsTotal: Long = 0,
+    /** Boletos pagos neste mês. */
+    val paidThisMonth: Long = 0,
+    /** Notas com todos os boletos pagos. */
+    val paidNotesCount: Int = 0,
+    val paidNotesTotal: Long = 0,
+    /** Notas com boletos em aberto. */
+    val openNotesCount: Int = 0,
     val loading: Boolean = true,
 )
 
@@ -60,6 +71,14 @@ class InvoicesViewModel(private val repo: StoreRepository) : MessageViewModel() 
             debt = SupplierDebt.from(all.flatMap { it.bills }, today),
             today = today,
             waitingCount = all.count { !it.invoice.isReceived },
+            paidBillsCount = rows.count { it.bill.isPaid },
+            paidBillsTotal = rows.filter { it.bill.isPaid }.sumOf { it.bill.amount },
+            paidThisMonth = Periods.range(PeriodType.MONTH, today).let { r ->
+                rows.filter { it.bill.paidAt != null && it.bill.paidAt in r }.sumOf { it.bill.amount }
+            },
+            paidNotesCount = all.count { it.isFullyPaid },
+            paidNotesTotal = all.filter { it.isFullyPaid }.sumOf { it.invoice.total },
+            openNotesCount = all.count { !it.isFullyPaid },
             loading = false,
         )
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), InvoicesState())

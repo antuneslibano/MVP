@@ -38,6 +38,13 @@ data class ReportsState(
     val pdfFileName: String get() = Periods.reportFileName(selection.type, today, selection.offset)
 }
 
+private data class Services(
+    val charges: List<br.com.lojabaterias.data.ChargeService>,
+    val claims: List<br.com.lojabaterias.data.WarrantyClaim>,
+    val invoices: List<br.com.lojabaterias.data.InvoiceWithBills>,
+    val expenses: List<br.com.lojabaterias.data.Expense>,
+)
+
 private data class Snapshot(
     val products: List<br.com.lojabaterias.data.Product>,
     val scrapStock: List<br.com.lojabaterias.data.ScrapStock>,
@@ -69,7 +76,12 @@ class ReportsViewModel(private val container: AppContainer) : MessageViewModel()
         repo.observeStockValues(),
     ) { products, scrapStock, prices, values -> Snapshot(products, scrapStock, prices, values) }
 
-    private val services = combine(repo.observeCharges(), repo.observeWarranties()) { c, w -> c to w }
+    private val services = combine(
+        repo.observeCharges(),
+        repo.observeWarranties(),
+        repo.observeInvoices(),
+        repo.observeExpenses(),
+    ) { c, w, i, e -> Services(c, w, i, e) }
 
     val state: StateFlow<ReportsState> = combine(selection, currentDateFlow()) { sel, today -> sel to today }
         .flatMapLatest { (sel, today) ->
@@ -80,7 +92,7 @@ class ReportsViewModel(private val container: AppContainer) : MessageViewModel()
                 repo.observeScrapMovementsInRange(range),
                 repo.observeExpensePayments(range),
             ) { sales, stockMoves, scrapMoves, expenses -> PeriodData(sales, stockMoves, scrapMoves, expenses) }
-            combine(period, snapshot, services) { (sales, stockMoves, scrapMoves, expenses), (products, scrapStock, prices, values), (charges, claims) ->
+            combine(period, snapshot, services) { (sales, stockMoves, scrapMoves, expenses), (products, scrapStock, prices, values), (charges, claims, invoices, allExpenses) ->
                 ReportsState(
                     selection = sel,
                     today = today,
@@ -92,6 +104,9 @@ class ReportsViewModel(private val container: AppContainer) : MessageViewModel()
                         expenses = expenses,
                         range = range,
                         stockValues = values,
+                        allExpenses = allExpenses,
+                        allInvoices = invoices,
+                        today = today,
                     ),
                     loading = false,
                 )

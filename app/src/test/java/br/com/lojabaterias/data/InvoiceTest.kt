@@ -180,4 +180,35 @@ class InvoiceTest {
         // Sobraram 4 do lote de R$ 280
         assertEquals(listOf(br.com.lojabaterias.domain.CostLayer(4, 28_000)), repo.costLayers(pid))
     }
+
+    @Test
+    fun reportIncludesInvoicesBillsAndWithdrawals() = runBlocking {
+        val pid = product()
+        val id = repo.saveInvoice(
+            id = null, number = "4200", supplier = "PCR Baterias Baterax", issueDate = 1_000,
+            items = listOf(InvoiceItem.fromTotals("BE50D", 4, 282_664, 5_653, pid)),
+            total = 277_011,
+            bills = listOf(BillDraft(dueDate = 2_000, amount = 177_011), BillDraft(dueDate = 3_000, amount = 100_000)),
+            note = null,
+        )
+        repo.setInvoiceBillPaid(repo.observeInvoice(id).first()!!.sortedBills.first().id, true, at = 5_000)
+        repo.markInvoiceReceived(id, null, at = 6_000)
+        repo.addWithdrawal("João", 50_000, 7_000)
+        val f = FullReport.build(
+            salesInPeriod = emptyList(), stockMovements = emptyList(), scrapMovements = emptyList(),
+            products = repo.observeProducts().first(), scrapStock = emptyList(), scrapPrices = emptyMap(),
+            range = br.com.lojabaterias.domain.DateRange(0, 10_000),
+            allExpenses = repo.observeExpenses().first(),
+            allInvoices = repo.observeInvoices().first(),
+        )
+        assertEquals(1, f.invoices.issued.size)
+        assertEquals(277_011L, f.invoices.issuedTotal)
+        assertEquals(1, f.invoices.received.size)
+        assertEquals(4, f.invoices.receivedUnits)
+        assertEquals(177_011L, f.invoices.paidTotal)
+        assertEquals(100_000L, f.invoices.debt.open)
+        assertEquals(50_000L, f.withdrawalsTotal)
+        assertEquals(177_011L, f.cash.supplierPaid)
+        assertEquals(-177_011L - 50_000L, f.cash.cashResult)
+    }
 }

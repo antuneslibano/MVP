@@ -78,6 +78,10 @@ object ReportPdfWriter {
                 warrantySection(f)
                 chapter("6. Despesas e resultado")
                 expensesSection(f)
+                chapter("7. Notas fiscais e boletos")
+                invoicesSection(f)
+                chapter("8. Caixa e retiradas dos sócios")
+                cashSection(f)
                 finish()
             }
             pdf.writeTo(output)
@@ -394,6 +398,102 @@ object ReportPdfWriter {
             } else {
                 keyValueTable(g.extras.map { it.model to "${it.count}" })
             }
+            val x = f.extrasSold
+            sectionTitle("Extras vendidas no período (${x.sold})")
+            keyValueTable(listOf("Valor de venda" to Money.format(x.saleValue), "Lucro (custo zero, menos taxa)" to Money.format(x.profit)))
+        }
+
+        fun invoicesSection(f: FullReport) {
+            val n = f.invoices
+            sectionTitle("Resumo")
+            keyValueTable(
+                listOf(
+                    "Notas lançadas no período" to "${n.issued.size} • ${Money.format(n.issuedTotal)}",
+                    "Notas que chegaram no período" to "${n.received.size} • ${n.receivedUnits} baterias",
+                    "Boletos pagos no período" to "${n.paid.size} • ${Money.format(n.paidTotal)}",
+                    "Devemos aos fornecedores (hoje)" to "${n.debt.openCount} boletos • ${Money.format(n.debt.open)}",
+                    "Boletos vencidos (hoje)" to if (n.debt.overdueCount == 0) "Nenhum" else "${n.debt.overdueCount} • ${Money.format(n.debt.overdue)}",
+                    "Notas aguardando baterias (hoje)" to n.waitingNow.toString(),
+                ),
+                colors = if (n.debt.overdueCount > 0) mapOf(4 to RED) else emptyMap(),
+            )
+            sectionTitle("Notas lançadas no período (${n.issued.size})")
+            if (n.issued.isEmpty()) {
+                emptyLine("Nenhuma nota lançada no período.")
+            } else {
+                table(
+                    listOf(Col(1.2f), Col(1.1f), Col(2.2f), Col(1.3f), Col(1.3f, true), Col(1.3f, true)),
+                    listOf("Data", "Nota", "Fornecedor", "Situação", "Total", "Falta pagar"),
+                    n.issued.map { inv ->
+                        val i = inv.invoice
+                        listOf(
+                            Periods.formatDate(i.issueDate), i.number, i.supplier.ifBlank { "-" },
+                            if (i.isReceived) "Chegou" else "Aguardando",
+                            Money.format(i.total), Money.format(inv.openAmount),
+                        )
+                    },
+                )
+                val lines = n.issued.flatMap { inv -> inv.invoice.items.map { inv.invoice.number to it } }
+                sectionTitle("Baterias das notas lançadas")
+                table(
+                    listOf(Col(1.1f), Col(1.8f), Col(0.8f, true), Col(1.4f, true), Col(1.2f, true), Col(1.4f, true)),
+                    listOf("Nota", "Modelo", "Qtd", "Sem desconto", "Desconto", "Custo cada"),
+                    lines.map { (num, it) ->
+                        listOf(
+                            num, it.model, it.quantity.toString(), Money.format(it.grossTotal ?: it.subtotal),
+                            Money.format(it.discountTotal), Money.format(it.unitCost),
+                        )
+                    },
+                )
+            }
+            sectionTitle("Boletos pagos no período (${n.paid.size})")
+            if (n.paid.isEmpty()) {
+                emptyLine("Nenhum boleto pago no período.")
+            } else {
+                table(
+                    listOf(Col(1.3f), Col(1.2f), Col(2.4f), Col(1.3f), Col(1.4f, true)),
+                    listOf("Pago em", "Nota", "Fornecedor", "Vencimento", "Valor"),
+                    n.paid.map { p ->
+                        listOf(
+                            Periods.formatDate(p.bill.paidAt ?: 0), p.invoice.number, p.invoice.supplier.ifBlank { "-" },
+                            Periods.formatDate(p.bill.dueDate), Money.format(p.bill.amount),
+                        )
+                    },
+                )
+            }
+        }
+
+        fun cashSection(f: FullReport) {
+            val k = f.cash
+            sectionTitle("Caixa do período (dinheiro que entrou e saiu)")
+            keyValueTable(
+                listOf(
+                    "Vendas (sem a taxa da maquininha)" to Money.format(k.salesCashIn),
+                    "Carga de baterias recebida" to Money.format(k.chargesPaid),
+                    "Sucatas vendidas" to Money.format(k.scrapSold),
+                    "Total que entrou" to Money.format(k.cashIn),
+                    "Boletos de fornecedor pagos" to "-" + Money.format(k.supplierPaid),
+                    "Despesas pagas" to "-" + Money.format(k.expenses),
+                    "Sucatas compradas" to "-" + Money.format(k.scrapPurchased),
+                    "Vales de casco devolvidos" to "-" + Money.format(k.vouchersPaid),
+                    "Total que saiu" to "-" + Money.format(k.cashOut),
+                    "Sobrou antes das retiradas" to Money.format(k.cashBeforeWithdrawals),
+                    "Retiradas dos sócios" to "-" + Money.format(f.withdrawalsTotal),
+                    "Ficou na loja" to Money.format(k.cashBeforeWithdrawals - f.withdrawalsTotal),
+                ),
+                colors = mapOf(11 to if (k.cashBeforeWithdrawals - f.withdrawalsTotal < 0) RED else GREEN),
+            )
+            sectionTitle("Retiradas dos sócios no período (${f.withdrawals.size})")
+            if (f.withdrawals.isEmpty()) {
+                emptyLine("Nenhuma retirada no período.")
+                return
+            }
+            if (f.withdrawalsByPartner.size > 1) keyValueTable(f.withdrawalsByPartner.map { (n, v) -> n to Money.format(v) })
+            table(
+                listOf(Col(1.3f), Col(3f), Col(1.4f, true)),
+                listOf("Data", "Sócio", "Valor"),
+                f.withdrawals.map { listOf(Periods.formatDate(it.date), it.category, Money.format(it.amount)) },
+            )
         }
 
         private fun sectionTitle(text: String) {

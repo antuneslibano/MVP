@@ -77,6 +77,26 @@ data class WarrantyPeriodSummary(
     }
 }
 
+/** Boleto pago no período, com a nota a que pertence. */
+data class PaidBill(val bill: InvoiceBill, val invoice: Invoice)
+
+/** Notas fiscais e boletos: o que aconteceu no período e a situação atual. */
+data class InvoicePeriodSummary(
+    /** Notas lançadas no período (pela data da nota). */
+    val issued: List<InvoiceWithBills> = emptyList(),
+    /** Notas cujas baterias chegaram no período. */
+    val received: List<InvoiceWithBills> = emptyList(),
+    /** Boletos pagos no período. */
+    val paid: List<PaidBill> = emptyList(),
+    /** Situação atual (independe do período). */
+    val debt: SupplierDebt = SupplierDebt(),
+    val waitingNow: Int = 0,
+) {
+    val issuedTotal: Long get() = issued.sumOf { it.invoice.total }
+    val receivedUnits: Int get() = received.sumOf { inv -> inv.invoice.items.sumOf { it.received ?: it.quantity } }
+    val paidTotal: Long get() = paid.sumOf { it.bill.amount }
+}
+
 /** Relatório completo de um período: vendas, estoque e sucatas. */
 data class FullReport(
     val sales: Report = Report.EMPTY,
@@ -99,7 +119,17 @@ data class FullReport(
     val warranty: WarrantyPeriodSummary = WarrantyPeriodSummary(),
     // Despesas pagas no período
     val expenses: List<Expense> = emptyList(),
+    // Notas fiscais e boletos
+    val invoices: InvoicePeriodSummary = InvoicePeriodSummary(),
+    // Retiradas dos sócios no período
+    val withdrawals: List<Expense> = emptyList(),
+    // Caixa (dinheiro de verdade) e extras vendidas no período
+    val cash: FinanceSummary = FinanceSummary(),
+    val extrasSold: ExtrasSummary = ExtrasSummary(),
 ) {
+    val withdrawalsTotal: Long get() = withdrawals.sumOf { it.amount }
+    val withdrawalsByPartner: List<Pair<String, Long>>
+        get() = withdrawals.groupBy { it.category }.map { (n, l) -> n to l.sumOf { it.amount } }.sortedByDescending { it.second }
     val expensesTotal: Long get() = expenses.sumOf { it.amount }
     /** Total por categoria, da maior para a menor. */
     val expensesByCategory: List<Pair<String, Long>>
@@ -126,6 +156,9 @@ data class FullReport(
             allCharges: List<ChargeService> = emptyList(),
             allWarranties: List<WarrantyClaim> = emptyList(),
             expenses: List<Expense> = emptyList(),
+            allExpenses: List<Expense> = emptyList(),
+            allInvoices: List<InvoiceWithBills> = emptyList(),
+            today: java.time.LocalDate = java.time.LocalDate.now(),
             range: br.com.lojabaterias.domain.DateRange? = null,
             stockValues: Map<Long, Long> = emptyMap(),
         ): FullReport {
@@ -133,6 +166,8 @@ data class FullReport(
             val periodCharges = allCharges.filter { inRange(it.receivedAt) }
             val openCharges = allCharges.filter { it.isOpen }
             val periodClaims = allWarranties.filter { inRange(it.createdAt) }
+            val all = range ?: br.com.lojabaterias.domain.DateRange(Long.MIN_VALUE, Long.MAX_VALUE)
+            val withdrawals = allExpenses.filter { it.kind == ExpenseKind.WITHDRAWAL }
             val chargeSummary = ChargePeriodSummary(
                 received = periodCharges.size,
                 charged = periodCharges.sumOf { it.price },
@@ -173,6 +208,20 @@ data class FullReport(
                 chargesInPeriod = periodCharges,
                 warranty = WarrantyPeriodSummary.from(periodClaims),
                 expenses = expenses.filter { it.kind == ExpenseKind.PAYMENT && inRange(it.date) },
+                invoices = InvoicePeriodSummary(
+                    issued = allInvoices.filter { inRange(it.invoice.issueDate) }.sortedBy { it.invoice.issueDate },
+                    received = allInvoices.filter { it.invoice.isReceived && inRange(it.invoice.receivedAt) },
+                    paid = allInvoices.flatMap { inv -> inv.bills.filter { inRange(it.paidAt) }.map { PaidBill(it, inv.invoice) } }
+                        .sortedBy { it.bill.paidAt },
+                    debt = SupplierDebt.from(allInvoices.flatMap { it.bills }, today),
+                    waitingNow = allInvoices.count { !it.invoice.isReceived },
+                ),
+                withdrawals = withdrawals.filter { inRange(it.date) }.sortedBy { it.date },
+                cash = FinanceReport.summarize(
+                    all, active, allExpenses.filter { it.kind == ExpenseKind.PAYMENT }, scrapMovements, allCharges,
+                    allInvoices.flatMap { it.bills }, withdrawals,
+                ),
+                extrasSold = FinanceReport.extrasSummary(allWarranties.filter { it.isExtra }, active, all),
             )
         }
     }

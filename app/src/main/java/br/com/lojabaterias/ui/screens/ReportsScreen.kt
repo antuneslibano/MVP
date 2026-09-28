@@ -298,13 +298,58 @@ fun ReportsScreen() {
                         )
                         if (g.extras.isEmpty()) Text("Nenhuma no período.", style = MaterialTheme.typography.bodyMedium)
                         g.extras.forEach { InfoRow(it.model, it.count.toString()) }
+                        HorizontalDivider(Modifier.padding(vertical = 6.dp))
+                        val x = f.extrasSold
+                        Text("Extras vendidas (${x.sold})", style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.primary)
+                        InfoRow("Valor de venda", Money.format(x.saleValue))
+                        InfoRow("Lucro", Money.format(x.profit), valueColor = moneyResultColor(x.profit))
+                    }
+                }
+            }
+            item { SectionTitle("Notas fiscais e boletos") }
+            item {
+                AppCard {
+                    Column(Modifier.padding(horizontal = 16.dp, vertical = 8.dp)) {
+                        val n = f.invoices
+                        Text("No período", style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.primary)
+                        InfoRow("Notas lançadas", "${n.issued.size} • ${Money.format(n.issuedTotal)}")
+                        InfoRow("Notas que chegaram", "${n.received.size} • ${n.receivedUnits} baterias")
+                        InfoRow("Boletos pagos", "${n.paid.size} • ${Money.format(n.paidTotal)}")
+                        HorizontalDivider(Modifier.padding(vertical = 6.dp))
+                        Text("Situação atual", style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.primary)
+                        InfoRow("Devemos aos fornecedores", "${n.debt.openCount} boletos • ${Money.format(n.debt.open)}")
+                        InfoRow(
+                            "Vencidos",
+                            if (n.debt.overdueCount == 0) "Nenhum" else "${n.debt.overdueCount} • ${Money.format(n.debt.overdue)}",
+                            valueColor = if (n.debt.overdueCount > 0) dangerColor() else Color.Unspecified,
+                        )
+                        InfoRow("Notas aguardando baterias", n.waitingNow.toString())
+                    }
+                }
+            }
+            item { SectionTitle("Caixa e retiradas") }
+            item {
+                AppCard {
+                    Column(Modifier.padding(horizontal = 16.dp, vertical = 8.dp)) {
+                        val k = f.cash
+                        InfoRow("Entrou (vendas sem taxa, carga, sucatas)", Money.format(k.cashIn))
+                        InfoRow("Saiu (boletos, despesas, sucatas, vales)", "-" + Money.format(k.cashOut))
+                        InfoRow("Sobrou antes das retiradas", Money.format(k.cashBeforeWithdrawals), valueColor = moneyResultColor(k.cashBeforeWithdrawals))
+                        HorizontalDivider(Modifier.padding(vertical = 6.dp))
+                        Text("Retiradas dos sócios", style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.primary)
+                        if (f.withdrawals.isEmpty()) Text("Nenhuma no período.", style = MaterialTheme.typography.bodyMedium)
+                        f.withdrawalsByPartner.forEach { (name, total) -> InfoRow(name, Money.format(total)) }
+                        InfoRow("Total retirado", "-" + Money.format(f.withdrawalsTotal))
+                        HorizontalDivider(Modifier.padding(vertical = 6.dp))
+                        InfoRow("Ficou na loja", Money.format(k.cashBeforeWithdrawals - f.withdrawalsTotal), bold = true,
+                            valueColor = moneyResultColor(k.cashBeforeWithdrawals - f.withdrawalsTotal))
                     }
                 }
             }
             item {
                 Text(
-                    "O PDF traz tudo isso e mais: lista de vendas e cancelamentos, estoque modelo a modelo " +
-                        "e todas as movimentações de estoque e de sucatas do período.",
+                    "O PDF traz tudo isso e mais: lista de vendas e cancelamentos, estoque modelo a modelo, " +
+                        "todas as movimentações de estoque e de sucatas, as notas e os boletos pagos e as retiradas do período.",
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     modifier = Modifier.padding(vertical = 8.dp),

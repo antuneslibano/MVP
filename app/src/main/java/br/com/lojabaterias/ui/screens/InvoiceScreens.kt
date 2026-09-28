@@ -85,6 +85,7 @@ import br.com.lojabaterias.ui.viewmodel.BillRow
 import br.com.lojabaterias.ui.viewmodel.InvoiceDetailViewModel
 import br.com.lojabaterias.ui.viewmodel.InvoiceFormViewModel
 import br.com.lojabaterias.ui.viewmodel.InvoiceTab
+import br.com.lojabaterias.ui.viewmodel.InvoicesState
 import br.com.lojabaterias.ui.viewmodel.InvoicesViewModel
 import br.com.lojabaterias.ui.viewmodel.appViewModel
 import java.time.LocalDate
@@ -127,7 +128,14 @@ fun InvoicesScreen(onNew: () -> Unit, onOpen: (Long) -> Unit) {
             contentPadding = PaddingValues(start = 16.dp, end = 16.dp, bottom = 96.dp),
             verticalArrangement = Arrangement.spacedBy(8.dp),
         ) {
-            item { DebtCard(s.debt.open, s.debt.openCount, s.debt.overdue, s.debt.overdueCount, s.debt.dueSoon, s.debt.dueSoonCount, s.waitingCount) }
+            item {
+                // O quadro de cima acompanha o que está sendo visto
+                when {
+                    s.tab == InvoiceTab.NOTES -> NotesSummaryCard(s)
+                    s.showPaid -> PaidSummaryCard(s)
+                    else -> DebtCard(s.debt.open, s.debt.openCount, s.debt.overdue, s.debt.overdueCount, s.debt.dueSoon, s.debt.dueSoonCount, s.waitingCount)
+                }
+            }
             item {
                 SingleChoiceSegmentedButtonRow(Modifier.fillMaxWidth().padding(top = 8.dp)) {
                     InvoiceTab.entries.forEachIndexed { i, t ->
@@ -225,6 +233,54 @@ private fun DebtCard(open: Long, openCount: Int, overdue: Long, overdueCount: In
                     color = on,
                     modifier = Modifier.padding(top = 12.dp),
                 )
+            }
+        }
+    }
+}
+
+@Composable
+private fun PaidSummaryCard(s: InvoicesState) {
+    AppCard(containerColor = MaterialTheme.colorScheme.secondaryContainer) {
+        Column(Modifier.padding(20.dp)) {
+            val on = MaterialTheme.colorScheme.onSecondaryContainer
+            Text("Já pagamos aos fornecedores", style = MaterialTheme.typography.bodyMedium, color = on)
+            FitText(Money.format(s.paidBillsTotal), style = MaterialTheme.typography.headlineMedium, color = on, fontWeight = FontWeight.Bold)
+            Text(
+                "${s.paidBillsCount} boleto${if (s.paidBillsCount == 1) "" else "s"} pago${if (s.paidBillsCount == 1) "" else "s"}",
+                style = MaterialTheme.typography.bodyMedium,
+                color = on,
+            )
+            Text(
+                "Neste mês: ${Money.format(s.paidThisMonth)}",
+                style = MaterialTheme.typography.titleMedium,
+                color = on,
+                modifier = Modifier.padding(top = 12.dp),
+            )
+        }
+    }
+}
+
+@Composable
+private fun NotesSummaryCard(s: InvoicesState) {
+    AppCard(containerColor = MaterialTheme.colorScheme.secondaryContainer) {
+        Column(Modifier.padding(20.dp)) {
+            val on = MaterialTheme.colorScheme.onSecondaryContainer
+            Text("Notas pagas", style = MaterialTheme.typography.bodyMedium, color = on)
+            FitText(Money.format(s.paidNotesTotal), style = MaterialTheme.typography.headlineMedium, color = on, fontWeight = FontWeight.Bold)
+            Text(
+                "${s.paidNotesCount} de ${s.invoices.size} nota${if (s.invoices.size == 1) "" else "s"} com todos os boletos pagos",
+                style = MaterialTheme.typography.bodyMedium,
+                color = on,
+            )
+            Row(Modifier.padding(top = 12.dp)) {
+                Column(Modifier.weight(1f).padding(end = 8.dp)) {
+                    Text("Em aberto", style = MaterialTheme.typography.bodyMedium, color = on.copy(alpha = 0.8f))
+                    FitText("${s.openNotesCount} • falta ${Money.format(s.debt.open)}", style = MaterialTheme.typography.titleMedium, color = on)
+                }
+                Column(Modifier.weight(1f)) {
+                    Text("Aguardando baterias", style = MaterialTheme.typography.bodyMedium, color = on.copy(alpha = 0.8f))
+                    FitText(s.waitingCount.toString(), style = MaterialTheme.typography.titleMedium, color = on)
+                }
             }
         }
     }

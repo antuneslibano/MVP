@@ -67,7 +67,9 @@ relacionadas. O **Menu ☰** mostra tudo agrupado pelas mesmas áreas, com atalh
   marque ao lançar e ela não mexe no estoque. Aba de boletos a pagar/pagos com "Paguei".
   Boletos pagos **não saem do lucro** (o custo já sai na venda), mas saem do **caixa**.
 - **Despesas**: despesas pagas no mês, por categoria.
-- **Relatórios e PDF**: diário, semanal e mensal, com o **PDF completo** do período.
+- **Relatórios e PDF**: diário, semanal e mensal, com o **PDF completo** do período: vendas, estoque, sucatas,
+  carga, garantias e extras (inclusive valor e lucro das extras vendidas), despesas, **notas fiscais e boletos**
+  (lançadas, chegadas, boletos pagos, dívida atual) e **caixa e retiradas dos sócios**.
 
 ### Geral
 - **Senha** ao abrir e após 2 minutos fora; bloqueio após tentativas erradas; "Esqueci a senha" com pergunta secreta.
