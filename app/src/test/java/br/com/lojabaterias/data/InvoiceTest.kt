@@ -144,4 +144,16 @@ class InvoiceTest {
         assertEquals(2, d.dueSoonCount)
         assertEquals(listOf(334L, 333L, 333L), SupplierDebt.split(1000, 3))
     }
+
+    @Test
+    fun itemFromSubtotal() {
+        val a = InvoiceItem.fromSubtotal("M100QD", 4, 282_664)
+        assertEquals(70_666L, a.unitCost)
+        assertEquals(282_664L, a.subtotal)
+        val b = InvoiceItem.fromSubtotal("BE50D", 3, 100_000)
+        assertEquals(33_333L, b.unitCost)
+        assertEquals(100_000L, b.subtotal) // o total da nota continua exato
+        val decoded = InvoiceItems.decode(InvoiceItems.encode(listOf(b))).single()
+        assertEquals(100_000L, decoded.subtotal)
+    }
 }

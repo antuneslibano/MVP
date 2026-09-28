@@ -586,11 +586,11 @@ fun InvoiceFormScreen(invoiceId: Long?, onDone: () -> Unit, onBack: () -> Unit) 
                             QuantityStepper(item.quantity, { q -> vm.updateItem(item.key) { it.copy(quantity = q) } }, max = 999)
                         }
                         MoneyField(
-                            value = item.unitCost,
-                            onValueChange = { v -> vm.updateItem(item.key) { it.copy(unitCost = v) } },
-                            label = "Valor de cada bateria na nota",
+                            value = item.subtotal,
+                            onValueChange = { v -> vm.updateItem(item.key) { it.copy(subtotal = v) } },
+                            label = "Subtotal dessas baterias na nota",
                             modifier = Modifier.padding(top = 8.dp),
-                            supportingText = "Subtotal: ${Money.format(item.subtotal)}",
+                            supportingText = if (item.quantity > 1) "${Money.format(item.unitCost)} cada bateria" else null,
                         )
                     }
                 }
