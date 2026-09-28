@@ -60,7 +60,7 @@ relacionadas. O **Menu ☰** mostra tudo agrupado pelas mesmas áreas, com atalh
     período, **retiradas dos sócios** e o que a loja tem (estoque, sucatas, a receber, dívidas com fornecedores).
   - **Extras**: quanto as baterias extras renderam (valor de venda e lucro), no período e desde o começo.
   - Botão **"? Entenda"**: glossário dos termos.
-- **Notas e boletos**: nota do fornecedor (distribuidora, baterias com quantidade e valor, frete/impostos) e seus
+- **Notas e boletos**: nota do fornecedor (distribuidora; cada modelo com quantidade, subtotal sem desconto e desconto da linha — o custo de cada bateria é (subtotal − desconto) ÷ quantidade; frete/impostos) e seus
   boletos (parcelas iguais a cada 7–30 dias, editáveis; a soma tem que bater com o total). "As baterias chegaram"
   conferindo quantas chegaram de cada modelo: as que chegaram **entram no estoque automaticamente** (com o custo da
   nota; dá para desligar). "Ainda não chegaram" desfaz a entrada. Nota antiga (baterias que já estavam no estoque):

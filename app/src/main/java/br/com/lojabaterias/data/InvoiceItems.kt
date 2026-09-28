@@ -15,8 +15,8 @@ object InvoiceItems {
                     .put("product_id", i.productId ?: JSONObject.NULL)
                     .put("received", i.received ?: JSONObject.NULL)
                     .put("movement_id", i.movementId ?: JSONObject.NULL)
-                    .put("list_price", i.listPrice ?: JSONObject.NULL)
-                    .put("unit_discount", i.unitDiscount)
+                    .put("gross_total", i.grossTotal ?: JSONObject.NULL)
+                    .put("discount_total", i.discountTotal)
             )
         }
     }.toString()
@@ -32,8 +32,14 @@ object InvoiceItems {
                 productId = if (o.isNull("product_id")) null else o.optLong("product_id"),
                 received = if (o.isNull("received")) null else o.optInt("received"),
                 movementId = if (o.isNull("movement_id")) null else o.optLong("movement_id"),
-                listPrice = if (o.isNull("list_price")) null else o.optLong("list_price"),
-                unitDiscount = o.optLong("unit_discount", 0),
+                grossTotal = when {
+                    !o.isNull("gross_total") && o.has("gross_total") -> o.optLong("gross_total")
+                    // Versão 1.0.39–1.0.41: valor e desconto por bateria
+                    o.has("list_price") && !o.isNull("list_price") -> o.optLong("list_price") * o.optInt("quantity")
+                    else -> null
+                },
+                discountTotal = if (o.has("discount_total")) o.optLong("discount_total", 0)
+                else o.optLong("unit_discount", 0) * o.optInt("quantity"),
             )
         }
     }.getOrDefault(emptyList())

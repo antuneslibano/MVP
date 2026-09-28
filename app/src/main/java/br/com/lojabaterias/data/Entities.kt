@@ -479,24 +479,27 @@ data class InvoiceItem(
     val received: Int? = null,
     /** Entrada no estoque criada na chegada (null = não entrou no estoque). */
     val movementId: Long? = null,
-    /** Valor unitário na nota, antes do desconto (null = sem desconto informado). */
-    val listPrice: Long? = null,
-    /** Desconto por bateria na nota. */
-    val unitDiscount: Long = 0,
+    /** Subtotal da linha na nota, sem desconto (null = linha antiga: valor unitário × quantidade). */
+    val grossTotal: Long? = null,
+    /** Desconto da linha inteira (não é por bateria). */
+    val discountTotal: Long = 0,
 ) {
-    /** [unitCost] já é o valor de cada bateria com o desconto (é o custo que entra no estoque). */
-    val subtotal: Long get() = unitCost * quantity
+    /** Subtotal com desconto: exatamente o valor da nota. [unitCost] é esse valor dividido pela quantidade. */
+    val subtotal: Long get() = grossTotal?.let { it - discountTotal } ?: (unitCost * quantity)
 
     companion object {
-        /** Linha da nota: valor unitário − desconto unitário = custo de cada bateria. */
-        fun withDiscount(model: String, quantity: Int, listPrice: Long, unitDiscount: Long, productId: Long? = null) = InvoiceItem(
-            model = model,
-            quantity = quantity,
-            unitCost = (listPrice - unitDiscount).coerceAtLeast(0),
-            productId = productId,
-            listPrice = listPrice,
-            unitDiscount = unitDiscount,
-        )
+        /** Linha da nota: (subtotal − desconto) ÷ quantidade = custo de cada bateria (arredondado). */
+        fun fromTotals(model: String, quantity: Int, grossTotal: Long, discountTotal: Long, productId: Long? = null): InvoiceItem {
+            val net = (grossTotal - discountTotal).coerceAtLeast(0)
+            return InvoiceItem(
+                model = model,
+                quantity = quantity,
+                unitCost = if (quantity > 0) (net + quantity / 2) / quantity else 0,
+                productId = productId,
+                grossTotal = grossTotal,
+                discountTotal = discountTotal.coerceAtMost(grossTotal),
+            )
+        }
     }
 }
 

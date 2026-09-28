@@ -153,14 +153,20 @@ class InvoiceTest {
     }
 
     @Test
-    fun itemWithUnitDiscount() {
-        val a = InvoiceItem.withDiscount("M100QD", 4, 70_666, 5_653)
-        assertEquals(65_013L, a.unitCost)
-        assertEquals(260_052L, a.subtotal)
+    fun itemWithLineDiscount() {
+        // 4 M100QD: subtotal 2.826,64 sem desconto, desconto de 56,53 na linha
+        val a = InvoiceItem.fromTotals("M100QD", 4, 282_664, 5_653)
+        assertEquals(277_011L, a.subtotal) // o total da nota bate no centavo
+        assertEquals(69_253L, a.unitCost) // 2.770,11 ÷ 4 = 692,53 (arredondado)
         val decoded = InvoiceItems.decode(InvoiceItems.encode(listOf(a))).single()
-        assertEquals(70_666L, decoded.listPrice)
-        assertEquals(5_653L, decoded.unitDiscount)
-        assertEquals(260_052L, decoded.subtotal)
+        assertEquals(282_664L, decoded.grossTotal)
+        assertEquals(5_653L, decoded.discountTotal)
+        assertEquals(277_011L, decoded.subtotal)
+        // Linha salva na versão com desconto por bateria
+        val old = InvoiceItems.decode("""[{"model":"M100QD","quantity":4,"unit_cost":65013,"list_price":70666,"unit_discount":5653}]""").single()
+        assertEquals(282_664L, old.grossTotal)
+        assertEquals(22_612L, old.discountTotal)
+        assertEquals(260_052L, old.subtotal)
     }
 
     @Test

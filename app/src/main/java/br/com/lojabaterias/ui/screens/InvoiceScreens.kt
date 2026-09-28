@@ -391,9 +391,9 @@ fun InvoiceDetailScreen(invoiceId: Long, onEdit: () -> Unit, onBack: () -> Unit)
                         val items = i.items
                         items.forEach { line ->
                             InfoRow("${line.quantity}× ${line.model}", "${Money.format(line.unitCost)} cada • ${Money.format(line.subtotal)}")
-                            if (line.unitDiscount > 0 && line.listPrice != null) {
+                            if (line.discountTotal > 0 && line.grossTotal != null) {
                                 Text(
-                                    "${Money.format(line.listPrice)} − desconto de ${Money.format(line.unitDiscount)} por bateria",
+                                    "${Money.format(line.grossTotal)} − desconto de ${Money.format(line.discountTotal)}",
                                     style = MaterialTheme.typography.bodySmall,
                                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                                 )
@@ -593,19 +593,19 @@ fun InvoiceFormScreen(invoiceId: Long?, onDone: () -> Unit, onBack: () -> Unit) 
                             QuantityStepper(item.quantity, { q -> vm.updateItem(item.key) { it.copy(quantity = q) } }, max = 999)
                         }
                         MoneyField(
-                            value = item.unitPrice,
-                            onValueChange = { v -> vm.updateItem(item.key) { it.copy(unitPrice = v) } },
-                            label = "Valor unitário",
+                            value = item.grossTotal,
+                            onValueChange = { v -> vm.updateItem(item.key) { it.copy(grossTotal = v) } },
+                            label = "Subtotal sem desconto (todas desse modelo)",
                             modifier = Modifier.padding(top = 8.dp),
                         )
                         MoneyField(
-                            value = item.unitDiscount,
-                            onValueChange = { v -> vm.updateItem(item.key) { it.copy(unitDiscount = v) } },
-                            label = "Desconto por bateria (opcional)",
+                            value = item.discountTotal,
+                            onValueChange = { v -> vm.updateItem(item.key) { it.copy(discountTotal = v) } },
+                            label = "Desconto (no subtotal, opcional)",
                             modifier = Modifier.padding(top = 4.dp),
                         )
                         Text(
-                            "Cada uma sai por ${Money.format(item.unitCost)} • Subtotal: ${Money.format(item.subtotal)}",
+                            "Com desconto: ${Money.format(item.subtotal)} ÷ ${item.quantity} = ${Money.format(item.unitCost)} cada",
                             style = MaterialTheme.typography.bodyMedium,
                             fontWeight = FontWeight.SemiBold,
                             modifier = Modifier.padding(top = 4.dp),
