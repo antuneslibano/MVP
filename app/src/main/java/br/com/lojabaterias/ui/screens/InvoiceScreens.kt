@@ -1,6 +1,12 @@
 package br.com.lojabaterias.ui.screens
 
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.selection.selectable
+import androidx.compose.foundation.selection.toggleable
+import androidx.compose.material3.RadioButton
+import androidx.compose.material3.Switch
+import androidx.compose.runtime.mutableStateListOf
+import androidx.compose.ui.semantics.Role
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
@@ -318,6 +324,7 @@ fun InvoiceDetailScreen(invoiceId: Long, onEdit: () -> Unit, onBack: () -> Unit)
     val loaded by vm.invoice.collectAsStateWithLifecycle()
     ToastEffect(vm.messages)
     var askReceive by remember { mutableStateOf(false) }
+    var askUndo by remember { mutableStateOf(false) }
     var askDelete by remember { mutableStateOf(false) }
     var askPay by remember { mutableStateOf<Long?>(null) }
 
@@ -357,7 +364,7 @@ fun InvoiceDetailScreen(invoiceId: Long, onEdit: () -> Unit, onBack: () -> Unit)
                         if (i.isReceived) {
                             Text("✓ Chegaram em ${i.receivedAt?.let { Periods.formatDate(it) } ?: "-"}", color = profitColor(), fontWeight = FontWeight.SemiBold)
                             i.receivedNote?.let { Text(it, style = MaterialTheme.typography.bodyMedium, modifier = Modifier.padding(top = 4.dp)) }
-                            TextButton(onClick = vm::markWaiting, modifier = Modifier.padding(top = 4.dp)) { Text("Ainda não chegaram (desfazer)") }
+                            TextButton(onClick = { askUndo = true }, modifier = Modifier.padding(top = 4.dp)) { Text("Ainda não chegaram (desfazer)") }
                         } else {
                             Text("⏳ Aguardando as baterias chegarem", color = warningColor(), fontWeight = FontWeight.SemiBold)
                             FilledTonalButton(onClick = { askReceive = true }, modifier = Modifier.fillMaxWidth().padding(top = 8.dp)) {
@@ -365,7 +372,12 @@ fun InvoiceDetailScreen(invoiceId: Long, onEdit: () -> Unit, onBack: () -> Unit)
                             }
                         }
                         Text(
-                            "O estoque não muda sozinho: continue contando e ajustando o estoque normalmente.",
+                            if (i.isReceived) {
+                                if (i.items.any { it.movementId != null }) "As baterias que chegaram entraram no estoque (veja em Movimentações)."
+                                else "Esta nota não mexeu no estoque."
+                            } else {
+                                "Quando chegarem, toque no botão acima: as baterias entram no estoque automaticamente."
+                            },
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                             modifier = Modifier.padding(top = 8.dp),
@@ -377,7 +389,18 @@ fun InvoiceDetailScreen(invoiceId: Long, onEdit: () -> Unit, onBack: () -> Unit)
                 AppCard {
                     Column(Modifier.padding(horizontal = 16.dp, vertical = 8.dp)) {
                         val items = i.items
-                        items.forEach { line -> InfoRow("${line.quantity}× ${line.model}", "${Money.format(line.unitCost)} cada • ${Money.format(line.subtotal)}") }
+                        items.forEach { line ->
+                            InfoRow("${line.quantity}× ${line.model}", "${Money.format(line.unitCost)} cada • ${Money.format(line.subtotal)}")
+                            val got = line.received
+                            if (i.isReceived && got != null) {
+                                Text(
+                                    (if (got == line.quantity) "✓ chegaram todas" else "⚠ chegaram $got de ${line.quantity}") +
+                                        if (line.movementId != null) " • entrou no estoque" else "",
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = if (got == line.quantity) profitColor() else warningColor(),
+                                )
+                            }
+                        }
                         val extras = i.total - items.sumOf { it.subtotal }
                         if (extras != 0L) InfoRow("Frete, impostos e outros", Money.format(extras))
                         HorizontalDivider(Modifier.padding(vertical = 6.dp))
@@ -422,29 +445,27 @@ fun InvoiceDetailScreen(invoiceId: Long, onEdit: () -> Unit, onBack: () -> Unit)
         }
     }
 
-    if (askReceive) {
-        var note by remember { mutableStateOf("") }
-        AlertDialog(
-            onDismissRequest = { askReceive = false },
-            title = { Text("As baterias chegaram?") },
-            text = {
-                Column {
-                    Text("Se faltou ou voltou alguma bateria, anote aqui (opcional).")
-                    OutlinedTextField(
-                        value = note,
-                        onValueChange = { note = it.take(200) },
-                        label = { Text("Ex.: faltou 1 BE50D") },
-                        modifier = Modifier.fillMaxWidth().padding(top = 8.dp),
-                    )
-                }
+    val current = loaded?.value
+    if (askReceive && current != null) {
+        ReceiveDialog(
+            inv = current,
+            onConfirm = { note, qty, stock ->
+                vm.markReceived(note, qty, stock)
+                askReceive = false
             },
-            confirmButton = {
-                TextButton(onClick = {
-                    vm.markReceived(note)
-                    askReceive = false
-                }) { Text("Confirmar chegada") }
+            onDismiss = { askReceive = false },
+        )
+    }
+    if (askUndo) {
+        ConfirmDialog(
+            title = "Desfazer a chegada?",
+            text = "A nota volta para \"aguardando baterias\" e as baterias que entraram no estoque por ela saem do estoque.",
+            confirmLabel = "Desfazer",
+            onConfirm = {
+                vm.markWaiting()
+                askUndo = false
             },
-            dismissButton = { TextButton(onClick = { askReceive = false }) { Text("Voltar") } },
+            onDismiss = { askUndo = false },
         )
     }
     askPay?.let { id ->
@@ -462,7 +483,7 @@ fun InvoiceDetailScreen(invoiceId: Long, onEdit: () -> Unit, onBack: () -> Unit)
     if (askDelete) {
         ConfirmDialog(
             title = "Excluir nota?",
-            text = "A nota e todos os boletos dela serão apagados. O estoque não muda.",
+            text = "A nota e todos os boletos dela serão apagados. Se as baterias entraram no estoque por ela, saem do estoque.",
             confirmLabel = "Excluir",
             destructive = true,
             onConfirm = {
@@ -632,23 +653,31 @@ fun InvoiceFormScreen(invoiceId: Long?, onDone: () -> Unit, onBack: () -> Unit) 
                 TextButton(onClick = vm::addBill) { Text("+ Adicionar outro boleto") }
             }
 
-            SectionTitle("4. As baterias já chegaram?")
-            SingleChoiceSegmentedButtonRow(Modifier.fillMaxWidth()) {
-                listOf(false to "Ainda não", true to "Já chegaram").forEachIndexed { i, (v, label) ->
-                    SegmentedButton(
-                        selected = s.received == v,
-                        onClick = { vm.update { it.copy(received = v) } },
-                        shape = SegmentedButtonDefaults.itemShape(i, 2),
-                        icon = {},
-                    ) { FitText(label, style = MaterialTheme.typography.labelLarge) }
+            if (!s.isEdit) {
+                SectionTitle("4. As baterias já chegaram?")
+                listOf(
+                    false to "Ainda não: vão entrar no estoque quando eu marcar que chegaram",
+                    true to "Nota antiga: já chegaram antes (não mexe no estoque)",
+                ).forEach { (v, label) ->
+                    Row(
+                        Modifier
+                            .fillMaxWidth()
+                            .selectable(selected = s.received == v, role = Role.RadioButton, onClick = { vm.update { it.copy(received = v) } })
+                            .padding(vertical = 4.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        RadioButton(selected = s.received == v, onClick = null)
+                        Text(label, style = MaterialTheme.typography.bodyLarge, modifier = Modifier.padding(start = 8.dp))
+                    }
+                }
+                if (s.received) {
+                    Text(
+                        "Use para notas de antes, de baterias que já estão no estoque: coloque só os boletos que faltam pagar.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
                 }
             }
-            Text(
-                "Notas antigas, de baterias que já chegaram: marque \"Já chegaram\" e coloque só os boletos que faltam pagar. " +
-                    "O estoque não muda em nenhum caso.",
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
             OutlinedTextField(
                 value = s.note,
                 onValueChange = { v -> vm.update { it.copy(note = v.take(300)) } },
@@ -670,6 +699,47 @@ fun InvoiceFormScreen(invoiceId: Long?, onDone: () -> Unit, onBack: () -> Unit) 
             onDismiss = { picking = false },
         )
     }
+}
+
+/** Chegada das baterias: quantas vieram de cada modelo e se entram no estoque. */
+@Composable
+private fun ReceiveDialog(inv: InvoiceWithBills, onConfirm: (String, List<Int>, Boolean) -> Unit, onDismiss: () -> Unit) {
+    val items = inv.invoice.items
+    val qty = remember { mutableStateListOf(*items.map { it.quantity }.toTypedArray()) }
+    var toStock by remember { mutableStateOf(true) }
+    var note by remember { mutableStateOf("") }
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("As baterias chegaram?") },
+        text = {
+            Column(Modifier.verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                Text("Confira quantas chegaram de cada uma (se faltou alguma, diminua).", style = MaterialTheme.typography.bodyMedium)
+                items.forEachIndexed { k, item ->
+                    Column {
+                        Text("${item.model} (na nota: ${item.quantity})", style = MaterialTheme.typography.titleSmall)
+                        QuantityStepper(qty[k], { qty[k] = it }, min = 0, max = item.quantity * 2)
+                    }
+                }
+                Row(
+                    Modifier
+                        .fillMaxWidth()
+                        .toggleable(value = toStock, role = Role.Switch, onValueChange = { toStock = it }),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Text("Dar entrada no estoque", style = MaterialTheme.typography.bodyLarge, modifier = Modifier.weight(1f))
+                    Switch(checked = toStock, onCheckedChange = null)
+                }
+                OutlinedTextField(
+                    value = note,
+                    onValueChange = { note = it.take(200) },
+                    label = { Text("Observação (opcional)") },
+                    modifier = Modifier.fillMaxWidth(),
+                )
+            }
+        },
+        confirmButton = { TextButton(onClick = { onConfirm(note, qty.toList(), toStock) }) { Text("Confirmar chegada") } },
+        dismissButton = { TextButton(onClick = onDismiss) { Text("Voltar") } },
+    )
 }
 
 /** Monta os boletos de uma vez: quantidade, primeiro vencimento e intervalo. */

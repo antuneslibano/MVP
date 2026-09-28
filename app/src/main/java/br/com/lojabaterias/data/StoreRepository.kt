@@ -902,7 +902,9 @@ class StoreRepository(
     fun observeInvoiceBills(): Flow<List<InvoiceBill>> = invoices.observeBills()
 
     /**
-     * Cria ou altera uma nota fiscal com seus boletos. Não mexe no estoque (a contagem continua manual).
+     * Cria ou altera uma nota fiscal com seus boletos. Nota nova fica "aguardando baterias"; com [alreadyReceived]
+     * (nota antiga, baterias que chegaram antes) fica recebida sem mexer no estoque.
+     * Na edição, a situação da chegada é mantida (muda-se pela tela da nota).
      * Com [updateCosts], o custo das baterias no cadastro passa a ser o valor desta nota.
      */
     suspend fun saveInvoice(
@@ -913,13 +915,13 @@ class StoreRepository(
         items: List<InvoiceItem>,
         total: Long,
         bills: List<BillDraft>,
-        received: Boolean,
         note: String?,
         updateCosts: Boolean = false,
+        alreadyReceived: Boolean = false,
     ): Long = write {
         val num = number.trim()
         if (num.isEmpty()) throw BusinessException("Informe o número da nota")
-        val list = items.filter { it.quantity > 0 }
+        var list = items.filter { it.quantity > 0 }
         if (list.isEmpty()) throw BusinessException("Adicione as baterias da nota")
         if (list.any { it.unitCost < 0 }) throw BusinessException("Valor de bateria inválido")
         if (total <= 0) throw BusinessException("Informe o valor da nota")
@@ -936,6 +938,21 @@ class StoreRepository(
             throw BusinessException("A nota nº $num${if (name.isNotEmpty()) " de $name" else ""} já foi lançada")
         }
         val current = id?.let { invoices.getById(it) }
+        if (current != null) {
+            // Nota que já entrou no estoque: as baterias só mudam depois de desfazer a chegada.
+            val old = current.items
+            if (old.any { it.movementId != null }) {
+                val same = old.size == list.size &&
+                    old.zip(list).all { (a, b) -> a.productId == b.productId && a.quantity == b.quantity }
+                if (!same) {
+                    throw BusinessException(
+                        "Essas baterias já entraram no estoque. Para mudar as baterias da nota, toque antes em \"Ainda não chegaram\"."
+                    )
+                }
+                list = list.zip(old).map { (n, o) -> n.copy(received = o.received, movementId = o.movementId) }
+            }
+        }
+        val received = current?.isReceived ?: alreadyReceived
         val invoice = Invoice(
             id = current?.id ?: IdGenerator.next(),
             number = num,
@@ -972,21 +989,71 @@ class StoreRepository(
         invoice.id
     }
 
-    /** As baterias da nota chegaram (o estoque continua manual). */
-    suspend fun markInvoiceReceived(id: Long, note: String?, at: Long = now()): Unit = write {
+    /**
+     * As baterias da nota chegaram. [receivedQty] diz quantas chegaram de cada item (na ordem da nota;
+     * vazio = todas). Com [addToStock], as que chegaram entram no estoque com o custo da nota.
+     */
+    suspend fun markInvoiceReceived(
+        id: Long,
+        note: String?,
+        receivedQty: List<Int> = emptyList(),
+        addToStock: Boolean = true,
+        at: Long = now(),
+    ): Unit = write {
         val i = invoices.getById(id) ?: throw BusinessException("Nota não encontrada")
+        if (i.isReceived) throw BusinessException("Essa nota já foi marcada como recebida")
+        val label = "Nota ${i.number}" + if (i.supplier.isNotBlank()) " (${i.supplier})" else ""
+        val items = i.items.mapIndexed { k, item ->
+            val qty = receivedQty.getOrNull(k)?.coerceAtLeast(0) ?: item.quantity
+            val product = item.productId?.let { products.getById(it) }
+            val moveId = if (addToStock && qty > 0 && product != null) {
+                moveStock(product.id, qty, MovementType.ENTRY, label, at, item.unitCost)
+            } else {
+                null
+            }
+            item.copy(received = qty, movementId = moveId)
+        }
+        val missing = i.items.zip(items).filter { (a, b) -> (b.received ?: a.quantity) < a.quantity }
+            .joinToString { (a, b) -> "${a.quantity - (b.received ?: 0)} ${a.model}" }
+        val autoNote = if (missing.isNotEmpty()) "Faltou: $missing" else null
+        val fullNote = listOfNotNull(autoNote, note?.trim()?.ifEmpty { null }).joinToString(" • ").ifEmpty { null }
         invoices.upsert(
             i.copy(
-                status = InvoiceStatus.RECEIVED, receivedAt = at, receivedNote = note?.trim()?.ifEmpty { null },
+                itemsJson = InvoiceItems.encode(items),
+                status = InvoiceStatus.RECEIVED, receivedAt = at, receivedNote = fullNote,
                 updatedAt = now(), dirty = true,
             )
         )
     }
 
-    /** Volta a nota para "aguardando baterias". */
+    /** Desfaz a entrada no estoque feita na chegada da nota (se ainda der). */
+    private suspend fun undoInvoiceStock(i: Invoice): List<InvoiceItem> {
+        val items = i.items
+        for (item in items) {
+            val moveId = item.movementId ?: continue
+            val m = movements.getById(moveId) ?: continue
+            val p = products.getById(m.productId) ?: continue
+            if (p.stock - m.quantity < 0) {
+                throw BusinessException(
+                    "Não dá para desfazer: parte das ${p.model} dessa nota já foi vendida (o estoque ficaria negativo). " +
+                        "Se precisar, corrija o estoque pelo ajuste."
+                )
+            }
+        }
+        items.forEach { undoStockMovement(it.movementId) }
+        return items.map { it.copy(received = null, movementId = null) }
+    }
+
+    /** Volta a nota para "aguardando baterias" e tira do estoque o que entrou na chegada. */
     suspend fun markInvoiceWaiting(id: Long): Unit = write {
         val i = invoices.getById(id) ?: throw BusinessException("Nota não encontrada")
-        invoices.upsert(i.copy(status = InvoiceStatus.WAITING, receivedAt = null, receivedNote = null, updatedAt = now(), dirty = true))
+        val items = undoInvoiceStock(i)
+        invoices.upsert(
+            i.copy(
+                itemsJson = InvoiceItems.encode(items),
+                status = InvoiceStatus.WAITING, receivedAt = null, receivedNote = null, updatedAt = now(), dirty = true,
+            )
+        )
     }
 
     /** Marca o boleto como pago (ou desfaz, com [paid] = false). */
@@ -995,8 +1062,9 @@ class StoreRepository(
         invoices.upsertBill(b.copy(paidAt = if (paid) at else null, updatedAt = now(), dirty = true))
     }
 
-    /** Exclui a nota e os boletos dela. */
+    /** Exclui a nota e os boletos dela (e tira do estoque o que entrou pela nota). */
     suspend fun deleteInvoice(id: Long): Unit = write {
+        invoices.getById(id)?.let { undoInvoiceStock(it) }
         val bills = invoices.billsFor(id).map { it.id }
         tomb(SyncTables.INVOICE_BILLS, bills)
         bills.forEach { invoices.deleteBill(it) }

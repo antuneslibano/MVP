@@ -465,7 +465,7 @@ data class Expense(
 object InvoiceStatus {
     /** Nota lançada, baterias ainda não chegaram. */
     const val WAITING = "WAITING"
-    /** Baterias chegaram (o estoque continua manual: não muda sozinho). */
+    /** Baterias chegaram (as que chegaram entram no estoque, se marcado na chegada). */
     const val RECEIVED = "RECEIVED"
 }
 
@@ -475,13 +475,17 @@ data class InvoiceItem(
     val quantity: Int,
     val unitCost: Long,
     val productId: Long? = null,
+    /** Quantas chegaram (null = nota ainda não recebida, ou recebida antes do controle de estoque). */
+    val received: Int? = null,
+    /** Entrada no estoque criada na chegada (null = não entrou no estoque). */
+    val movementId: Long? = null,
 ) {
     val subtotal: Long get() = unitCost * quantity
 }
 
 /**
  * Nota fiscal de compra (fornecedor/fábrica). As baterias ficam em [itemsJson] (lista de [InvoiceItem]);
- * os boletos, na tabela [InvoiceBill]. Não mexe no estoque.
+ * os boletos, na tabela [InvoiceBill]. Ao marcar a chegada, as baterias recebidas entram no estoque.
  */
 @Entity(tableName = "invoices", indices = [Index("issue_date")])
 data class Invoice(

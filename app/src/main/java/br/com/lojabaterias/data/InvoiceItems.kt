@@ -13,6 +13,8 @@ object InvoiceItems {
                     .put("quantity", i.quantity)
                     .put("unit_cost", i.unitCost)
                     .put("product_id", i.productId ?: JSONObject.NULL)
+                    .put("received", i.received ?: JSONObject.NULL)
+                    .put("movement_id", i.movementId ?: JSONObject.NULL)
             )
         }
     }.toString()
@@ -26,6 +28,8 @@ object InvoiceItems {
                 quantity = o.optInt("quantity"),
                 unitCost = o.optLong("unit_cost"),
                 productId = if (o.isNull("product_id")) null else o.optLong("product_id"),
+                received = if (o.isNull("received")) null else o.optInt("received"),
+                movementId = if (o.isNull("movement_id")) null else o.optLong("movement_id"),
             )
         }
     }.getOrDefault(emptyList())

@@ -58,7 +58,9 @@ relacionadas. O **Menu ☰** mostra tudo agrupado pelas mesmas áreas, com atalh
   - Botão **"? Entenda"**: glossário dos termos.
 - **Notas e boletos**: nota do fornecedor (distribuidora, baterias com quantidade e valor, frete/impostos) e seus
   boletos (parcelas iguais a cada 7–30 dias, editáveis; a soma tem que bater com o total). "As baterias chegaram"
-  com observação. **O estoque não muda** (contagem manual). Aba de boletos a pagar/pagos com "Paguei".
+  conferindo quantas chegaram de cada modelo: as que chegaram **entram no estoque automaticamente** (com o custo da
+  nota; dá para desligar). "Ainda não chegaram" desfaz a entrada. Nota antiga (baterias que já estavam no estoque):
+  marque ao lançar e ela não mexe no estoque. Aba de boletos a pagar/pagos com "Paguei".
   Boletos pagos **não saem do lucro** (o custo já sai na venda), mas saem do **caixa**.
 - **Despesas**: contas fixas do mês ("Paguei") e despesas avulsas por categoria.
 - **Relatórios e PDF**: diário, semanal e mensal, com o **PDF completo** do período.

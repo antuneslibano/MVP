@@ -209,7 +209,7 @@ class InvoiceFormViewModel(private val repo: StoreRepository, private val invoic
                     items = s.items.map { InvoiceItem(it.model, it.quantity, it.unitCost, it.productId) },
                     total = s.total,
                     bills = s.bills.sortedBy { it.dueDate }.map { BillDraft(it.id, Periods.toMillis(it.dueDate), it.amount, it.paidAt) },
-                    received = s.received,
+                    alreadyReceived = s.received,
                     note = s.note,
                     updateCosts = s.updateCosts,
                 )
@@ -240,7 +240,10 @@ class InvoiceDetailViewModel(private val repo: StoreRepository, private val invo
         }
     }
 
-    fun markReceived(note: String) = act("Baterias recebidas") { repo.markInvoiceReceived(invoiceId, note) }
+    fun markReceived(note: String, quantities: List<Int>, addToStock: Boolean) =
+        act(if (addToStock) "Baterias recebidas e lançadas no estoque" else "Baterias recebidas") {
+            repo.markInvoiceReceived(invoiceId, note, quantities, addToStock)
+        }
     fun markWaiting() = act("Voltou para \"aguardando baterias\"") { repo.markInvoiceWaiting(invoiceId) }
     fun setPaid(billId: Long, paid: Boolean) =
         act(if (paid) "Boleto marcado como pago" else "Pagamento desfeito") { repo.setInvoiceBillPaid(billId, paid) }

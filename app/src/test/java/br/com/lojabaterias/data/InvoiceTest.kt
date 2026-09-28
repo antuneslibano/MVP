@@ -45,22 +45,37 @@ class InvoiceTest {
             items = listOf(InvoiceItem("BE50D", 10, 31_000, pid)),
             total = 310_000,
             bills = listOf(BillDraft(dueDate = 2_000, amount = 155_000), BillDraft(dueDate = 3_000, amount = 155_000)),
-            received = false, note = null, updateCosts = true,
+            note = null, updateCosts = true,
         )
         val inv = repo.observeInvoice(id).first()!!
         assertEquals(2, inv.bills.size)
         assertEquals(310_000L, inv.openAmount)
         assertEquals(10, inv.invoice.items.single().quantity)
-        // Estoque continua manual; o custo foi atualizado
+        // Lançar a nota não mexe no estoque; o custo foi atualizado
         assertEquals(5, repo.getProduct(pid)!!.stock)
         assertEquals(31_000L, repo.getProduct(pid)!!.cost)
 
         repo.setInvoiceBillPaid(inv.sortedBills.first().id, true)
-        repo.markInvoiceReceived(id, "faltou 1")
+        // Chegaram 9 das 10: entram 9 no estoque
+        repo.markInvoiceReceived(id, "caixa amassada", listOf(9), addToStock = true)
         val after = repo.observeInvoice(id).first()!!
         assertEquals(155_000L, after.openAmount)
         assertTrue(after.invoice.isReceived)
-        assertEquals("faltou 1", after.invoice.receivedNote)
+        assertEquals("Faltou: 1 BE50D • caixa amassada", after.invoice.receivedNote)
+        assertEquals(14, repo.getProduct(pid)!!.stock)
+        assertEquals(9, after.invoice.items.single().received)
+
+        // Não dá para trocar as baterias de uma nota que já entrou no estoque
+        try {
+            repo.saveInvoice(
+                id = id, number = "1234", supplier = "Fábrica", issueDate = 1_000,
+                items = listOf(InvoiceItem("BE50D", 8, 31_000, pid)), total = 248_000,
+                bills = listOf(BillDraft(dueDate = 2_000, amount = 248_000)), note = null,
+            )
+            fail("Esperava BusinessException")
+        } catch (e: BusinessException) {
+            // ok
+        }
 
         // Editar mantendo o boleto pago e trocando o outro por dois
         val paid = after.sortedBills.first()
@@ -73,14 +88,26 @@ class InvoiceTest {
                 BillDraft(dueDate = 4_000, amount = 100_000),
                 BillDraft(dueDate = 5_000, amount = 55_000),
             ),
-            received = true, note = null,
+            note = null,
         )
         val edited = repo.observeInvoice(id).first()!!
         assertEquals(3, edited.bills.size)
         assertEquals(1, edited.paidCount)
-        assertEquals("faltou 1", edited.invoice.receivedNote)
+        assertTrue(edited.invoice.isReceived)
+        assertEquals(9, edited.invoice.items.single().received)
 
+        // Desfazer a chegada tira do estoque; marcar de novo sem estoque não mexe
+        repo.markInvoiceWaiting(id)
+        assertEquals(5, repo.getProduct(pid)!!.stock)
+        repo.markInvoiceReceived(id, null, addToStock = false)
+        assertEquals(5, repo.getProduct(pid)!!.stock)
+        repo.markInvoiceWaiting(id)
+        repo.markInvoiceReceived(id, null)
+        assertEquals(15, repo.getProduct(pid)!!.stock)
+
+        // Excluir a nota tira do estoque o que entrou por ela
         repo.deleteInvoice(id)
+        assertEquals(5, repo.getProduct(pid)!!.stock)
         assertEquals(0, repo.observeInvoices().first().size)
         assertEquals(0, repo.observeInvoiceBills().first().size)
     }
@@ -91,7 +118,7 @@ class InvoiceTest {
             repo.saveInvoice(
                 id = null, number = "1", supplier = "", issueDate = 0,
                 items = listOf(InvoiceItem("BE50D", 1, 30_000)), total = 30_000,
-                bills = listOf(BillDraft(dueDate = 0, amount = 20_000)), received = false, note = null,
+                bills = listOf(BillDraft(dueDate = 0, amount = 20_000)), note = null,
             )
             fail("Esperava BusinessException")
         } catch (e: BusinessException) {
