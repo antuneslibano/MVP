@@ -109,6 +109,12 @@ class BackupManager(private val db: AppDatabase, private val onChange: () -> Uni
         root.put("expenses", JSONArray().apply {
             db.expenseDao().getAll().forEach { put(RemoteMapper.toJson(it)) }
         })
+        root.put("invoices", JSONArray().apply {
+            db.invoiceDao().getAll().forEach { put(RemoteMapper.toJson(it)) }
+        })
+        root.put("invoiceBills", JSONArray().apply {
+            db.invoiceDao().getAllBills().forEach { put(RemoteMapper.toJson(it)) }
+        })
         root.put("scrapMovements", JSONArray().apply {
             db.scrapDao().getAllMovements().forEach { m ->
                 put(JSONObject().apply {
@@ -228,6 +234,10 @@ class BackupManager(private val db: AppDatabase, private val onChange: () -> Uni
             .map { RemoteMapper.expense(it).copy(updatedAt = importNow, dirty = true) }
         val paymentList = root.optJSONArray("salePayments")?.objects().orEmpty()
             .map { RemoteMapper.salePayment(it).copy(updatedAt = importNow, dirty = true) }
+        val invoiceList = root.optJSONArray("invoices")?.objects().orEmpty()
+            .map { RemoteMapper.invoice(it).copy(updatedAt = importNow, dirty = true) }
+        val invoiceBillList = root.optJSONArray("invoiceBills")?.objects().orEmpty()
+            .map { RemoteMapper.invoiceBill(it).copy(updatedAt = importNow, dirty = true) }
 
         db.withTransaction {
             // Para a sincronização: o que existia e não está no backup vira exclusão na nuvem;
@@ -247,6 +257,10 @@ class BackupManager(private val db: AppDatabase, private val onChange: () -> Uni
             gone(SyncTables.WARRANTIES, sync.allWarrantyIds(), warrantyList.map { it.id }.toSet())
             gone(SyncTables.EXPENSES, sync.allExpenseIds(), expenseList.map { it.id }.toSet())
             gone(SyncTables.SALE_PAYMENTS, sync.allSalePaymentIds(), paymentList.map { it.id }.toSet())
+            gone(SyncTables.INVOICES, sync.allInvoiceIds(), invoiceList.map { it.id }.toSet())
+            gone(SyncTables.INVOICE_BILLS, sync.allInvoiceBillIds(), invoiceBillList.map { it.id }.toSet())
+            db.invoiceDao().deleteAllBills()
+            db.invoiceDao().deleteAll()
             db.saleDao().deleteAllPayments()
             db.chargeDao().deleteAll()
             db.warrantyDao().deleteAll()
@@ -267,6 +281,8 @@ class BackupManager(private val db: AppDatabase, private val onChange: () -> Uni
             db.chargeDao().insertAll(chargeList)
             db.warrantyDao().insertAll(warrantyList)
             db.expenseDao().insertAll(expenseList)
+            db.invoiceDao().insertAll(invoiceList)
+            db.invoiceDao().insertAllBills(invoiceBillList)
             db.saleDao().insertPayments(paymentList.filter { p -> sales.any { it.id == p.saleId } })
             sync.insertTombstones(removed)
             // O estoque é a soma das movimentações: se o backup tiver diferença, registra um ajuste de conciliação.

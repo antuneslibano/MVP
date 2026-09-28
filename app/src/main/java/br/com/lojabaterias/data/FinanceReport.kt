@@ -51,6 +51,8 @@ data class FinanceSummary(
     val scrapSold: Long = 0,
     val scrapPurchased: Long = 0,
     val vouchersPaid: Long = 0,
+    /** Boletos de notas fiscais pagos no período (não entram no lucro: o custo já sai nas vendas). */
+    val supplierPaid: Long = 0,
     val byPayment: List<PaymentStats> = emptyList(),
     val expensesByCategory: List<Pair<String, Long>> = emptyList(),
     val topModels: List<ModelStats> = emptyList(),
@@ -85,6 +87,8 @@ data class FinanceReport(
     val stockAtPix: Long = 0,
     val scrapStockValue: Long = 0,
     val toReceive: Long = 0,
+    /** Boletos de fornecedor ainda não pagos. */
+    val supplierDebt: SupplierDebt = SupplierDebt(),
 ) {
     companion object {
         private val MONTHS = listOf(
@@ -124,6 +128,7 @@ data class FinanceReport(
             scrapStock: List<ScrapStock>,
             scrapPrices: Map<Int, Long>,
             zone: ZoneId = ZoneId.systemDefault(),
+            invoiceBills: List<InvoiceBill> = emptyList(),
         ): FinanceReport {
             val sales = allSales.filter { !it.sale.isCanceled }
             val payments = expenses.filter { it.kind == ExpenseKind.PAYMENT }
@@ -133,7 +138,7 @@ data class FinanceReport(
                 FinancePeriod.YEAR -> startOf(p, today, off).let { DateRange(millis(it), millis(it.plusYears(1))) }
                 FinancePeriod.ALL -> DateRange(Long.MIN_VALUE, Long.MAX_VALUE)
             }
-            fun summary(range: DateRange) = summarize(range, sales, payments, scrapMovements, charges)
+            fun summary(range: DateRange) = summarize(range, sales, payments, scrapMovements, charges, invoiceBills)
 
             val range = rangeOf(period, offset)
             val start = startOf(period, today, offset)
@@ -189,6 +194,7 @@ data class FinanceReport(
                 stockAtPix = products.sumOf { (it.pricePix * it.stock).coerceAtLeast(0) },
                 scrapStockValue = scrapStock.sumOf { (scrapPrices[it.amperage] ?: 0L) * it.quantity.coerceAtLeast(0) },
                 toReceive = charges.filter { !it.paid }.sumOf { it.price },
+                supplierDebt = SupplierDebt.from(invoiceBills, today, zone),
             )
         }
 
@@ -198,6 +204,7 @@ data class FinanceReport(
             expensePayments: List<Expense>,
             scrapMovements: List<ScrapMovement>,
             charges: List<ChargeService>,
+            invoiceBills: List<InvoiceBill> = emptyList(),
         ): FinanceSummary {
             val sales = activeSales.filter { it.sale.dateTime in range }
             val report = ReportCalculator.build(sales.map { StoreRepository.toReportSale(it) })
@@ -217,6 +224,7 @@ data class FinanceReport(
                 scrapSold = scrap.soldAmount,
                 scrapPurchased = scrap.purchasedAmount,
                 vouchersPaid = scrap.voucherPaidAmount,
+                supplierPaid = invoiceBills.filter { it.paidAt != null && it.paidAt in range }.sumOf { it.amount },
                 byPayment = report.byPayment,
                 expensesByCategory = exp.groupBy { it.category }
                     .map { (c, l) -> c to l.sumOf { it.amount } }

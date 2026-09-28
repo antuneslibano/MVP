@@ -42,9 +42,10 @@ class FinanceViewModel(container: AppContainer) : ViewModel() {
         repo.observeProducts(),
         repo.observeScrapStock(),
         repo.observeScrapPrices().map { list -> list.associate { it.amperage to it.value } },
-    ) { products, scrapStock, prices -> Triple(products, scrapStock, prices) }
+        repo.observeInvoiceBills(),
+    ) { products, scrapStock, prices, bills -> Stock(products, scrapStock, prices, bills) }
 
-    val state: StateFlow<FinanceState> = combine(selection, currentDateFlow(), money, stock) { sel, today, m, (products, scrapStock, prices) ->
+    val state: StateFlow<FinanceState> = combine(selection, currentDateFlow(), money, stock) { sel, today, m, (products, scrapStock, prices, bills) ->
         FinanceState(
             selection = sel,
             report = FinanceReport.build(
@@ -59,6 +60,7 @@ class FinanceViewModel(container: AppContainer) : ViewModel() {
                 products = products,
                 scrapStock = scrapStock,
                 scrapPrices = prices,
+                invoiceBills = bills,
             ),
             loading = false,
         )
@@ -69,6 +71,13 @@ class FinanceViewModel(container: AppContainer) : ViewModel() {
     fun setPeriod(period: FinancePeriod) = selection.update { FinanceSelection(period, 0) }
     fun previous() = selection.update { it.copy(offset = it.offset - 1) }
     fun next() = selection.update { if (it.offset < 0) it.copy(offset = it.offset + 1) else it }
+
+    private data class Stock(
+        val products: List<br.com.lojabaterias.data.Product>,
+        val scrapStock: List<br.com.lojabaterias.data.ScrapStock>,
+        val prices: Map<Int, Long>,
+        val bills: List<br.com.lojabaterias.data.InvoiceBill>,
+    )
 
     private data class Money(
         val sales: List<br.com.lojabaterias.data.SaleWithItems>,

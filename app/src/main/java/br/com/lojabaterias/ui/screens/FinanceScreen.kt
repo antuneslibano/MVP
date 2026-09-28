@@ -191,6 +191,10 @@ fun FinanceScreen() {
                     InfoRow("Baterias no estoque (se vender no PIX)", Money.format(f.stockAtPix))
                     InfoRow("Sucatas no estoque (tabela)", Money.format(f.scrapStockValue))
                     InfoRow("A receber da carga (não pago)", Money.format(f.toReceive))
+                    InfoRow("Devemos aos fornecedores (boletos)", Money.format(f.supplierDebt.open))
+                    if (f.supplierDebt.overdue > 0) {
+                        InfoRow("Boletos vencidos", Money.format(f.supplierDebt.overdue), valueColor = dangerColor())
+                    }
                 }
             }
 
@@ -379,6 +383,9 @@ private fun StatementCard(c: FinanceSummary) {
         Text(
             buildString {
                 append("Descontos dados nas vendas: ${Money.format(c.discounts)} (já estão fora do que entrou).")
+                if (c.supplierPaid > 0) {
+                    append(" Boletos de fornecedor pagos: ${Money.format(c.supplierPaid)} (não entram na conta: o custo das baterias já sai do lucro quando elas são vendidas).")
+                }
                 if (c.vouchersPaid > 0) {
                     append(" Vales de casco devolvidos: ${Money.format(c.vouchersPaid)} (não entram na conta: o valor já foi contado como custo na venda).")
                 }

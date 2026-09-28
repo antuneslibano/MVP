@@ -2,6 +2,9 @@ package br.com.lojabaterias.data.sync
 
 import br.com.lojabaterias.data.ChargeService
 import br.com.lojabaterias.data.Expense
+import br.com.lojabaterias.data.Invoice
+import br.com.lojabaterias.data.InvoiceBill
+import br.com.lojabaterias.data.InvoiceStatus
 import br.com.lojabaterias.data.Product
 import br.com.lojabaterias.data.Sale
 import br.com.lojabaterias.data.SalePayment
@@ -254,6 +257,43 @@ object RemoteMapper {
         saleId = o.getLong("sale_id"),
         method = o.getString("method"),
         amount = o.optLong("amount", 0),
+        updatedAt = o.optLong("updated_at", 0),
+        dirty = false,
+    )
+
+    fun toJson(i: Invoice) = JSONObject().apply {
+        put("id", i.id); put("number", i.number); put("supplier", i.supplier); put("issue_date", i.issueDate)
+        put("items", i.itemsJson); put("total", i.total); put("status", i.status)
+        put("received_at", i.receivedAt.orNull()); put("received_note", i.receivedNote.orNull()); put("note", i.note.orNull())
+        put("updated_at", i.updatedAt)
+    }
+
+    fun invoice(o: JSONObject) = Invoice(
+        id = o.getLong("id"),
+        number = o.optString("number", ""),
+        supplier = o.optString("supplier", ""),
+        issueDate = o.getLong("issue_date"),
+        itemsJson = o.optString("items", "[]"),
+        total = o.optLong("total", 0),
+        status = o.optString("status", InvoiceStatus.WAITING),
+        receivedAt = o.longOrNull("received_at"),
+        receivedNote = o.stringOrNull("received_note"),
+        note = o.stringOrNull("note"),
+        updatedAt = o.optLong("updated_at", 0),
+        dirty = false,
+    )
+
+    fun toJson(b: InvoiceBill) = JSONObject().apply {
+        put("id", b.id); put("invoice_id", b.invoiceId); put("due_date", b.dueDate); put("amount", b.amount)
+        put("paid_at", b.paidAt.orNull()); put("updated_at", b.updatedAt)
+    }
+
+    fun invoiceBill(o: JSONObject) = InvoiceBill(
+        id = o.getLong("id"),
+        invoiceId = o.getLong("invoice_id"),
+        dueDate = o.getLong("due_date"),
+        amount = o.optLong("amount", 0),
+        paidAt = o.longOrNull("paid_at"),
         updatedAt = o.optLong("updated_at", 0),
         dirty = false,
     )

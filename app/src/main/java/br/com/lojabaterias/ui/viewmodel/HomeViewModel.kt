@@ -5,6 +5,7 @@ import androidx.lifecycle.viewModelScope
 import br.com.lojabaterias.data.PeriodSummary
 import br.com.lojabaterias.data.SaleWithItems
 import br.com.lojabaterias.data.StoreRepository
+import br.com.lojabaterias.data.SupplierDebt
 import br.com.lojabaterias.domain.PeriodType
 import br.com.lojabaterias.domain.Periods
 import kotlinx.coroutines.ExperimentalCoroutinesApi
@@ -27,6 +28,8 @@ data class HomeState(
     val date: LocalDate = LocalDate.now(),
     /** Baterias de clientes na carga (não entregues). */
     val chargesOpen: Int = 0,
+    /** Boletos de fornecedor vencidos ou vencendo. */
+    val debt: SupplierDebt = SupplierDebt(),
 )
 
 /** Emite a data atual e muda automaticamente na virada do dia. */
@@ -48,5 +51,6 @@ class HomeViewModel(repo: StoreRepository) : ViewModel() {
             repo.observeRecentSales(10),
         ) { d, w, m, recent -> HomeState(d, w, m, recent, date) }
     }.combine(repo.observeCharges()) { home, charges -> home.copy(chargesOpen = charges.count { it.isOpen }) }
+        .combine(repo.observeInvoiceBills()) { home, bills -> home.copy(debt = SupplierDebt.from(bills, home.date)) }
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), HomeState())
 }

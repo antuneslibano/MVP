@@ -116,6 +116,18 @@ class SyncEngine(
                 count += list.size
             }
         }
+        runCatching {
+            dao.dirtyInvoices().let { list ->
+                send(token, SyncTables.INVOICES, list.map { RemoteMapper.toJson(it) })
+                list.forEach { dao.cleanInvoice(it.id, it.updatedAt) }
+                count += list.size
+            }
+            dao.dirtyInvoiceBills().let { list ->
+                send(token, SyncTables.INVOICE_BILLS, list.map { RemoteMapper.toJson(it) })
+                list.forEach { dao.cleanInvoiceBill(it.id, it.updatedAt) }
+                count += list.size
+            }
+        }
         val tombstones = dao.tombstones()
         if (tombstones.isNotEmpty()) {
             send(
@@ -234,6 +246,22 @@ class SyncEngine(
                     count++
                 }
             }
+            data.rows(SyncTables.INVOICES).forEach { o ->
+                val r = RemoteMapper.invoice(o)
+                val local = dao.invoice(r.id)
+                if (local == null || !local.dirty || local.updatedAt <= r.updatedAt) {
+                    dao.upsertInvoice(r)
+                    count++
+                }
+            }
+            data.rows(SyncTables.INVOICE_BILLS).forEach { o ->
+                val r = RemoteMapper.invoiceBill(o)
+                val local = dao.invoiceBill(r.id)
+                if (local == null || !local.dirty || local.updatedAt <= r.updatedAt) {
+                    dao.upsertInvoiceBill(r)
+                    count++
+                }
+            }
             data.rows(DELETIONS).forEach { o ->
                 val id = o.getLong("record_id")
                 when (o.getString("table_name")) {
@@ -247,6 +275,8 @@ class SyncEngine(
                     SyncTables.WARRANTIES -> dao.deleteWarranty(id)
                     SyncTables.EXPENSES -> dao.deleteExpense(id)
                     SyncTables.SALE_PAYMENTS -> dao.deleteSalePayment(id)
+                    SyncTables.INVOICES -> dao.deleteInvoice(id)
+                    SyncTables.INVOICE_BILLS -> dao.deleteInvoiceBill(id)
                 }
                 count++
             }
@@ -268,6 +298,7 @@ class SyncEngine(
             SyncTables.PRODUCTS, SyncTables.SALES, SyncTables.SALE_ITEMS,
             SyncTables.STOCK_MOVEMENTS, SyncTables.SCRAP_PRICES, SyncTables.SCRAP_MOVEMENTS,
             SyncTables.CHARGES, SyncTables.WARRANTIES, SyncTables.EXPENSES, SyncTables.SALE_PAYMENTS,
+            SyncTables.INVOICES, SyncTables.INVOICE_BILLS,
         )
     }
 }

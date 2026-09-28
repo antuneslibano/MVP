@@ -320,6 +320,24 @@ interface SyncDao {
     @Query("SELECT id FROM sale_payments WHERE sale_id = :saleId") suspend fun salePaymentIds(saleId: Long): List<Long>
     @Query("DELETE FROM sale_payments") suspend fun wipeSalePayments()
 
+    @Query("SELECT * FROM invoices WHERE dirty = 1") suspend fun dirtyInvoices(): List<Invoice>
+    @Query("UPDATE invoices SET dirty = 0 WHERE id = :id AND updated_at = :updatedAt")
+    suspend fun cleanInvoice(id: Long, updatedAt: Long)
+    @Query("SELECT * FROM invoices WHERE id = :id") suspend fun invoice(id: Long): Invoice?
+    @Upsert suspend fun upsertInvoice(i: Invoice)
+    @Query("DELETE FROM invoices WHERE id = :id") suspend fun deleteInvoice(id: Long)
+    @Query("SELECT id FROM invoices") suspend fun allInvoiceIds(): List<Long>
+    @Query("DELETE FROM invoices") suspend fun wipeInvoices()
+
+    @Query("SELECT * FROM invoice_bills WHERE dirty = 1") suspend fun dirtyInvoiceBills(): List<InvoiceBill>
+    @Query("UPDATE invoice_bills SET dirty = 0 WHERE id = :id AND updated_at = :updatedAt")
+    suspend fun cleanInvoiceBill(id: Long, updatedAt: Long)
+    @Query("SELECT * FROM invoice_bills WHERE id = :id") suspend fun invoiceBill(id: Long): InvoiceBill?
+    @Upsert suspend fun upsertInvoiceBill(b: InvoiceBill)
+    @Query("DELETE FROM invoice_bills WHERE id = :id") suspend fun deleteInvoiceBill(id: Long)
+    @Query("SELECT id FROM invoice_bills") suspend fun allInvoiceBillIds(): List<Long>
+    @Query("DELETE FROM invoice_bills") suspend fun wipeInvoiceBills()
+
     // ----- Marcar como enviado (só se não mudou durante o envio)
     @Query("UPDATE products SET dirty = 0 WHERE id = :id AND updated_at = :updatedAt")
     suspend fun cleanProduct(id: Long, updatedAt: Long)
@@ -463,4 +481,33 @@ interface ExpenseDao {
     @Update suspend fun update(e: Expense)
     @Query("DELETE FROM expenses WHERE id = :id") suspend fun delete(id: Long)
     @Query("DELETE FROM expenses") suspend fun deleteAll()
+}
+
+@Dao
+interface InvoiceDao {
+    @Transaction
+    @Query("SELECT * FROM invoices ORDER BY issue_date DESC, id DESC")
+    fun observeAll(): Flow<List<InvoiceWithBills>>
+
+    @Transaction
+    @Query("SELECT * FROM invoices WHERE id = :id")
+    fun observeById(id: Long): Flow<InvoiceWithBills?>
+
+    @Query("SELECT * FROM invoice_bills")
+    fun observeBills(): Flow<List<InvoiceBill>>
+
+    @Query("SELECT * FROM invoices WHERE id = :id") suspend fun getById(id: Long): Invoice?
+    @Query("SELECT * FROM invoice_bills WHERE id = :id") suspend fun getBill(id: Long): InvoiceBill?
+    @Query("SELECT * FROM invoice_bills WHERE invoice_id = :invoiceId") suspend fun billsFor(invoiceId: Long): List<InvoiceBill>
+    @Query("SELECT * FROM invoices ORDER BY id") suspend fun getAll(): List<Invoice>
+    @Query("SELECT * FROM invoice_bills ORDER BY id") suspend fun getAllBills(): List<InvoiceBill>
+
+    @Upsert suspend fun upsert(i: Invoice)
+    @Upsert suspend fun upsertBill(b: InvoiceBill)
+    @Insert suspend fun insertAll(list: List<Invoice>)
+    @Insert suspend fun insertAllBills(list: List<InvoiceBill>)
+    @Query("DELETE FROM invoices WHERE id = :id") suspend fun delete(id: Long)
+    @Query("DELETE FROM invoice_bills WHERE id = :id") suspend fun deleteBill(id: Long)
+    @Query("DELETE FROM invoices") suspend fun deleteAll()
+    @Query("DELETE FROM invoice_bills") suspend fun deleteAllBills()
 }

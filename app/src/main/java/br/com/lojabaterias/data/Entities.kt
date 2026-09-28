@@ -423,9 +423,10 @@ object ExpenseKind {
 
 /** Categorias das despesas, na ordem em que aparecem. */
 object ExpenseCategory {
+    /** Boletos de fornecedor agora ficam em "Notas fiscais" (o custo das baterias já sai do lucro nas vendas). */
     val ALL = listOf(
         "Aluguel", "Água", "Luz", "Internet/Telefone", "Funcionários", "Impostos/Taxas",
-        "Fornecedores/Boletos", "Manutenção", "Transporte/Combustível", "Material/Limpeza", "Outros",
+        "Manutenção", "Transporte/Combustível", "Material/Limpeza", "Outros",
     )
 }
 
@@ -455,4 +456,75 @@ data class Expense(
     @ColumnInfo(name = "dirty", defaultValue = "1") val dirty: Boolean = true,
 ) {
     val isBill: Boolean get() = kind == ExpenseKind.BILL
+}
+
+object InvoiceStatus {
+    /** Nota lançada, baterias ainda não chegaram. */
+    const val WAITING = "WAITING"
+    /** Baterias chegaram (o estoque continua manual: não muda sozinho). */
+    const val RECEIVED = "RECEIVED"
+}
+
+/** Bateria de uma nota fiscal (ex.: 10× BE50D a R$ 300,00). */
+data class InvoiceItem(
+    val model: String,
+    val quantity: Int,
+    val unitCost: Long,
+    val productId: Long? = null,
+) {
+    val subtotal: Long get() = unitCost * quantity
+}
+
+/**
+ * Nota fiscal de compra (fornecedor/fábrica). As baterias ficam em [itemsJson] (lista de [InvoiceItem]);
+ * os boletos, na tabela [InvoiceBill]. Não mexe no estoque.
+ */
+@Entity(tableName = "invoices", indices = [Index("issue_date")])
+data class Invoice(
+    @PrimaryKey(autoGenerate = true) val id: Long = IdGenerator.next(),
+    val number: String,
+    val supplier: String,
+    @ColumnInfo(name = "issue_date") val issueDate: Long,
+    @ColumnInfo(name = "items") val itemsJson: String,
+    /** Valor total da nota, em centavos. */
+    val total: Long,
+    val status: String = InvoiceStatus.WAITING,
+    @ColumnInfo(name = "received_at") val receivedAt: Long? = null,
+    /** Observação da chegada (ex.: "faltou 1 BE50D"). */
+    @ColumnInfo(name = "received_note") val receivedNote: String? = null,
+    val note: String? = null,
+    /** Controle de sincronização: momento da última alteração local. */
+    @ColumnInfo(name = "updated_at", defaultValue = "0") val updatedAt: Long = System.currentTimeMillis(),
+    /** Controle de sincronização: alteração ainda não enviada para a nuvem. */
+    @ColumnInfo(name = "dirty", defaultValue = "1") val dirty: Boolean = true,
+) {
+    val isReceived: Boolean get() = status == InvoiceStatus.RECEIVED
+}
+
+/** Boleto (parcela) de uma nota fiscal. */
+@Entity(tableName = "invoice_bills", indices = [Index("invoice_id"), Index("due_date")])
+data class InvoiceBill(
+    @PrimaryKey(autoGenerate = true) val id: Long = IdGenerator.next(),
+    @ColumnInfo(name = "invoice_id") val invoiceId: Long,
+    @ColumnInfo(name = "due_date") val dueDate: Long,
+    val amount: Long,
+    /** Quando foi pago (null = a pagar). */
+    @ColumnInfo(name = "paid_at") val paidAt: Long? = null,
+    /** Controle de sincronização: momento da última alteração local. */
+    @ColumnInfo(name = "updated_at", defaultValue = "0") val updatedAt: Long = System.currentTimeMillis(),
+    /** Controle de sincronização: alteração ainda não enviada para a nuvem. */
+    @ColumnInfo(name = "dirty", defaultValue = "1") val dirty: Boolean = true,
+) {
+    val isPaid: Boolean get() = paidAt != null
+}
+
+data class InvoiceWithBills(
+    @Embedded val invoice: Invoice,
+    @Relation(parentColumn = "id", entityColumn = "invoice_id")
+    val bills: List<InvoiceBill>,
+) {
+    val sortedBills: List<InvoiceBill> get() = bills.sortedBy { it.dueDate }
+    val paidCount: Int get() = bills.count { it.isPaid }
+    val openAmount: Long get() = bills.filter { !it.isPaid }.sumOf { it.amount }
+    val isFullyPaid: Boolean get() = bills.isNotEmpty() && bills.all { it.isPaid }
 }

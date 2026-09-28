@@ -4,6 +4,7 @@ import androidx.room.withTransaction
 import br.com.lojabaterias.data.sync.IdGenerator
 import br.com.lojabaterias.domain.CardFees
 import br.com.lojabaterias.domain.DateRange
+import br.com.lojabaterias.domain.Money
 import br.com.lojabaterias.domain.PaymentMethod
 import br.com.lojabaterias.domain.ReportItem
 import br.com.lojabaterias.domain.ReportSale
@@ -36,6 +37,9 @@ data class ScrapInput(
     }
 }
 
+/** Boleto no formulário da nota (id nulo = boleto novo). */
+data class BillDraft(val id: Long? = null, val dueDate: Long, val amount: Long, val paidAt: Long? = null)
+
 /** Nomes das tabelas sincronizadas (iguais no aparelho e na nuvem). */
 object SyncTables {
     const val PRODUCTS = "products"
@@ -48,6 +52,8 @@ object SyncTables {
     const val WARRANTIES = "warranty_claims"
     const val EXPENSES = "expenses"
     const val SALE_PAYMENTS = "sale_payments"
+    const val INVOICES = "invoices"
+    const val INVOICE_BILLS = "invoice_bills"
 }
 
 /**
@@ -70,6 +76,7 @@ class StoreRepository(
     private val charges = db.chargeDao()
     private val warranties = db.warrantyDao()
     private val expenses = db.expenseDao()
+    private val invoices = db.invoiceDao()
 
     /** Executa uma alteração em transação e avisa a sincronização. */
     private suspend fun <T> write(block: suspend () -> T): T {
@@ -855,6 +862,115 @@ class StoreRepository(
     suspend fun deleteExpense(id: Long): Unit = write {
         tomb(SyncTables.EXPENSES, listOf(id))
         expenses.delete(id)
+    }
+
+    // ----------------------------------------------------------- Notas fiscais
+
+    fun observeInvoices(): Flow<List<InvoiceWithBills>> = invoices.observeAll()
+    fun observeInvoice(id: Long): Flow<InvoiceWithBills?> = invoices.observeById(id)
+    fun observeInvoiceBills(): Flow<List<InvoiceBill>> = invoices.observeBills()
+
+    /**
+     * Cria ou altera uma nota fiscal com seus boletos. Não mexe no estoque (a contagem continua manual).
+     * Com [updateCosts], o custo das baterias no cadastro passa a ser o valor desta nota.
+     */
+    suspend fun saveInvoice(
+        id: Long?,
+        number: String,
+        supplier: String,
+        issueDate: Long,
+        items: List<InvoiceItem>,
+        total: Long,
+        bills: List<BillDraft>,
+        received: Boolean,
+        note: String?,
+        updateCosts: Boolean = false,
+    ): Long = write {
+        val num = number.trim()
+        if (num.isEmpty()) throw BusinessException("Informe o número da nota")
+        val list = items.filter { it.quantity > 0 }
+        if (list.isEmpty()) throw BusinessException("Adicione as baterias da nota")
+        if (list.any { it.unitCost < 0 }) throw BusinessException("Valor de bateria inválido")
+        if (total <= 0) throw BusinessException("Informe o valor da nota")
+        if (bills.isEmpty()) throw BusinessException("Adicione pelo menos um boleto")
+        if (bills.any { it.amount <= 0 }) throw BusinessException("Todo boleto precisa ter valor")
+        val billsTotal = bills.sumOf { it.amount }
+        if (billsTotal != total) {
+            throw BusinessException(
+                "A soma dos boletos (${Money.format(billsTotal)}) está diferente do total da nota (${Money.format(total)})"
+            )
+        }
+        val name = supplier.trim()
+        if (invoices.getAll().any { it.id != id && it.number.equals(num, true) && it.supplier.equals(name, true) }) {
+            throw BusinessException("A nota nº $num${if (name.isNotEmpty()) " de $name" else ""} já foi lançada")
+        }
+        val current = id?.let { invoices.getById(it) }
+        val invoice = Invoice(
+            id = current?.id ?: IdGenerator.next(),
+            number = num,
+            supplier = name,
+            issueDate = issueDate,
+            itemsJson = InvoiceItems.encode(list),
+            total = total,
+            status = if (received) InvoiceStatus.RECEIVED else InvoiceStatus.WAITING,
+            receivedAt = if (received) current?.receivedAt ?: now() else null,
+            receivedNote = if (received) current?.receivedNote else null,
+            note = note?.trim()?.ifEmpty { null },
+            updatedAt = now(),
+            dirty = true,
+        )
+        invoices.upsert(invoice)
+        val keep = bills.mapNotNull { it.id }.toSet()
+        val removed = invoices.billsFor(invoice.id).map { it.id }.filter { it !in keep }
+        tomb(SyncTables.INVOICE_BILLS, removed)
+        removed.forEach { invoices.deleteBill(it) }
+        bills.forEach { b ->
+            invoices.upsertBill(
+                InvoiceBill(
+                    id = b.id ?: IdGenerator.next(), invoiceId = invoice.id, dueDate = b.dueDate, amount = b.amount,
+                    paidAt = b.paidAt, updatedAt = now(), dirty = true,
+                )
+            )
+        }
+        if (updateCosts) {
+            list.forEach { item ->
+                val p = item.productId?.let { products.getById(it) } ?: return@forEach
+                if (p.cost != item.unitCost) products.update(p.copy(cost = item.unitCost, updatedAt = now(), dirty = true))
+            }
+        }
+        invoice.id
+    }
+
+    /** As baterias da nota chegaram (o estoque continua manual). */
+    suspend fun markInvoiceReceived(id: Long, note: String?, at: Long = now()): Unit = write {
+        val i = invoices.getById(id) ?: throw BusinessException("Nota não encontrada")
+        invoices.upsert(
+            i.copy(
+                status = InvoiceStatus.RECEIVED, receivedAt = at, receivedNote = note?.trim()?.ifEmpty { null },
+                updatedAt = now(), dirty = true,
+            )
+        )
+    }
+
+    /** Volta a nota para "aguardando baterias". */
+    suspend fun markInvoiceWaiting(id: Long): Unit = write {
+        val i = invoices.getById(id) ?: throw BusinessException("Nota não encontrada")
+        invoices.upsert(i.copy(status = InvoiceStatus.WAITING, receivedAt = null, receivedNote = null, updatedAt = now(), dirty = true))
+    }
+
+    /** Marca o boleto como pago (ou desfaz, com [paid] = false). */
+    suspend fun setInvoiceBillPaid(billId: Long, paid: Boolean, at: Long = now()): Unit = write {
+        val b = invoices.getBill(billId) ?: throw BusinessException("Boleto não encontrado")
+        invoices.upsertBill(b.copy(paidAt = if (paid) at else null, updatedAt = now(), dirty = true))
+    }
+
+    /** Exclui a nota e os boletos dela. */
+    suspend fun deleteInvoice(id: Long): Unit = write {
+        val bills = invoices.billsFor(id).map { it.id }
+        tomb(SyncTables.INVOICE_BILLS, bills)
+        bills.forEach { invoices.deleteBill(it) }
+        tomb(SyncTables.INVOICES, listOf(id))
+        invoices.delete(id)
     }
 
     // ----------------------------------------------------------------- Sucatas

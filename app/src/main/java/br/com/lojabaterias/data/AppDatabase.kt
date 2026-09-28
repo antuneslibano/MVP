@@ -20,8 +20,10 @@ import androidx.sqlite.db.SupportSQLiteDatabase
         WarrantyClaim::class,
         Expense::class,
         SalePayment::class,
+        Invoice::class,
+        InvoiceBill::class,
     ],
-    version = 10,
+    version = 11,
     exportSchema = true,
 )
 abstract class AppDatabase : RoomDatabase() {
@@ -33,6 +35,7 @@ abstract class AppDatabase : RoomDatabase() {
     abstract fun chargeDao(): ChargeDao
     abstract fun warrantyDao(): WarrantyDao
     abstract fun expenseDao(): ExpenseDao
+    abstract fun invoiceDao(): InvoiceDao
 
     companion object {
         const val NAME = "loja_baterias.db"
@@ -281,9 +284,29 @@ abstract class AppDatabase : RoomDatabase() {
             }
         }
 
+        /** v10 → v11: notas fiscais de compra e seus boletos (não mexem no estoque). */
+        val MIGRATION_10_11 = object : Migration(10, 11) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL(
+                    "CREATE TABLE IF NOT EXISTS `invoices` (`id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, " +
+                        "`number` TEXT NOT NULL, `supplier` TEXT NOT NULL, `issue_date` INTEGER NOT NULL, `items` TEXT NOT NULL, " +
+                        "`total` INTEGER NOT NULL, `status` TEXT NOT NULL, `received_at` INTEGER, `received_note` TEXT, `note` TEXT, " +
+                        "`updated_at` INTEGER NOT NULL DEFAULT 0, `dirty` INTEGER NOT NULL DEFAULT 1)"
+                )
+                db.execSQL("CREATE INDEX IF NOT EXISTS `index_invoices_issue_date` ON `invoices` (`issue_date`)")
+                db.execSQL(
+                    "CREATE TABLE IF NOT EXISTS `invoice_bills` (`id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, " +
+                        "`invoice_id` INTEGER NOT NULL, `due_date` INTEGER NOT NULL, `amount` INTEGER NOT NULL, `paid_at` INTEGER, " +
+                        "`updated_at` INTEGER NOT NULL DEFAULT 0, `dirty` INTEGER NOT NULL DEFAULT 1)"
+                )
+                db.execSQL("CREATE INDEX IF NOT EXISTS `index_invoice_bills_invoice_id` ON `invoice_bills` (`invoice_id`)")
+                db.execSQL("CREATE INDEX IF NOT EXISTS `index_invoice_bills_due_date` ON `invoice_bills` (`due_date`)")
+            }
+        }
+
         val ALL_MIGRATIONS = arrayOf(
             MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5, MIGRATION_5_6, MIGRATION_6_7, MIGRATION_7_8,
-            MIGRATION_8_9, MIGRATION_9_10,
+            MIGRATION_8_9, MIGRATION_9_10, MIGRATION_10_11,
         )
 
         fun build(context: Context): AppDatabase =

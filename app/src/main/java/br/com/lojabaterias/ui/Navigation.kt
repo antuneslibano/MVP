@@ -11,6 +11,7 @@ import androidx.compose.material.icons.filled.Build
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.DateRange
 import androidx.compose.material.icons.filled.Edit
+import androidx.compose.material.icons.filled.Email
 import androidx.compose.material.icons.filled.Home
 import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.Menu
@@ -58,6 +59,9 @@ import br.com.lojabaterias.ui.screens.ChargeFormScreen
 import br.com.lojabaterias.ui.screens.ChargesScreen
 import br.com.lojabaterias.ui.screens.ExpensesScreen
 import br.com.lojabaterias.ui.screens.FinanceScreen
+import br.com.lojabaterias.ui.screens.InvoiceDetailScreen
+import br.com.lojabaterias.ui.screens.InvoiceFormScreen
+import br.com.lojabaterias.ui.screens.InvoicesScreen
 import br.com.lojabaterias.ui.screens.VouchersScreen
 import br.com.lojabaterias.ui.screens.WarrantiesScreen
 import br.com.lojabaterias.ui.screens.HomeScreen
@@ -95,6 +99,13 @@ object Routes {
     const val VOUCHERS = "vouchers"
     const val EXPENSES = "expenses"
     const val FINANCE = "finance"
+    const val INVOICES = "invoices"
+    const val INVOICE_NEW = "invoicenew"
+    const val INVOICE_EDIT = "invoiceedit/{id}"
+    const val INVOICE_DETAIL = "invoicedetail/{id}"
+
+    fun invoiceEdit(id: Long) = "invoiceedit/$id"
+    fun invoiceDetail(id: Long) = "invoicedetail/$id"
 
     fun chargeEdit(id: Long) = "chargeedit/$id"
     fun chargeDetail(id: Long) = "chargedetail/$id"
@@ -116,7 +127,7 @@ private val topLevel = listOf(
 )
 
 /** Telas principais que exibem a barra inferior mas ficam no menu (não têm botão próprio). */
-private val menuOnlyTopLevel = setOf(Routes.SCRAPS, Routes.CHARGES, Routes.WARRANTIES, Routes.VOUCHERS, Routes.EXPENSES, Routes.FINANCE)
+private val menuOnlyTopLevel = setOf(Routes.SCRAPS, Routes.CHARGES, Routes.WARRANTIES, Routes.VOUCHERS, Routes.EXPENSES, Routes.FINANCE, Routes.INVOICES)
 
 private data class MenuEntry(val label: String, val icon: ImageVector, val route: String, val topLevel: Boolean)
 
@@ -131,6 +142,7 @@ private val menuEntries = listOf(
     MenuEntry("Vales de casco", Icons.Filled.Star, Routes.VOUCHERS, true),
     MenuEntry("Financeiro", Icons.Filled.Info, Routes.FINANCE, true),
     MenuEntry("Despesas", Icons.Filled.DateRange, Routes.EXPENSES, true),
+    MenuEntry("Notas fiscais e boletos", Icons.Filled.Email, Routes.INVOICES, true),
     MenuEntry("Relatórios", AppIcons.BarChart, Routes.REPORTS, true),
     MenuEntry("Movimentações de estoque", Icons.AutoMirrored.Filled.List, Routes.MOVEMENTS, false),
     MenuEntry("Tabela de sucatas", Icons.Filled.Edit, Routes.SCRAP_PRICES, false),
@@ -203,6 +215,7 @@ fun LojaNavHost() {
                     onSeeAllSales = { nav.navigateTopLevel(Routes.SALES) },
                     onBackup = { nav.navigate(Routes.BACKUP) },
                     onCharges = { nav.navigateTopLevel(Routes.CHARGES) },
+                    onInvoices = { nav.navigateTopLevel(Routes.INVOICES) },
                 )
             }
             composable(Routes.SALES) {
@@ -285,6 +298,20 @@ fun LojaNavHost() {
             composable(Routes.VOUCHERS) { VouchersScreen() }
             composable(Routes.EXPENSES) { ExpensesScreen() }
             composable(Routes.FINANCE) { FinanceScreen() }
+            composable(Routes.INVOICES) {
+                InvoicesScreen(onNew = { nav.navigate(Routes.INVOICE_NEW) }, onOpen = { nav.navigate(Routes.invoiceDetail(it)) })
+            }
+            composable(Routes.INVOICE_NEW) {
+                InvoiceFormScreen(invoiceId = null, onDone = { nav.popBackStack() }, onBack = { nav.popBackStack() })
+            }
+            composable(Routes.INVOICE_EDIT, arguments = listOf(navArgument("id") { type = NavType.LongType })) { entry ->
+                val id = entry.arguments?.getLong("id") ?: 0L
+                InvoiceFormScreen(invoiceId = id, onDone = { nav.popBackStack() }, onBack = { nav.popBackStack() })
+            }
+            composable(Routes.INVOICE_DETAIL, arguments = listOf(navArgument("id") { type = NavType.LongType })) { entry ->
+                val id = entry.arguments?.getLong("id") ?: 0L
+                InvoiceDetailScreen(invoiceId = id, onEdit = { nav.navigate(Routes.invoiceEdit(id)) }, onBack = { nav.popBackStack() })
+            }
             composable(Routes.SCRAPS) {
                 ScrapsScreen(onPriceTable = { nav.navigate(Routes.SCRAP_PRICES) })
             }

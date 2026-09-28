@@ -67,6 +67,13 @@ pois todos os APKs são assinados com a mesma chave (`app/signing/loja-baterias.
   completa até o lucro líquido e o resultado geral (com carga e sucatas); formas de pagamento, despesas por
   categoria e modelos que mais dão lucro; quanto as **baterias extras** já renderam (valor de venda e lucro);
   o que a loja tem agora (estoque, sucatas, a receber) e um glossário dos termos.
+- **Notas fiscais e boletos** (Menu ☰): lança a nota do fornecedor (número, fornecedor, data, baterias com quantidade e
+  valor de cada, frete/impostos) e os boletos (divide em parcelas iguais a cada 7/14/15/21/28/30 dias, com valores editáveis;
+  a soma precisa bater com o total). A nota fica "Aguardando baterias" até tocar em "As baterias chegaram" (com observação,
+  ex.: faltou 1). **O estoque não muda** (contagem manual). Aba "Boletos": a pagar por vencimento (vencidos em vermelho,
+  próximos 7 dias em laranja) e "Paguei". O Início avisa boletos vencidos/vencendo. Opcional: atualizar o custo das baterias
+  com os valores da nota. Boletos pagos **não** saem do lucro (o custo das baterias já sai nas vendas); por isso a categoria
+  "Fornecedores/Boletos" saiu de Despesas (as despesas antigas dessa categoria continuam como estão).
 - **Pagamento dividido** (Nova venda > "Dividir o pagamento"): várias formas na mesma venda (ex.: R$ 100 no
   dinheiro + o resto no crédito). A loja decide quanto em cada forma; o app sugere quanto falta pelo preço à vista,
   pelo preço do cartão ou proporcional. A taxa da maquininha incide só na parte no cartão.

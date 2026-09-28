@@ -43,7 +43,9 @@ import br.com.lojabaterias.ui.components.EmptyState
 import br.com.lojabaterias.ui.components.SaleRow
 import br.com.lojabaterias.ui.components.SyncIndicator
 import br.com.lojabaterias.ui.components.UpdateBanner
+import br.com.lojabaterias.ui.theme.dangerColor
 import br.com.lojabaterias.ui.theme.moneyResultColor
+import br.com.lojabaterias.ui.theme.warningColor
 import br.com.lojabaterias.ui.viewmodel.HomeViewModel
 import br.com.lojabaterias.ui.viewmodel.appViewModel
 
@@ -55,6 +57,7 @@ fun HomeScreen(
     onSeeAllSales: () -> Unit,
     onBackup: () -> Unit,
     onCharges: () -> Unit = {},
+    onInvoices: () -> Unit = {},
 ) {
     val vm = appViewModel { HomeViewModel(it.repository) }
     val state by vm.state.collectAsStateWithLifecycle()
@@ -106,6 +109,32 @@ fun HomeScreen(
                 Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                     PeriodCard("Esta semana", state.week, Modifier.weight(1f))
                     PeriodCard("Este mês", state.month, Modifier.weight(1f))
+                }
+            }
+            val debt = state.debt
+            if (debt.overdueCount > 0 || debt.dueSoonCount > 0) {
+                item {
+                    AppCard(onClick = onInvoices) {
+                        Column(Modifier.padding(12.dp)) {
+                            Text("Boletos de fornecedor", style = MaterialTheme.typography.labelMedium)
+                            if (debt.overdueCount > 0) {
+                                Text(
+                                    "${debt.overdueCount} vencido${if (debt.overdueCount == 1) "" else "s"} • ${Money.format(debt.overdue)}",
+                                    style = MaterialTheme.typography.titleMedium,
+                                    fontWeight = FontWeight.Bold,
+                                    color = dangerColor(),
+                                )
+                            }
+                            if (debt.dueSoonCount > 0) {
+                                Text(
+                                    "${debt.dueSoonCount} vence${if (debt.dueSoonCount == 1) "" else "m"} nos próximos 7 dias • ${Money.format(debt.dueSoon)}",
+                                    style = MaterialTheme.typography.titleMedium,
+                                    fontWeight = FontWeight.Bold,
+                                    color = warningColor(),
+                                )
+                            }
+                        }
+                    }
                 }
             }
             if (state.chargesOpen > 0) {
