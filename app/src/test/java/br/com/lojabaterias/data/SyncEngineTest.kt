@@ -51,7 +51,7 @@ private class FakeCloud : RemoteApi {
     override suspend fun pull(token: String, since: String?): JSONObject {
         val s = since?.toLong() ?: -1L
         val result = JSONObject().put("now", clock.toString())
-        for (t in listOf("products", "sales", "sale_items", "stock_movements", "scrap_prices", "scrap_movements", "charge_services", "warranty_claims", "expenses", "sale_payments")) {
+        for (t in listOf("products", "sales", "sale_items", "stock_movements", "scrap_prices", "scrap_movements", "charge_services", "warranty_claims", "expenses", "sale_payments", "invoices", "invoice_bills")) {
             result.put(t, JSONArray(tables[t].orEmpty().values.filter { it.getLong("_v") > s }))
         }
         result.put("deletions", JSONArray(deletions.values.filter { it.getLong("_v") > s }))
@@ -61,6 +61,7 @@ private class FakeCloud : RemoteApi {
 
 private class MemCursor : CursorStore {
     override var cursor: String? = null
+    override var knownData: String? = null
 }
 
 @RunWith(RobolectricTestRunner::class)
@@ -74,7 +75,8 @@ class SyncEngineTest {
     private inner class Phone {
         val db = Room.inMemoryDatabaseBuilder(context, AppDatabase::class.java).build().also { dbs += it }
         val repo = StoreRepository(db)
-        val engine = SyncEngine(db, cloud, MemCursor())
+        val cursor = MemCursor()
+        val engine = SyncEngine(db, cloud, cursor)
         suspend fun sync() = engine.sync("t")
         suspend fun product(model: String) = repo.observeProducts().first().first { it.model == model }
         suspend fun salesCount() = repo.observeSales(br.com.lojabaterias.domain.DateRange(0, Long.MAX_VALUE)).first().size
@@ -220,5 +222,33 @@ class SyncEngineTest {
         a.sync()
         assertEquals(6, a.product("BEP60D").stock)
         assertEquals(ChargeStatus.DELIVERED, a.repo.getCharge(chargeId)!!.status)
+    }
+
+    @Test
+    fun updatedPhone_getsDataCreatedWhileItWasOutdated() = runBlocking {
+        val a = Phone()
+        val b = Phone()
+        a.newProduct()
+        a.sync()
+        b.sync()
+        // A lança uma nota; B sincroniza, mas finge ser uma versão antiga que não conhecia notas:
+        // o marcador de B avança sem guardar a nota.
+        a.repo.saveInvoice(
+            id = null, number = "1", supplier = "", issueDate = 1_000,
+            items = listOf(InvoiceItem("BEP60D", 1, 10_000)), total = 10_000,
+            bills = listOf(BillDraft(dueDate = 2_000, amount = 10_000)), note = null,
+        )
+        a.sync()
+        b.sync()
+        b.db.syncDao().wipeInvoices()
+        b.db.syncDao().wipeInvoiceBills()
+        b.cursor.knownData = "0:versao-antiga"
+        assertEquals(0, b.repo.observeInvoices().first().size)
+
+        // Depois de atualizar, a próxima sincronização baixa tudo de novo
+        b.sync()
+        assertEquals(1, b.repo.observeInvoices().first().size)
+        assertEquals(1, b.repo.observeInvoiceBills().first().size)
+        assertEquals(5, b.product("BEP60D").stock)
     }
 }

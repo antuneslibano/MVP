@@ -9,6 +9,13 @@ import org.json.JSONObject
 /** Guarda o "cursor" da última sincronização (momento do servidor). */
 interface CursorStore {
     var cursor: String?
+
+    /**
+     * Quais dados este celular já sabia receber na última sincronização completa.
+     * Se o app atualizar e passar a conhecer dados novos, baixa tudo de novo uma vez:
+     * o que foi criado na nuvem enquanto este celular estava desatualizado não se perde.
+     */
+    var knownData: String?
 }
 
 /**
@@ -36,7 +43,14 @@ class SyncEngine(
 
     suspend fun sync(token: String): SyncReport {
         val firstSync = cursorStore.cursor == null
-        return if (firstSync) {
+        if (!firstSync && cursorStore.knownData != KNOWN_DATA) {
+            // App atualizado: busca tudo de novo (inclusive o que chegou quando este celular não sabia ler).
+            val pushed = push(token)
+            val pulled = apply(remote.pull(token, null))
+            cursorStore.knownData = KNOWN_DATA
+            return SyncReport(pushed, pulled)
+        }
+        val report = if (firstSync) {
             val data = remote.pull(token, null)
             if (hasAnyData(data) && dao.legacyDirtyCount() > 0) {
                 throw SyncConflictException(
@@ -52,6 +66,8 @@ class SyncEngine(
             val pulled = apply(remote.pull(token, cursorStore.cursor))
             SyncReport(pushed, pulled)
         }
+        cursorStore.knownData = KNOWN_DATA
+        return report
     }
 
     private fun hasAnyData(data: JSONObject): Boolean =
@@ -300,5 +316,12 @@ class SyncEngine(
             SyncTables.CHARGES, SyncTables.WARRANTIES, SyncTables.EXPENSES, SyncTables.SALE_PAYMENTS,
             SyncTables.INVOICES, SyncTables.INVOICE_BILLS,
         )
+
+        /**
+         * Versão dos dados que este app sabe ler. Aumente [DATA_VERSION] quando um dado novo passar a
+         * ser guardado numa tabela que já existe (novas tabelas já mudam o texto sozinhas).
+         */
+        private const val DATA_VERSION = 1
+        val KNOWN_DATA: String = "$DATA_VERSION:" + TABLES.joinToString(",")
     }
 }

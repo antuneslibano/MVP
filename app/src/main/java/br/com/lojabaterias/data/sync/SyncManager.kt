@@ -53,6 +53,9 @@ class SyncManager(
         override var cursor: String?
             get() = prefs.getString(KEY_CURSOR, null)
             set(value) = prefs.edit().putString(KEY_CURSOR, value).apply()
+        override var knownData: String?
+            get() = prefs.getString(KEY_KNOWN_DATA, null)
+            set(value) = prefs.edit().putString(KEY_KNOWN_DATA, value).apply()
     }
 
     private val engine = remote?.let { SyncEngine(db, it, cursorStore) }
@@ -224,6 +227,7 @@ class SyncManager(
     companion object {
         private const val INTERVAL_MS = 30_000L
         private const val KEY_CURSOR = "cursor"
+        private const val KEY_KNOWN_DATA = "known_data"
         private const val KEY_ACCESS = "access_token"
         private const val KEY_REFRESH = "refresh_token"
         private const val KEY_EXPIRES = "expires_at"
