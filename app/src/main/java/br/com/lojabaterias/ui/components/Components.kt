@@ -42,6 +42,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.drawWithContent
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.Layout
 import androidx.compose.ui.platform.LocalContext
@@ -175,11 +176,26 @@ fun QuantityStepper(
             enabled = value > min,
             modifier = Modifier.size(52.dp),
         ) { Text("−", style = MaterialTheme.typography.headlineSmall) }
-        Text(
-            text = value.toString(),
-            style = MaterialTheme.typography.headlineSmall,
-            textAlign = TextAlign.Center,
-            modifier = Modifier.widthIn(min = 64.dp),
+        // O número também pode ser digitado (ex.: 70), sem precisar tocar várias vezes no + / −.
+        var text by remember(value) { mutableStateOf(value.toString()) }
+        OutlinedTextField(
+            value = text,
+            onValueChange = { new ->
+                val digits = new.filter { it.isDigit() }.take(5)
+                text = digits
+                digits.toIntOrNull()?.let { n ->
+                    val v = n.coerceIn(min, maxOf(min, max))
+                    if (v != value) onValueChange(v)
+                    if (v != n) text = v.toString()
+                }
+            },
+            singleLine = true,
+            textStyle = MaterialTheme.typography.headlineSmall.copy(textAlign = TextAlign.Center),
+            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number, imeAction = ImeAction.Done),
+            modifier = Modifier
+                .padding(horizontal = 6.dp)
+                .width(92.dp)
+                .onFocusChanged { if (!it.isFocused) text = value.toString() },
         )
         FilledTonalIconButton(
             onClick = { if (value < max) onValueChange(value + 1) },
