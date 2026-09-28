@@ -1,4 +1,14 @@
--- Notas fiscais e boletos (rode UMA vez no SQL Editor do Supabase; pode rodar de novo sem problema)
+-- Pagamento dividido + notas fiscais e boletos (rode no SQL Editor do Supabase; pode rodar de novo sem problema)
+create table if not exists public.sale_payments (
+  id bigint primary key,
+  sale_id bigint not null,
+  method text not null,
+  amount bigint not null default 0,
+  updated_at bigint not null default 0,
+  server_updated_at timestamptz not null default now()
+);
+create index if not exists sale_payments_sua on public.sale_payments (server_updated_at);
+
 create table if not exists public.invoices (
   id bigint primary key,
   number text not null default '',
@@ -40,7 +50,7 @@ end $$;
 do $$
 declare t text;
 begin
-  foreach t in array array['invoices','invoice_bills'] loop
+  foreach t in array array['sale_payments','invoices','invoice_bills'] loop
     execute format('drop trigger if exists touch_%1$s on public.%1$I', t);
     execute format('create trigger touch_%1$s before insert or update on public.%1$I for each row execute function public.touch_server_updated_at()', t);
     execute format('drop trigger if exists skip_deleted_%1$s on public.%1$I', t);
