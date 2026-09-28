@@ -42,6 +42,11 @@ jobs:
       - name: Permissão de execução do Gradle Wrapper
         run: chmod +x gradlew
 
+      - name: Testes unitários
+        run: ./gradlew --no-daemon testDebugUnitTest
+        env:
+          VERSION_CODE: ${{ github.run_number }}
+
       - name: Preparar chave de assinatura (secrets do repositório)
         env:
           KEYSTORE_BASE64: ${{ secrets.SIGNING_KEYSTORE_BASE64 }}
@@ -53,11 +58,6 @@ jobs:
           echo "$KEYSTORE_BASE64" | base64 -d > "$RUNNER_TEMP/release.jks"
           echo "SIGNING_KEYSTORE_PATH=$RUNNER_TEMP/release.jks" >> "$GITHUB_ENV"
           echo "Usando a chave de assinatura dos secrets do repositório."
-
-      - name: Testes unitários
-        run: ./gradlew --no-daemon testDebugUnitTest
-        env:
-          VERSION_CODE: ${{ github.run_number }}
 
       - name: Compilar APK de release
         run: ./gradlew --no-daemon assembleRelease

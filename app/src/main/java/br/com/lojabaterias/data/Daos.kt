@@ -47,6 +47,12 @@ interface ProductDao {
 
 @Dao
 interface SaleDao {
+    @Insert suspend fun insertPayments(list: List<SalePayment>)
+    @Query("SELECT * FROM sale_payments WHERE sale_id = :saleId") suspend fun paymentsFor(saleId: Long): List<SalePayment>
+    @Query("DELETE FROM sale_payments WHERE sale_id = :saleId") suspend fun deletePaymentsFor(saleId: Long)
+    @Query("SELECT * FROM sale_payments ORDER BY id") suspend fun getAllPayments(): List<SalePayment>
+    @Query("DELETE FROM sale_payments") suspend fun deleteAllPayments()
+
     @Insert
     suspend fun insertSale(sale: Sale): Long
 
@@ -263,7 +269,7 @@ interface SyncDao {
             "(SELECT COUNT(*) FROM sale_items WHERE dirty = 1) + (SELECT COUNT(*) FROM stock_movements WHERE dirty = 1) + " +
             "(SELECT COUNT(*) FROM scrap_prices WHERE dirty = 1) + (SELECT COUNT(*) FROM scrap_movements WHERE dirty = 1) + " +
             "(SELECT COUNT(*) FROM charge_services WHERE dirty = 1) + (SELECT COUNT(*) FROM warranty_claims WHERE dirty = 1) + " +
-            "(SELECT COUNT(*) FROM expenses WHERE dirty = 1) + " +
+            "(SELECT COUNT(*) FROM expenses WHERE dirty = 1) + (SELECT COUNT(*) FROM sale_payments WHERE dirty = 1) + " +
             "(SELECT COUNT(*) FROM tombstones)"
     )
     suspend fun pendingCount(): Int
@@ -303,6 +309,16 @@ interface SyncDao {
     @Query("DELETE FROM expenses WHERE id = :id") suspend fun deleteExpense(id: Long)
     @Query("SELECT id FROM expenses") suspend fun allExpenseIds(): List<Long>
     @Query("DELETE FROM expenses") suspend fun wipeExpenses()
+
+    @Query("SELECT * FROM sale_payments WHERE dirty = 1") suspend fun dirtySalePayments(): List<SalePayment>
+    @Query("UPDATE sale_payments SET dirty = 0 WHERE id = :id AND updated_at = :updatedAt")
+    suspend fun cleanSalePayment(id: Long, updatedAt: Long)
+    @Query("SELECT * FROM sale_payments WHERE id = :id") suspend fun salePayment(id: Long): SalePayment?
+    @Upsert suspend fun upsertSalePayment(p: SalePayment)
+    @Query("DELETE FROM sale_payments WHERE id = :id") suspend fun deleteSalePayment(id: Long)
+    @Query("SELECT id FROM sale_payments") suspend fun allSalePaymentIds(): List<Long>
+    @Query("SELECT id FROM sale_payments WHERE sale_id = :saleId") suspend fun salePaymentIds(saleId: Long): List<Long>
+    @Query("DELETE FROM sale_payments") suspend fun wipeSalePayments()
 
     // ----- Marcar como enviado (só se não mudou durante o envio)
     @Query("UPDATE products SET dirty = 0 WHERE id = :id AND updated_at = :updatedAt")

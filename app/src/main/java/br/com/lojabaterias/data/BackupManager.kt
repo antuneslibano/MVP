@@ -103,6 +103,9 @@ class BackupManager(private val db: AppDatabase, private val onChange: () -> Uni
         root.put("warrantyClaims", JSONArray().apply {
             db.warrantyDao().getAll().forEach { put(RemoteMapper.toJson(it)) }
         })
+        root.put("salePayments", JSONArray().apply {
+            db.saleDao().getAllPayments().forEach { put(RemoteMapper.toJson(it)) }
+        })
         root.put("expenses", JSONArray().apply {
             db.expenseDao().getAll().forEach { put(RemoteMapper.toJson(it)) }
         })
@@ -223,6 +226,8 @@ class BackupManager(private val db: AppDatabase, private val onChange: () -> Uni
             .map { RemoteMapper.warranty(it).copy(updatedAt = importNow, dirty = true) }
         val expenseList = root.optJSONArray("expenses")?.objects().orEmpty()
             .map { RemoteMapper.expense(it).copy(updatedAt = importNow, dirty = true) }
+        val paymentList = root.optJSONArray("salePayments")?.objects().orEmpty()
+            .map { RemoteMapper.salePayment(it).copy(updatedAt = importNow, dirty = true) }
 
         db.withTransaction {
             // Para a sincronização: o que existia e não está no backup vira exclusão na nuvem;
@@ -241,6 +246,8 @@ class BackupManager(private val db: AppDatabase, private val onChange: () -> Uni
             gone(SyncTables.CHARGES, sync.allChargeIds(), chargeList.map { it.id }.toSet())
             gone(SyncTables.WARRANTIES, sync.allWarrantyIds(), warrantyList.map { it.id }.toSet())
             gone(SyncTables.EXPENSES, sync.allExpenseIds(), expenseList.map { it.id }.toSet())
+            gone(SyncTables.SALE_PAYMENTS, sync.allSalePaymentIds(), paymentList.map { it.id }.toSet())
+            db.saleDao().deleteAllPayments()
             db.chargeDao().deleteAll()
             db.warrantyDao().deleteAll()
             db.expenseDao().deleteAll()
@@ -260,6 +267,7 @@ class BackupManager(private val db: AppDatabase, private val onChange: () -> Uni
             db.chargeDao().insertAll(chargeList)
             db.warrantyDao().insertAll(warrantyList)
             db.expenseDao().insertAll(expenseList)
+            db.saleDao().insertPayments(paymentList.filter { p -> sales.any { it.id == p.saleId } })
             sync.insertTombstones(removed)
             // O estoque é a soma das movimentações: se o backup tiver diferença, registra um ajuste de conciliação.
             val now = System.currentTimeMillis()

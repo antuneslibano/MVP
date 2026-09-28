@@ -118,10 +118,35 @@ data class SaleWithItems(
     @Embedded val sale: Sale,
     @Relation(parentColumn = "id", entityColumn = "sale_id")
     val items: List<SaleItem>,
+    /** Pagamento dividido (vazio = pagou tudo em [Sale.payment]). */
+    @Relation(parentColumn = "id", entityColumn = "sale_id")
+    val payments: List<SalePayment> = emptyList(),
 ) {
     val modelsLabel: String get() = items.joinToString(", ") { it.modelSnapshot }
     val quantity: Int get() = items.sumOf { it.quantity }
+    val isSplit: Boolean get() = payments.size > 1
+
+    /** Quanto entrou em cada forma de pagamento. */
+    val paymentParts: List<Pair<PaymentMethod, Long>>
+        get() = if (isSplit) payments.map { PaymentMethod.fromName(it.method) to it.amount }.sortedByDescending { it.second }
+        else listOf(sale.payment to sale.finalAmount)
+
+    /** "PIX" ou, dividido, "Dinheiro + Crédito". */
+    val paymentLabel: String get() = paymentParts.joinToString(" + ") { it.first.label }
 }
+
+/** Uma parte de um pagamento dividido (ex.: R$ 100 no dinheiro). */
+@Entity(tableName = "sale_payments", indices = [Index("sale_id")])
+data class SalePayment(
+    @PrimaryKey(autoGenerate = true) val id: Long = IdGenerator.next(),
+    @ColumnInfo(name = "sale_id") val saleId: Long,
+    val method: String,
+    val amount: Long,
+    /** Controle de sincronização: momento da última alteração local. */
+    @ColumnInfo(name = "updated_at", defaultValue = "0") val updatedAt: Long = System.currentTimeMillis(),
+    /** Controle de sincronização: alteração ainda não enviada para a nuvem. */
+    @ColumnInfo(name = "dirty", defaultValue = "1") val dirty: Boolean = true,
+)
 
 object MovementType {
     const val INITIAL = "INITIAL"

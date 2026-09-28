@@ -174,6 +174,7 @@ class SyncManager(
                 dao.wipeCharges()
                 dao.wipeWarranties()
                 dao.wipeExpenses()
+                dao.wipeSalePayments()
                 dao.wipeScrapMovements()
                 dao.wipeScrapPrices()
                 dao.wipeStockMovements()

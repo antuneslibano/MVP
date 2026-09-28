@@ -8,6 +8,7 @@ import br.com.lojabaterias.domain.PaymentMethod
 import br.com.lojabaterias.domain.ReportItem
 import br.com.lojabaterias.domain.ReportSale
 import br.com.lojabaterias.domain.SaleCalculator
+import br.com.lojabaterias.domain.SplitPayment
 import kotlinx.coroutines.flow.Flow
 
 /** Erro de regra de negócio com mensagem pronta para o usuário. */
@@ -46,6 +47,7 @@ object SyncTables {
     const val CHARGES = "charge_services"
     const val WARRANTIES = "warranty_claims"
     const val EXPENSES = "expenses"
+    const val SALE_PAYMENTS = "sale_payments"
 }
 
 /**
@@ -264,19 +266,20 @@ class StoreRepository(
         discount: Long,
         dateTime: Long,
         scrap: ScrapInput = ScrapInput.NONE,
+        payments: List<Pair<PaymentMethod, Long>> = emptyList(),
     ): Long = write {
         val product = products.getById(productId) ?: throw BusinessException("Produto não encontrado")
-        SaleCalculator.validate(unitPrice, quantity, discount, product.stock)?.let { throw BusinessException(it) }
+        val split = payments.size > 1
+        SaleCalculator.validate(unitPrice, quantity, if (split) 0 else discount, product.stock)?.let { throw BusinessException(it) }
+        if (split) SplitPayment.validate(payments)?.let { throw BusinessException(it) }
         validateScrap(quantity, scrap)
         rebuildOrphanExtras()
         val extras = availableExtras(product.id).take(quantity)
-        val totals = SaleCalculator.compute(
-            unitPrice, quantity, discount, product.cost, scrap.charge, cardFees.rateFor(method), extras.size,
-        )
+        val totals = totalsFor(unitPrice, quantity, discount, product.cost, scrap.charge, method, payments, extras.size)
         val saleId = sales.insertSale(
             Sale(
                 dateTime = dateTime,
-                paymentMethod = method.name,
+                paymentMethod = mainMethod(method, payments).name,
                 grossAmount = totals.grossAmount,
                 discount = totals.discount,
                 finalAmount = totals.finalAmount,
@@ -301,6 +304,7 @@ class StoreRepository(
             )
         )
         useExtras(extras, saleId)
+        setPayments(saleId, payments)
         val newStock = product.stock - quantity
         products.updateStock(product.id, newStock)
         movements.insert(
@@ -360,6 +364,7 @@ class StoreRepository(
         discount: Long,
         dateTime: Long,
         scrap: ScrapInput = ScrapInput.NONE,
+        payments: List<Pair<PaymentMethod, Long>> = emptyList(),
     ): Unit = write {
         val current = sales.getWithItems(saleId) ?: throw BusinessException("Venda não encontrada")
         if (current.sale.isCanceled) throw BusinessException("Venda cancelada não pode ser editada")
@@ -370,15 +375,16 @@ class StoreRepository(
         if (product == null && delta != 0) {
             throw BusinessException("O produto desta venda foi excluído; a quantidade não pode ser alterada")
         }
-        SaleCalculator.validate(unitPrice, quantity, discount, available)?.let { throw BusinessException(it) }
+        val split = payments.size > 1
+        SaleCalculator.validate(unitPrice, quantity, if (split) 0 else discount, available)?.let { throw BusinessException(it) }
+        if (split) SplitPayment.validate(payments)?.let { throw BusinessException(it) }
         validateScrap(quantity, scrap)
         rebuildOrphanExtras()
         releaseExtras(saleId)
         val extras = availableExtras(item.productId).take(quantity)
-        val totals = SaleCalculator.compute(
-            unitPrice, quantity, discount, item.unitCost, scrap.charge, cardFees.rateFor(method), extras.size,
-        )
+        val totals = totalsFor(unitPrice, quantity, discount, item.unitCost, scrap.charge, method, payments, extras.size)
         useExtras(extras, saleId)
+        setPayments(saleId, payments)
         val now = System.currentTimeMillis()
 
         sales.updateItem(
@@ -387,7 +393,7 @@ class StoreRepository(
         sales.updateSale(
             current.sale.copy(
                 dateTime = dateTime,
-                paymentMethod = method.name,
+                paymentMethod = mainMethod(method, payments).name,
                 grossAmount = totals.grossAmount,
                 discount = totals.discount,
                 finalAmount = totals.finalAmount,
@@ -485,11 +491,36 @@ class StoreRepository(
         tomb(SyncTables.STOCK_MOVEMENTS, sync.stockMovementIdsForSale(saleId))
         tomb(SyncTables.SCRAP_MOVEMENTS, sync.scrapMovementIdsForSale(saleId))
         tomb(SyncTables.SALE_ITEMS, sync.saleItemIds(saleId))
+        tomb(SyncTables.SALE_PAYMENTS, sync.salePaymentIds(saleId))
+        sales.deletePaymentsFor(saleId)
         tomb(SyncTables.SALES, listOf(saleId))
         movements.deleteForSale(saleId)
         scraps.deleteForSale(saleId)
         sales.deleteItemsForSale(saleId)
         sales.deleteSale(saleId)
+    }
+
+    /** Totais da venda: normal (uma forma de pagamento) ou dividida (soma das partes). */
+    private fun totalsFor(
+        unitPrice: Long, quantity: Int, discount: Long, unitCost: Long, scrapCharge: Long,
+        method: PaymentMethod, payments: List<Pair<PaymentMethod, Long>>, freeUnits: Int,
+    ) = if (payments.size > 1) {
+        SplitPayment.compute(unitPrice, quantity, unitCost, scrapCharge, payments, cardFees::rateFor, freeUnits)
+    } else {
+        SaleCalculator.compute(unitPrice, quantity, discount, unitCost, scrapCharge, cardFees.rateFor(method), freeUnits)
+    }
+
+    /** No pagamento dividido, a venda fica marcada com a forma de maior valor. */
+    private fun mainMethod(method: PaymentMethod, payments: List<Pair<PaymentMethod, Long>>): PaymentMethod =
+        if (payments.size > 1) payments.maxBy { it.second }.first else method
+
+    /** Troca as partes do pagamento dividido da venda (nenhuma = pagamento único). */
+    private suspend fun setPayments(saleId: Long, payments: List<Pair<PaymentMethod, Long>>) {
+        tomb(SyncTables.SALE_PAYMENTS, sync.salePaymentIds(saleId))
+        sales.deletePaymentsFor(saleId)
+        if (payments.size > 1) {
+            sales.insertPayments(payments.map { (m, amount) -> SalePayment(saleId = saleId, method = m.name, amount = amount) })
+        }
     }
 
     private fun validateScrap(quantity: Int, scrap: ScrapInput) {
@@ -967,6 +998,7 @@ class StoreRepository(
             finalAmount = s.sale.finalAmount,
             totalCost = s.sale.totalCost,
             cardFee = s.sale.cardFee,
+            payments = if (s.isSplit) s.paymentParts else emptyList(),
             items = s.items.map {
                 // Venda de um item: usa o custo gravado na venda (já com as extras de custo zero).
                 ReportItem(

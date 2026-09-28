@@ -4,6 +4,7 @@ import br.com.lojabaterias.data.ChargeService
 import br.com.lojabaterias.data.Expense
 import br.com.lojabaterias.data.Product
 import br.com.lojabaterias.data.Sale
+import br.com.lojabaterias.data.SalePayment
 import br.com.lojabaterias.data.SaleItem
 import br.com.lojabaterias.data.ScrapMovement
 import br.com.lojabaterias.data.ScrapPrice
@@ -240,6 +241,19 @@ object RemoteMapper {
         billMonth = o.intOrNull("bill_month"),
         active = o.optBoolean("active", true),
         note = o.stringOrNull("note"),
+        updatedAt = o.optLong("updated_at", 0),
+        dirty = false,
+    )
+
+    fun toJson(p: SalePayment) = JSONObject().apply {
+        put("id", p.id); put("sale_id", p.saleId); put("method", p.method); put("amount", p.amount); put("updated_at", p.updatedAt)
+    }
+
+    fun salePayment(o: JSONObject) = SalePayment(
+        id = o.getLong("id"),
+        saleId = o.getLong("sale_id"),
+        method = o.getString("method"),
+        amount = o.optLong("amount", 0),
         updatedAt = o.optLong("updated_at", 0),
         dirty = false,
     )

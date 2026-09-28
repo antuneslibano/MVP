@@ -19,8 +19,9 @@ import androidx.sqlite.db.SupportSQLiteDatabase
         ChargeService::class,
         WarrantyClaim::class,
         Expense::class,
+        SalePayment::class,
     ],
-    version = 9,
+    version = 10,
     exportSchema = true,
 )
 abstract class AppDatabase : RoomDatabase() {
@@ -268,9 +269,21 @@ abstract class AppDatabase : RoomDatabase() {
             return old && !new
         }
 
+        /** v9 → v10: pagamento dividido (várias formas de pagamento na mesma venda). */
+        val MIGRATION_9_10 = object : Migration(9, 10) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL(
+                    "CREATE TABLE IF NOT EXISTS `sale_payments` (`id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, " +
+                        "`sale_id` INTEGER NOT NULL, `method` TEXT NOT NULL, `amount` INTEGER NOT NULL, " +
+                        "`updated_at` INTEGER NOT NULL DEFAULT 0, `dirty` INTEGER NOT NULL DEFAULT 1)"
+                )
+                db.execSQL("CREATE INDEX IF NOT EXISTS `index_sale_payments_sale_id` ON `sale_payments` (`sale_id`)")
+            }
+        }
+
         val ALL_MIGRATIONS = arrayOf(
             MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5, MIGRATION_5_6, MIGRATION_6_7, MIGRATION_7_8,
-            MIGRATION_8_9,
+            MIGRATION_8_9, MIGRATION_9_10,
         )
 
         fun build(context: Context): AppDatabase =

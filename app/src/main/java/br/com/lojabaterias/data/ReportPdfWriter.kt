@@ -208,7 +208,7 @@ object ReportPdfWriter {
                         Periods.formatDateTime(s.sale.dateTime),
                         s.modelsLabel,
                         s.quantity.toString(),
-                        s.sale.payment.label,
+                        s.paymentLabel,
                         Money.format(s.sale.finalAmount),
                     )
                 },
@@ -526,7 +526,7 @@ object ReportPdfWriter {
                         Periods.formatDateTime(s.sale.dateTime),
                         s.modelsLabel,
                         s.quantity.toString(),
-                        s.sale.payment.label,
+                        s.paymentLabel,
                         Money.format(s.sale.finalAmount),
                         Money.format(s.sale.totalCost),
                         Money.format(s.sale.grossProfit),

@@ -17,6 +17,9 @@ object AccessControl {
     private const val PIN_HASH = "fb360d43ce77b8e695243e2216e6dcae95b99f13c3acc5d6c888830087b8b418"
     private const val PIN_CIPHER = "18f94219fdc8fb6d"
 
+    /** Quantidade de dígitos da senha (o app confere sozinho ao completar). */
+    val PIN_LENGTH: Int = PIN_CIPHER.length / 2
+
     /** Confere a senha digitada. */
     fun checkPin(pin: String): Boolean = sha256Hex("artdasbaterias:pin:$pin") == PIN_HASH
 

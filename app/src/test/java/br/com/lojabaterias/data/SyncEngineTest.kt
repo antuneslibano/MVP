@@ -51,7 +51,7 @@ private class FakeCloud : RemoteApi {
     override suspend fun pull(token: String, since: String?): JSONObject {
         val s = since?.toLong() ?: -1L
         val result = JSONObject().put("now", clock.toString())
-        for (t in listOf("products", "sales", "sale_items", "stock_movements", "scrap_prices", "scrap_movements", "charge_services", "warranty_claims", "expenses")) {
+        for (t in listOf("products", "sales", "sale_items", "stock_movements", "scrap_prices", "scrap_movements", "charge_services", "warranty_claims", "expenses", "sale_payments")) {
             result.put(t, JSONArray(tables[t].orEmpty().values.filter { it.getLong("_v") > s }))
         }
         result.put("deletions", JSONArray(deletions.values.filter { it.getLong("_v") > s }))

@@ -10,7 +10,11 @@ data class ReportSale(
     val items: List<ReportItem>,
     /** Taxa da maquininha da venda. */
     val cardFee: Long = 0,
-)
+    /** Pagamento dividido: quanto entrou em cada forma (vazio = tudo em [paymentMethod]). */
+    val payments: List<Pair<PaymentMethod, Long>> = emptyList(),
+) {
+    val parts: List<Pair<PaymentMethod, Long>> get() = payments.ifEmpty { listOf(paymentMethod to finalAmount) }
+}
 
 data class ReportItem(
     val model: String,
@@ -87,14 +91,17 @@ object ReportCalculator {
         }
         val models = perModel.values.map { ModelStats(it.model, it.quantity, it.revenue, it.revenue - it.cost) }
 
-        val byPayment = sales.groupBy { it.paymentMethod }
-            .map { (method, list) -> PaymentStats(
-                    method = method,
-                    salesCount = list.size,
-                    units = list.sumOf { s -> s.items.sumOf { it.quantity } },
-                    revenue = list.sumOf { it.finalAmount },
-                ) }
-            .sortedByDescending { it.revenue }
+        // Pagamento dividido: cada parte conta na sua forma; as baterias contam na forma principal da venda.
+        val byPayment = PaymentMethod.entries.mapNotNull { method ->
+            val withMethod = sales.filter { s -> s.parts.any { it.first == method } }
+            if (withMethod.isEmpty()) return@mapNotNull null
+            PaymentStats(
+                method = method,
+                salesCount = withMethod.size,
+                units = sales.filter { it.paymentMethod == method }.sumOf { s -> s.items.sumOf { it.quantity } },
+                revenue = withMethod.sumOf { s -> s.parts.filter { it.first == method }.sumOf { it.second } },
+            )
+        }.sortedByDescending { it.revenue }
 
         return Report(
             revenue = revenue,

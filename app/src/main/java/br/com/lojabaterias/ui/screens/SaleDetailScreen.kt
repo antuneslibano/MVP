@@ -86,7 +86,12 @@ fun SaleDetailScreen(
                     AppCard {
                         Column(Modifier.padding(16.dp)) {
                             InfoRow("Data/hora", Periods.formatDateTime(s.dateTime))
-                            InfoRow("Pagamento", s.payment.label)
+                            if (sw.isSplit) {
+                                InfoRow("Pagamento", "Dividido")
+                                sw.paymentParts.forEach { (m, amount) -> InfoRow("  ${m.label}", Money.format(amount)) }
+                            } else {
+                                InfoRow("Pagamento", s.payment.label)
+                            }
                         }
                     }
 

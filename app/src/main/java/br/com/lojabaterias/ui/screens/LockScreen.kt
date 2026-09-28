@@ -182,9 +182,11 @@ private fun PinEntry(onUnlock: (String) -> Unit, onForgot: () -> Unit) {
                             when (key) {
                                 "⌫" -> pin = pin.dropLast(1)
                                 "OK" -> submit()
-                                else -> if (pin.length < MAX_PIN) {
+                                else -> if (pin.length < MAX_PIN && !locked) {
                                     pin += key
                                     error = false
+                                    // Senha completa: confere sozinho, sem precisar apertar OK.
+                                    if (pin.length == AccessControl.PIN_LENGTH) submit()
                                 }
                             }
                             Unit

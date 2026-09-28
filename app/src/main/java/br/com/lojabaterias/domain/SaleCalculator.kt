@@ -76,3 +76,62 @@ object SaleCalculator {
         else -> null
     }
 }
+
+/**
+ * Pagamento dividido: cada parte é uma forma de pagamento com o valor que o cliente pagou nela.
+ * O total da venda é a soma das partes (a loja decide na hora quanto cobrar em cada forma).
+ */
+object SplitPayment {
+
+    /**
+     * Totais da venda com pagamento dividido. O preço de referência é o à vista ([cashUnitPrice]);
+     * se o total cobrado for menor, a diferença entra como desconto; se for maior, como acréscimo.
+     * A taxa da maquininha é calculada só sobre as partes no cartão.
+     */
+    fun compute(
+        cashUnitPrice: Long,
+        quantity: Int,
+        unitCost: Long,
+        scrapCharge: Long,
+        parts: List<Pair<PaymentMethod, Long>>,
+        feeBps: (PaymentMethod) -> Int,
+        freeUnits: Int = 0,
+    ): SaleTotals {
+        require(quantity > 0) { "Quantidade deve ser maior que zero" }
+        val gross = cashUnitPrice * quantity
+        val final = parts.sumOf { it.second }
+        val base = SaleCalculator.compute(cashUnitPrice, quantity, 0, unitCost, scrapCharge, 0, freeUnits)
+        val fee = parts.sumOf { (m, amount) -> CardFees.feeOf(amount, feeBps(m)) }
+        return base.copy(
+            discount = (gross + scrapCharge - final).coerceAtLeast(0),
+            finalAmount = final,
+            cardFee = fee,
+            grossProfit = final - base.totalCost - fee,
+        )
+    }
+
+    fun validate(parts: List<Pair<PaymentMethod, Long>>): String? = when {
+        parts.size < 2 -> "Adicione pelo menos duas formas de pagamento"
+        parts.any { it.second <= 0 } -> "Informe o valor de cada forma de pagamento"
+        else -> null
+    }
+
+    /** Quanto falta para fechar a venda pelo preço [dueInMethod] (ex.: preço à vista ou do cartão). */
+    fun remaining(dueInMethod: Long, othersTotal: Long): Long = (dueInMethod - othersTotal).coerceAtLeast(0)
+
+    /**
+     * Quanto falta, proporcionalmente, na forma [method]: o que já foi pago é convertido para o preço à vista
+     * e o que sobra é cobrado no preço da forma escolhida.
+     */
+    fun proportional(prices: PriceTable, quantity: Int, scrapCharge: Long, others: List<Pair<PaymentMethod, Long>>, method: PaymentMethod): Long {
+        val cash = prices.pix * quantity + scrapCharge
+        if (prices.pix <= 0) return remaining(cash, others.sumOf { it.second })
+        val paidInCash = others.sumOf { (m, amount) ->
+            val price = prices.priceFor(m).takeIf { it > 0 } ?: prices.pix
+            amount.toDouble() * prices.pix / price
+        }
+        val left = (cash - paidInCash).coerceAtLeast(0.0)
+        val price = prices.priceFor(method).takeIf { it > 0 } ?: prices.pix
+        return Math.round(left * price / prices.pix)
+    }
+}

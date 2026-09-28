@@ -30,6 +30,14 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.material3.pulltorefresh.PullToRefreshBox
+import androidx.compose.ui.platform.LocalContext
+import android.widget.Toast
+import br.com.lojabaterias.LojaApp
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
@@ -133,6 +141,10 @@ fun LojaNavHost() {
     val currentRoute = backStack?.destination?.route
     val showBottomBar = topLevel.any { it.route == currentRoute } || currentRoute in menuOnlyTopLevel
     var menuOpen by remember { mutableStateOf(false) }
+    val context = LocalContext.current
+    val container = (context.applicationContext as LojaApp).container
+    val scope = rememberCoroutineScope()
+    var refreshing by remember { mutableStateOf(false) }
 
     Scaffold(
         contentWindowInsets = WindowInsets(0, 0, 0, 0),
@@ -157,12 +169,26 @@ fun LojaNavHost() {
             }
         },
     ) { inner ->
+      // Puxar a tela para baixo sincroniza com a nuvem (em qualquer tela).
+      PullToRefreshBox(
+        isRefreshing = refreshing,
+        onRefresh = {
+            scope.launch {
+                refreshing = true
+                val ok = withContext(Dispatchers.IO) { container.syncManager.syncNow() }
+                refreshing = false
+                val msg = if (ok) "Sincronizado" else container.syncManager.status.value.message ?: "Não foi possível sincronizar agora"
+                Toast.makeText(context, msg, Toast.LENGTH_SHORT).show()
+            }
+        },
+        modifier = Modifier
+            .fillMaxSize()
+            .padding(bottom = inner.calculateBottomPadding()),
+      ) {
         NavHost(
             navController = nav,
             startDestination = Routes.HOME,
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(bottom = inner.calculateBottomPadding()),
+            modifier = Modifier.fillMaxSize(),
             enterTransition = { androidx.compose.animation.EnterTransition.None },
             exitTransition = { androidx.compose.animation.ExitTransition.None },
         ) {
@@ -261,6 +287,7 @@ fun LojaNavHost() {
                 ScrapPricesScreen(onBack = { nav.popBackStack() })
             }
         }
+      }
     }
 
     if (menuOpen) {

@@ -7,7 +7,9 @@ import br.com.lojabaterias.data.ScrapInput
 import br.com.lojabaterias.data.StoreRepository
 import br.com.lojabaterias.domain.CardFees
 import br.com.lojabaterias.domain.PaymentMethod
+import br.com.lojabaterias.domain.PriceTable
 import br.com.lojabaterias.domain.SaleCalculator
+import br.com.lojabaterias.domain.SplitPayment
 import br.com.lojabaterias.domain.Scrap
 import br.com.lojabaterias.domain.SaleTotals
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -57,7 +59,13 @@ data class SaleFormState(
     val fees: CardFees = CardFees.DEFAULT,
     /** Baterias extras (custo zero) deste modelo que podem sair nesta venda. */
     val freeAvailable: Int = 0,
+    /** Pagamento dividido em várias formas (ex.: parte no dinheiro, parte no crédito). */
+    val split: Boolean = false,
+    val parts: List<PaymentPart> = emptyList(),
 ) {
+    val partPairs: List<Pair<PaymentMethod, Long>> get() = parts.map { it.method to it.amount }
+    val partsTotal: Long get() = parts.sumOf { it.amount }
+
     val freeUnits: Int get() = minOf(quantity, freeAvailable).coerceAtLeast(0)
 
     val hasSelection: Boolean get() = model.isNotEmpty()
@@ -78,16 +86,25 @@ data class SaleFormState(
         }
 
     val totals: SaleTotals?
-        get() = if (quantity > 0 && discount <= unitPrice * quantity) {
+        get() = if (split && quantity > 0) {
+            SplitPayment.compute(unitPrice, quantity, unitCost, scrapInput.charge, partPairs, fees::rateFor, freeUnits)
+        } else if (quantity > 0 && discount <= unitPrice * quantity) {
             SaleCalculator.compute(unitPrice, quantity, discount, unitCost, scrapInput.charge, fees.rateFor(method), freeUnits)
         } else {
             null
         }
 
     val validationError: String?
-        get() = SaleCalculator.validate(unitPrice, quantity, discount, available)
+        get() = SaleCalculator.validate(unitPrice, quantity, if (split) 0 else discount, available)
+            ?: (if (split) SplitPayment.validate(partPairs) else null)
             ?: scrapInput.let { SaleCalculator.validateScrap(quantity, it.returned, it.missing, it.amperageOrNull, it.charge) }
 }
+
+/** Uma linha do pagamento dividido. */
+data class PaymentPart(val method: PaymentMethod, val amount: Long = 0)
+
+/** Sugestão de valor para uma linha do pagamento dividido. */
+data class PartSuggestion(val label: String, val amount: Long)
 
 class SaleFormViewModel(
     private val repo: StoreRepository,
@@ -157,6 +174,8 @@ class SaleFormViewModel(
             batteryAmperage = batteryAmperage(product, item?.modelSnapshot ?: ""),
             fees = repo.cardFees,
             freeAvailable = item?.let { repo.freeExtraCount(it.productId, id) } ?: 0,
+            split = sale.isSplit,
+            parts = sale.payments.map { PaymentPart(PaymentMethod.fromName(it.method), it.amount) },
         )
     }
 
@@ -236,6 +255,61 @@ class SaleFormViewModel(
     fun resetScrapCharge() = _form.update { it.copy(scrapChargeEdited = false).withScrapDefaults() }
     fun setScrapVoucher(v: Boolean) = _form.update { it.copy(scrapVoucher = v) }
     fun setUnitPrice(v: Long) = _form.update { it.copy(unitPrice = v) }
+
+    // ------------------------------------------------------------ Pagamento dividido
+
+    /** Liga/desliga o pagamento dividido. O preço de referência passa a ser o à vista (PIX/dinheiro). */
+    fun setSplit(on: Boolean) = _form.update { s ->
+        if (on) {
+            s.copy(
+                split = true,
+                unitPrice = s.product?.prices?.pix ?: s.unitPrice,
+                discount = 0,
+                parts = s.parts.takeIf { it.size >= 2 }
+                    ?: listOf(PaymentPart(PaymentMethod.DINHEIRO), PaymentPart(PaymentMethod.CREDITO)),
+            )
+        } else {
+            val main = s.parts.maxByOrNull { it.amount }?.method ?: s.method
+            s.copy(split = false, parts = emptyList(), method = main, unitPrice = s.product?.prices?.priceFor(main) ?: s.unitPrice)
+        }
+    }
+
+    fun setPartMethod(index: Int, m: PaymentMethod) = updatePart(index) { it.copy(method = m) }
+    fun setPartAmount(index: Int, v: Long) = updatePart(index) { it.copy(amount = v) }
+
+    fun addPart() = _form.update { s ->
+        val next = PaymentMethod.entries.firstOrNull { m -> s.parts.none { it.method == m } } ?: PaymentMethod.PIX
+        s.copy(parts = s.parts + PaymentPart(next))
+    }
+
+    fun removePart(index: Int) = _form.update { s ->
+        if (s.parts.size <= 2) s else s.copy(parts = s.parts.filterIndexed { i, _ -> i != index })
+    }
+
+    private fun updatePart(index: Int, f: (PaymentPart) -> PaymentPart) = _form.update { s ->
+        s.copy(parts = s.parts.mapIndexed { i, p -> if (i == index) f(p) else p })
+    }
+
+    /** Sugestões para a linha [index]: quanto falta pelo preço à vista, pelo preço da forma escolhida e proporcional. */
+    fun suggestions(s: SaleFormState, index: Int): List<PartSuggestion> {
+        val part = s.parts.getOrNull(index) ?: return emptyList()
+        val others = s.partPairs.filterIndexed { i, _ -> i != index }
+        val othersTotal = others.sumOf { it.second }
+        val scrap = s.scrapInput.charge
+        val prices = s.product?.prices ?: PriceTable(s.unitPrice, s.unitPrice, s.unitPrice)
+        val list = mutableListOf(
+            PartSuggestion("Falta (preço à vista)", SplitPayment.remaining(prices.pix * s.quantity + scrap, othersTotal)),
+        )
+        if (prices.priceFor(part.method) != prices.pix) {
+            list += PartSuggestion(
+                "Falta (preço ${part.method.label.lowercase()})",
+                SplitPayment.remaining(prices.priceFor(part.method) * s.quantity + scrap, othersTotal),
+            )
+            list += PartSuggestion("Proporcional", SplitPayment.proportional(prices, s.quantity, scrap, others, part.method))
+        }
+        return list.filter { it.amount > 0 }.distinctBy { it.amount }
+    }
+
     fun setDiscount(v: Long) = _form.update { it.copy(discount = v) }
     fun setDateTime(millis: Long) = _form.update { it.copy(dateTime = millis, dateTimeEdited = true) }
 
@@ -248,11 +322,17 @@ class SaleFormViewModel(
             try {
                 val dateTime = if (s.dateTimeEdited) s.dateTime else System.currentTimeMillis()
                 if (saleId != null) {
-                    repo.updateSale(saleId, s.quantity, s.method, s.unitPrice, s.discount, dateTime, s.scrapInput)
+                    repo.updateSale(
+                        saleId, s.quantity, s.method, s.unitPrice, if (s.split) 0 else s.discount, dateTime, s.scrapInput,
+                        if (s.split) s.partPairs else emptyList(),
+                    )
                     message("Venda atualizada")
                 } else {
                     val productId = s.product?.id ?: throw BusinessException("Selecione a bateria")
-                    repo.registerSale(productId, s.quantity, s.method, s.unitPrice, s.discount, dateTime, s.scrapInput)
+                    repo.registerSale(
+                        productId, s.quantity, s.method, s.unitPrice, if (s.split) 0 else s.discount, dateTime, s.scrapInput,
+                        if (s.split) s.partPairs else emptyList(),
+                    )
                     message("Venda registrada")
                 }
                 _form.update { it.copy(saving = false, done = true) }

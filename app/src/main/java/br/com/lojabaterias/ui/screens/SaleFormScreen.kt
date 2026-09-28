@@ -1,5 +1,9 @@
 package br.com.lojabaterias.ui.screens
 
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.FlowRow
+import androidx.compose.material3.AssistChip
+import androidx.compose.material3.Switch
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.layout.Arrangement
@@ -224,19 +228,32 @@ private fun SaleDetailsForm(
             }
 
             SectionTitle("Forma de pagamento")
-            val methods = PaymentMethod.entries
-            methods.chunked(2).forEach { row ->
-                Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.padding(bottom = 8.dp)) {
-                    row.forEach { method ->
-                        PaymentOption(
-                            method = method,
-                            price = form.product?.prices?.priceFor(method),
-                            selected = form.method == method,
-                            onClick = { vm.selectMethod(method) },
-                            modifier = Modifier.weight(1f),
-                        )
+            if (!form.split) {
+                val methods = PaymentMethod.entries
+                methods.chunked(2).forEach { row ->
+                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.padding(bottom = 8.dp)) {
+                        row.forEach { method ->
+                            PaymentOption(
+                                method = method,
+                                price = form.product?.prices?.priceFor(method),
+                                selected = form.method == method,
+                                onClick = { vm.selectMethod(method) },
+                                modifier = Modifier.weight(1f),
+                            )
+                        }
                     }
                 }
+            }
+            Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
+                Column(Modifier.weight(1f)) {
+                    Text("Dividir o pagamento", style = MaterialTheme.typography.titleSmall)
+                    Text(
+                        "Ex.: parte no dinheiro e parte no cartão",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
+                Switch(checked = form.split, onCheckedChange = vm::setSplit)
             }
 
             SectionTitle("Quantidade")
@@ -249,6 +266,9 @@ private fun SaleDetailsForm(
 
             ScrapSection(vm, form)
 
+            if (form.split) {
+                SplitSection(vm, form)
+            } else {
             SectionTitle("Valores")
             val tablePrice = form.product?.prices?.priceFor(form.method)
             MoneyField(
@@ -263,6 +283,7 @@ private fun SaleDetailsForm(
             )
             Spacer(Modifier.height(8.dp))
             MoneyField(value = form.discount, onValueChange = vm::setDiscount, label = "Desconto (opcional)")
+            }
 
             SectionTitle("Data e hora")
             DateTimeSelector(millis = form.dateTime, onChange = vm::setDateTime)
@@ -450,6 +471,64 @@ private fun ScrapSection(vm: SaleFormViewModel, form: SaleFormState) {
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 modifier = Modifier.padding(top = 4.dp),
             )
+        }
+    }
+}
+
+/** Pagamento dividido: uma linha por forma de pagamento, com atalhos do quanto falta. */
+@OptIn(ExperimentalLayoutApi::class)
+@Composable
+private fun SplitSection(vm: SaleFormViewModel, form: SaleFormState) {
+    SectionTitle("Pagamento dividido")
+    val prices = form.product?.prices
+    if (prices != null) {
+        val q = form.quantity
+        val scrap = form.scrapInput.charge
+        Text(
+            "Referência: à vista ${Money.format(prices.pix * q + scrap)} • débito ${Money.format(prices.debit * q + scrap)} • " +
+                "crédito ${Money.format(prices.credit * q + scrap)}",
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier.padding(bottom = 8.dp),
+        )
+    }
+    form.parts.forEachIndexed { index, part ->
+        AppCard(modifier = Modifier.padding(bottom = 8.dp)) {
+            Column(Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text("${index + 1}ª forma", style = MaterialTheme.typography.labelLarge, modifier = Modifier.weight(1f))
+                    if (form.parts.size > 2) {
+                        TextButton(onClick = { vm.removePart(index) }) { Text("Remover") }
+                    }
+                }
+                FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                    PaymentMethod.entries.forEach { m ->
+                        FilterChip(selected = part.method == m, onClick = { vm.setPartMethod(index, m) }, label = { Text(m.label) })
+                    }
+                }
+                MoneyField(value = part.amount, onValueChange = { vm.setPartAmount(index, it) }, label = "Valor no ${part.method.label}")
+                val suggestions = vm.suggestions(form, index).filter { it.amount != part.amount }
+                if (suggestions.isNotEmpty()) {
+                    Text("Usar o que falta:", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                        suggestions.forEach { sg ->
+                            AssistChip(
+                                onClick = { vm.setPartAmount(index, sg.amount) },
+                                label = { Text("${sg.label}: ${Money.format(sg.amount)}") },
+                            )
+                        }
+                    }
+                }
+            }
+        }
+    }
+    if (form.parts.size < PaymentMethod.entries.size) {
+        TextButton(onClick = vm::addPart) { Text("+ Adicionar outra forma de pagamento") }
+    }
+    AppCard(containerColor = MaterialTheme.colorScheme.surfaceContainerHigh) {
+        Column(Modifier.padding(12.dp)) {
+            form.parts.filter { it.amount > 0 }.forEach { InfoRow(it.method.label, Money.format(it.amount)) }
+            InfoRow("Total cobrado", Money.format(form.partsTotal), bold = true)
         }
     }
 }

@@ -414,6 +414,34 @@ class StoreRepositoryTest {
     }
 
     @Test
+    fun splitPayment_isSavedEditedAndDeleted() = runBlocking {
+        val id = newProduct(stock = 3)
+        val parts = listOf(PaymentMethod.DINHEIRO to 10_000L, PaymentMethod.CREDITO to 16_000L)
+        val saleId = repo.registerSale(id, 1, PaymentMethod.PIX, 25_000, 0, 1_000, ScrapInput(1, 0, 60, 0), parts)
+        val sale = repo.getSale(saleId)!!
+        assertTrue(sale.isSplit)
+        assertEquals(26_000L, sale.sale.finalAmount)
+        assertEquals(1_120L, sale.sale.cardFee) // 7% só dos R$ 160 no crédito
+        assertEquals(PaymentMethod.CREDITO, sale.sale.payment) // forma de maior valor
+        assertEquals("Crédito + Dinheiro", sale.paymentLabel)
+        assertEquals(26_000L - 18_990L - 1_120L, sale.sale.grossProfit)
+
+        // Editar para pagamento único apaga as partes
+        repo.updateSale(saleId, 1, PaymentMethod.PIX, 25_000, 0, 1_000, ScrapInput(1, 0, 60, 0))
+        assertEquals(false, repo.getSale(saleId)!!.isSplit)
+        assertEquals(25_000L, repo.getSale(saleId)!!.sale.finalAmount)
+
+        // Dividir de novo e excluir a venda
+        repo.updateSale(saleId, 1, PaymentMethod.PIX, 25_000, 0, 1_000, ScrapInput(1, 0, 60, 0), parts)
+        assertEquals(2, db.saleDao().paymentsFor(saleId).size)
+        repo.deleteSale(saleId)
+        assertTrue(db.saleDao().paymentsFor(saleId).isEmpty())
+        expectBusinessError {
+            repo.registerSale(id, 1, PaymentMethod.PIX, 25_000, 0, 1_000, ScrapInput(1, 0, 60, 0), listOf(PaymentMethod.PIX to 0L, PaymentMethod.CREDITO to 1L))
+        }
+    }
+
+    @Test
     fun cardFees_areDiscountedFromProfit() = runBlocking {
         val id = newProduct()
         val credit = repo.registerSale(id, 1, PaymentMethod.CREDITO, 28_000, 0, 1_000, ScrapInput(1, 0, 60, 0))

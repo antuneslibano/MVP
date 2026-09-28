@@ -63,6 +63,10 @@ As versões publicadas ficam no repositório público **antuneslibano/art-das-ba
 - **Despesas** (Menu ☰): contas fixas do mês (cadastradas uma vez; aparecem como "a pagar" e é só tocar
   em "Paguei") e despesas avulsas por categoria. Mostra entrou × saiu × sobrou (lucro líquido); os Relatórios
   e o PDF também trazem as despesas e o lucro líquido.
+- **Pagamento dividido** (Nova venda > "Dividir o pagamento"): várias formas na mesma venda (ex.: R$ 100 no
+  dinheiro + o resto no crédito). A loja decide quanto em cada forma; o app sugere quanto falta pelo preço à vista,
+  pelo preço do cartão ou proporcional. A taxa da maquininha incide só na parte no cartão.
+- **Desbloqueio**: ao completar a senha o app entra sozinho. **Puxar a tela para baixo** sincroniza com a nuvem.
 - **Casco cobrado**: entra no faturamento, mas também no custo (serve para repor o casco), então não vira lucro.
 - **Atualização automática**: cada build vira uma Release no GitHub; o app avisa no Início e instala
   com um toque (Menu > Backup e sincronização > Atualizações).
