@@ -107,3 +107,13 @@ fun DateTimeSelector(millis: Long, onChange: (Long) -> Unit, modifier: Modifier 
         )
     }
 }
+
+/** Botão "Rótulo: 28/09/2026" que abre o calendário. */
+@Composable
+fun DateButton(label: String, date: LocalDate, modifier: Modifier = Modifier, onPick: (LocalDate) -> Unit) {
+    var open by remember { mutableStateOf(false) }
+    OutlinedButton(onClick = { open = true }, modifier = modifier.fillMaxWidth()) {
+        Text("$label: ${date.format(Periods.DATE)}")
+    }
+    if (open) DatePickerModal(initial = date, onPick = onPick, onDismiss = { open = false })
+}

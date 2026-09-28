@@ -1,6 +1,15 @@
 package br.com.lojabaterias.ui
 
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.statusBars
+import androidx.compose.foundation.layout.windowInsetsPadding
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.material3.PrimaryScrollableTabRow
+import androidx.compose.material3.Tab
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.mutableStateMapOf
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
@@ -117,36 +126,68 @@ object Routes {
     fun productEdit(id: Long) = "productedit/$id"
 }
 
-private data class TopLevel(val route: String, val label: String, val icon: ImageVector)
+/** Uma aba de uma área do app. */
+private data class AreaTab(val route: String, val label: String)
 
-private val topLevel = listOf(
-    TopLevel(Routes.HOME, "Início", Icons.Filled.Home),
-    TopLevel(Routes.SALES, "Vendas", Icons.Filled.ShoppingCart),
-    TopLevel(Routes.STOCK, "Estoque", AppIcons.Battery),
-    TopLevel(Routes.REPORTS, "Relatórios", AppIcons.BarChart),
-)
+/**
+ * O app é dividido em áreas. Cada área tem um botão na barra de baixo e abas no topo
+ * que ligam as telas da mesma área (ex.: Estoque → Baterias | Sucatas | Garantias e extras).
+ */
+private enum class Area(val label: String, val icon: ImageVector, val tabs: List<AreaTab>) {
+    HOME("Início", Icons.Filled.Home, listOf(AreaTab(Routes.HOME, "Início"))),
+    SALES(
+        "Vendas", Icons.Filled.ShoppingCart,
+        listOf(AreaTab(Routes.SALES, "Vendas"), AreaTab(Routes.CHARGES, "Na carga"), AreaTab(Routes.VOUCHERS, "Vales de casco")),
+    ),
+    STOCK(
+        "Estoque", AppIcons.Battery,
+        listOf(AreaTab(Routes.STOCK, "Baterias"), AreaTab(Routes.SCRAPS, "Sucatas"), AreaTab(Routes.WARRANTIES, "Garantias e extras")),
+    ),
+    MONEY(
+        "Dinheiro", AppIcons.BarChart,
+        listOf(
+            AreaTab(Routes.FINANCE, "Resumo"),
+            AreaTab(Routes.INVOICES, "Notas e boletos"),
+            AreaTab(Routes.EXPENSES, "Despesas"),
+            AreaTab(Routes.REPORTS, "Relatórios e PDF"),
+        ),
+    ),
+    ;
 
-/** Telas principais que exibem a barra inferior mas ficam no menu (não têm botão próprio). */
-private val menuOnlyTopLevel = setOf(Routes.SCRAPS, Routes.CHARGES, Routes.WARRANTIES, Routes.VOUCHERS, Routes.EXPENSES, Routes.FINANCE, Routes.INVOICES)
+    companion object {
+        fun of(route: String?): Area? = entries.firstOrNull { a -> a.tabs.any { it.route == route } }
+    }
+}
 
 private data class MenuEntry(val label: String, val icon: ImageVector, val route: String, val topLevel: Boolean)
 
-private val menuEntries = listOf(
-    MenuEntry("Início", Icons.Filled.Home, Routes.HOME, true),
-    MenuEntry("Nova venda", Icons.Filled.Add, Routes.newSale(), false),
-    MenuEntry("Vendas", Icons.Filled.ShoppingCart, Routes.SALES, true),
-    MenuEntry("Estoque de baterias", AppIcons.Battery, Routes.STOCK, true),
-    MenuEntry("Baterias na carga", Icons.Filled.Build, Routes.CHARGES, true),
-    MenuEntry("Garantias e extras", Icons.Filled.CheckCircle, Routes.WARRANTIES, true),
-    MenuEntry("Sucatas", Icons.Filled.Refresh, Routes.SCRAPS, true),
-    MenuEntry("Vales de casco", Icons.Filled.Star, Routes.VOUCHERS, true),
-    MenuEntry("Financeiro", Icons.Filled.Info, Routes.FINANCE, true),
-    MenuEntry("Despesas", Icons.Filled.DateRange, Routes.EXPENSES, true),
-    MenuEntry("Notas fiscais e boletos", Icons.Filled.Email, Routes.INVOICES, true),
-    MenuEntry("Relatórios", AppIcons.BarChart, Routes.REPORTS, true),
-    MenuEntry("Movimentações de estoque", Icons.AutoMirrored.Filled.List, Routes.MOVEMENTS, false),
-    MenuEntry("Tabela de sucatas", Icons.Filled.Edit, Routes.SCRAP_PRICES, false),
-    MenuEntry("Backup e sincronização", Icons.Filled.Settings, Routes.BACKUP, false),
+/** Menu ☰: atalhos e todas as telas, agrupadas por área. */
+private val menuGroups = listOf(
+    "Atalhos" to listOf(
+        MenuEntry("Nova venda", Icons.Filled.Add, Routes.newSale(), false),
+        MenuEntry("Nova nota fiscal", Icons.Filled.Email, Routes.INVOICE_NEW, false),
+    ),
+    "Vendas" to listOf(
+        MenuEntry("Vendas", Icons.Filled.ShoppingCart, Routes.SALES, true),
+        MenuEntry("Baterias na carga", Icons.Filled.Build, Routes.CHARGES, true),
+        MenuEntry("Vales de casco", Icons.Filled.Star, Routes.VOUCHERS, true),
+    ),
+    "Estoque" to listOf(
+        MenuEntry("Baterias", AppIcons.Battery, Routes.STOCK, true),
+        MenuEntry("Sucatas", Icons.Filled.Refresh, Routes.SCRAPS, true),
+        MenuEntry("Tabela de sucatas", Icons.Filled.Edit, Routes.SCRAP_PRICES, false),
+        MenuEntry("Garantias e extras", Icons.Filled.CheckCircle, Routes.WARRANTIES, true),
+        MenuEntry("Movimentações de estoque", Icons.AutoMirrored.Filled.List, Routes.MOVEMENTS, false),
+    ),
+    "Dinheiro" to listOf(
+        MenuEntry("Resumo financeiro", Icons.Filled.Info, Routes.FINANCE, true),
+        MenuEntry("Notas fiscais e boletos", Icons.Filled.Email, Routes.INVOICES, true),
+        MenuEntry("Despesas", Icons.Filled.DateRange, Routes.EXPENSES, true),
+        MenuEntry("Relatórios e PDF", AppIcons.BarChart, Routes.REPORTS, true),
+    ),
+    "Sistema" to listOf(
+        MenuEntry("Backup, sincronização e atualizações", Icons.Filled.Settings, Routes.BACKUP, false),
+    ),
 )
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -155,7 +196,12 @@ fun LojaNavHost() {
     val nav = rememberNavController()
     val backStack by nav.currentBackStackEntryAsState()
     val currentRoute = backStack?.destination?.route
-    val showBottomBar = topLevel.any { it.route == currentRoute } || currentRoute in menuOnlyTopLevel
+    val currentArea = Area.of(currentRoute)
+    val showBottomBar = currentArea != null
+    val lastTab = remember { mutableStateMapOf<Area, String>() }
+    LaunchedEffect(currentRoute) {
+        if (currentArea != null && currentRoute != null) lastTab[currentArea] = currentRoute
+    }
     var menuOpen by remember { mutableStateOf(false) }
     val context = LocalContext.current
     val container = (context.applicationContext as LojaApp).container
@@ -167,16 +213,17 @@ fun LojaNavHost() {
         bottomBar = {
             if (showBottomBar) {
                 NavigationBar {
-                    topLevel.forEach { item ->
+                    Area.entries.forEach { area ->
                         NavigationBarItem(
-                            selected = currentRoute == item.route,
-                            onClick = { nav.navigateTopLevel(item.route) },
-                            icon = { Icon(item.icon, contentDescription = null) },
-                            label = { Text(item.label) },
+                            selected = currentArea == area,
+                            // Volta para a última aba usada naquela área
+                            onClick = { nav.navigateTopLevel(lastTab[area] ?: area.tabs.first().route) },
+                            icon = { Icon(area.icon, contentDescription = null) },
+                            label = { Text(area.label, maxLines = 1) },
                         )
                     }
                     NavigationBarItem(
-                        selected = currentRoute in menuOnlyTopLevel,
+                        selected = false,
                         onClick = { menuOpen = true },
                         icon = { Icon(Icons.Filled.Menu, contentDescription = null) },
                         label = { Text("Menu") },
@@ -201,10 +248,31 @@ fun LojaNavHost() {
             .fillMaxSize()
             .padding(bottom = inner.calculateBottomPadding()),
       ) {
+      Column(
+          Modifier
+              .fillMaxSize()
+              .let { if (currentArea != null && currentArea.tabs.size > 1) it.windowInsetsPadding(WindowInsets.statusBars) else it },
+      ) {
+        // Abas da área (ligam as telas relacionadas)
+        if (currentArea != null && currentArea.tabs.size > 1) {
+            PrimaryScrollableTabRow(
+                selectedTabIndex = currentArea.tabs.indexOfFirst { it.route == currentRoute }.coerceAtLeast(0),
+                edgePadding = 8.dp,
+                containerColor = MaterialTheme.colorScheme.background,
+            ) {
+                currentArea.tabs.forEach { tab ->
+                    Tab(
+                        selected = tab.route == currentRoute,
+                        onClick = { if (tab.route != currentRoute) nav.navigateTopLevel(tab.route) },
+                        text = { Text(tab.label, maxLines = 1, style = MaterialTheme.typography.titleSmall) },
+                    )
+                }
+            }
+        }
         NavHost(
             navController = nav,
             startDestination = Routes.HOME,
-            modifier = Modifier.fillMaxSize(),
+            modifier = Modifier.fillMaxWidth().weight(1f),
             enterTransition = { androidx.compose.animation.EnterTransition.None },
             exitTransition = { androidx.compose.animation.ExitTransition.None },
         ) {
@@ -320,27 +388,40 @@ fun LojaNavHost() {
             }
         }
       }
+      }
     }
 
     if (menuOpen) {
         ModalBottomSheet(onDismissRequest = { menuOpen = false }) {
-            Column(Modifier.padding(bottom = 24.dp)) {
+            Column(
+                Modifier
+                    .verticalScroll(rememberScrollState())
+                    .padding(bottom = 24.dp)
+            ) {
                 Text(
                     "Art das Baterias",
                     style = MaterialTheme.typography.titleLarge,
                     modifier = Modifier.padding(horizontal = 24.dp, vertical = 8.dp),
                 )
-                menuEntries.forEach { entry ->
-                    NavigationDrawerItem(
-                        label = { Text(entry.label, style = MaterialTheme.typography.titleMedium) },
-                        icon = { Icon(entry.icon, contentDescription = null) },
-                        selected = currentRoute == entry.route,
-                        onClick = {
-                            menuOpen = false
-                            if (entry.topLevel) nav.navigateTopLevel(entry.route) else nav.navigate(entry.route)
-                        },
-                        modifier = Modifier.padding(horizontal = 12.dp),
+                menuGroups.forEach { (title, entries) ->
+                    Text(
+                        title,
+                        style = MaterialTheme.typography.labelLarge,
+                        color = MaterialTheme.colorScheme.primary,
+                        modifier = Modifier.padding(start = 28.dp, top = 12.dp, bottom = 4.dp),
                     )
+                    entries.forEach { entry ->
+                        NavigationDrawerItem(
+                            label = { Text(entry.label, style = MaterialTheme.typography.titleMedium) },
+                            icon = { Icon(entry.icon, contentDescription = null) },
+                            selected = currentRoute == entry.route,
+                            onClick = {
+                                menuOpen = false
+                                if (entry.topLevel) nav.navigateTopLevel(entry.route) else nav.navigate(entry.route)
+                            },
+                            modifier = Modifier.padding(horizontal = 12.dp),
+                        )
+                    }
                 }
             }
         }

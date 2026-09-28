@@ -1,6 +1,5 @@
 package br.com.lojabaterias.ui.viewmodel
 
-import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import br.com.lojabaterias.AppContainer
 import br.com.lojabaterias.data.FinancePeriod

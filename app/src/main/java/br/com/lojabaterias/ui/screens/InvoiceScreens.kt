@@ -63,7 +63,7 @@ import br.com.lojabaterias.domain.Money
 import br.com.lojabaterias.domain.Periods
 import br.com.lojabaterias.ui.components.AppCard
 import br.com.lojabaterias.ui.components.ConfirmDialog
-import br.com.lojabaterias.ui.components.DatePickerModal
+import br.com.lojabaterias.ui.components.DateButton
 import br.com.lojabaterias.ui.components.EmptyState
 import br.com.lojabaterias.ui.components.FitText
 import br.com.lojabaterias.ui.components.InfoRow
@@ -548,7 +548,7 @@ fun InvoiceFormScreen(invoiceId: Long?, onDone: () -> Unit, onBack: () -> Unit) 
                     )
                 }
             }
-            DateField("Data da nota", s.issueDate) { d -> vm.update { it.copy(issueDate = d) } }
+            DateButton("Data da nota", s.issueDate) { d -> vm.update { it.copy(issueDate = d) } }
 
             SectionTitle("2. Baterias que vieram na nota")
             s.items.forEach { item ->
@@ -618,7 +618,7 @@ fun InvoiceFormScreen(invoiceId: Long?, onDone: () -> Unit, onBack: () -> Unit) 
                                 Icon(Icons.Filled.Delete, contentDescription = "Remover parcela ${k + 1}")
                             }
                         }
-                        DateField("Vencimento", b.dueDate) { d -> vm.updateBill(b.key) { it.copy(dueDate = d) } }
+                        DateButton("Vencimento", b.dueDate) { d -> vm.updateBill(b.key) { it.copy(dueDate = d) } }
                         MoneyField(
                             value = b.amount,
                             onValueChange = { v -> vm.updateBill(b.key) { it.copy(amount = v) } },
@@ -686,7 +686,7 @@ private fun BillGenerator(enabled: Boolean, default: LocalDate, onGenerate: (Int
                 Text("Quantos boletos?", style = MaterialTheme.typography.bodyLarge, modifier = Modifier.weight(1f))
                 QuantityStepper(count, { count = it }, max = 24)
             }
-            DateField("Primeiro vencimento", first) { first = it }
+            DateButton("Primeiro vencimento", first) { first = it }
             if (count > 1) {
                 Text("Um boleto a cada:", style = MaterialTheme.typography.bodyMedium)
                 FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -706,23 +706,5 @@ private fun BillGenerator(enabled: Boolean, default: LocalDate, onGenerate: (Int
                 )
             }
         }
-    }
-}
-
-@Composable
-private fun DateField(label: String, date: LocalDate, onPick: (LocalDate) -> Unit) {
-    var open by remember { mutableStateOf(false) }
-    OutlinedButton(onClick = { open = true }, modifier = Modifier.fillMaxWidth()) {
-        Text("$label: ${date.format(Periods.DATE)}")
-    }
-    if (open) {
-        DatePickerModal(
-            initial = date,
-            onPick = {
-                onPick(it)
-                open = false
-            },
-            onDismiss = { open = false },
-        )
     }
 }

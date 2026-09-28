@@ -57,7 +57,7 @@ import br.com.lojabaterias.domain.Money
 import br.com.lojabaterias.domain.Periods
 import br.com.lojabaterias.ui.components.AppCard
 import br.com.lojabaterias.ui.components.ConfirmDialog
-import br.com.lojabaterias.ui.components.DatePickerModal
+import br.com.lojabaterias.ui.components.DateButton
 import br.com.lojabaterias.ui.components.EmptyState
 import br.com.lojabaterias.ui.components.FitText
 import br.com.lojabaterias.ui.components.InfoRow
@@ -294,15 +294,6 @@ private fun CategoryChips(selected: String, onSelect: (String) -> Unit) {
 }
 
 @Composable
-private fun DateButton(date: LocalDate, onPick: (LocalDate) -> Unit) {
-    var open by remember { mutableStateOf(false) }
-    OutlinedButton(onClick = { open = true }, modifier = Modifier.fillMaxWidth()) {
-        Text("Data: ${date.format(Periods.DATE)}")
-    }
-    if (open) DatePickerModal(initial = date, onPick = onPick, onDismiss = { open = false })
-}
-
-@Composable
 private fun ExpenseDialog(onConfirm: (String, String, Long, LocalDate) -> Unit, onDismiss: () -> Unit) {
     var category by remember { mutableStateOf("") }
     var description by remember { mutableStateOf("") }
@@ -324,7 +315,7 @@ private fun ExpenseDialog(onConfirm: (String, String, Long, LocalDate) -> Unit, 
                     modifier = Modifier.fillMaxWidth(),
                 )
                 MoneyField(value = amount, onValueChange = { amount = it }, label = "Valor pago")
-                DateButton(date) { date = it }
+                DateButton("Data", date) { date = it }
             }
         },
         confirmButton = {
@@ -352,7 +343,7 @@ private fun PayBillDialog(status: BillStatus, onConfirm: (Long, LocalDate) -> Un
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
                 MoneyField(value = amount, onValueChange = { amount = it }, label = "Valor pago")
-                DateButton(date) { date = it }
+                DateButton("Data", date) { date = it }
             }
         },
         confirmButton = {
