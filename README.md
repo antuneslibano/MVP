@@ -62,6 +62,11 @@ pois todos os APKs são assinados com a mesma chave (`app/signing/loja-baterias.
 - **Despesas** (Menu ☰): contas fixas do mês (cadastradas uma vez; aparecem como "a pagar" e é só tocar
   em "Paguei") e despesas avulsas por categoria. Mostra entrou × saiu × sobrou (lucro líquido); os Relatórios
   e o PDF também trazem as despesas e o lucro líquido.
+- **Financeiro** (Menu ☰): mês, ano ou tudo. Mostra quanto entrou, saiu e sobrou; para onde foi cada R$ 100
+  (custo, despesas, taxas, lucro); gráfico dia a dia / mês a mês (toque na barra para ver os valores); a conta
+  completa até o lucro líquido e o resultado geral (com carga e sucatas); formas de pagamento, despesas por
+  categoria e modelos que mais dão lucro; quanto as **baterias extras** já renderam (valor de venda e lucro);
+  o que a loja tem agora (estoque, sucatas, a receber) e um glossário dos termos.
 - **Pagamento dividido** (Nova venda > "Dividir o pagamento"): várias formas na mesma venda (ex.: R$ 100 no
   dinheiro + o resto no crédito). A loja decide quanto em cada forma; o app sugere quanto falta pelo preço à vista,
   pelo preço do cartão ou proporcional. A taxa da maquininha incide só na parte no cartão.
