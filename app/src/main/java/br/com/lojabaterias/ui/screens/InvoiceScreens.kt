@@ -84,6 +84,9 @@ import br.com.lojabaterias.ui.viewmodel.appViewModel
 import java.time.LocalDate
 import java.time.temporal.ChronoUnit
 
+/** Distribuidoras mais usadas (atalhos no formulário da nota). */
+private val SUPPLIERS = listOf("Heliar do Rio", "Oeste Rio Distribuidora Moura", "PCR Baterias Baterax", "Barra Nota 10")
+
 // ------------------------------------------------------------------ Lista
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -531,11 +534,20 @@ fun InvoiceFormScreen(invoiceId: Long?, onDone: () -> Unit, onBack: () -> Unit) 
             OutlinedTextField(
                 value = s.supplier,
                 onValueChange = { v -> vm.update { it.copy(supplier = v.take(60)) } },
-                label = { Text("Fornecedor (ex.: nome da fábrica)") },
+                label = { Text("Fornecedor (toque numa opção ou digite)") },
                 singleLine = true,
                 keyboardOptions = KeyboardOptions(capitalization = KeyboardCapitalization.Words, imeAction = ImeAction.Next),
                 modifier = Modifier.fillMaxWidth(),
             )
+            FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                SUPPLIERS.forEach { name ->
+                    FilterChip(
+                        selected = s.supplier.equals(name, ignoreCase = true),
+                        onClick = { vm.update { it.copy(supplier = name) } },
+                        label = { Text(name) },
+                    )
+                }
+            }
             DateField("Data da nota", s.issueDate) { d -> vm.update { it.copy(issueDate = d) } }
 
             SectionTitle("2. Baterias que vieram na nota")
