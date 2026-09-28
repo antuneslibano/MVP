@@ -58,6 +58,20 @@ class ProductDetailViewModel(private val repo: StoreRepository, private val prod
     val movements: StateFlow<List<MovementWithModel>> = repo.observeMovements(productId)
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
 
+    /** Lotes do estoque (as mais antigas saem primeiro). */
+    val layers: StateFlow<List<br.com.lojabaterias.domain.CostLayer>> = kotlinx.coroutines.flow.combine(
+        repo.observeProduct(productId),
+        repo.observeMovements(productId),
+        repo.observeWarranties(),
+    ) { p, moves, claims ->
+        if (p == null) {
+            emptyList()
+        } else {
+            val extras = claims.count { it.isExtra && it.saleId == null && it.returnedProductId == p.id }
+            StoreRepository.costLayersFrom(p, moves.map { it.movement }, extras)
+        }
+    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
+
     /** Retorna true pelo callback se deu certo (para fechar o diálogo). */
     fun addStock(quantity: Int, newCost: Long?, note: String, onSuccess: () -> Unit) {
         viewModelScope.launch {

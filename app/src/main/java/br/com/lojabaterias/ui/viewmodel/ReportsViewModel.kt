@@ -38,6 +38,13 @@ data class ReportsState(
     val pdfFileName: String get() = Periods.reportFileName(selection.type, today, selection.offset)
 }
 
+private data class Snapshot(
+    val products: List<br.com.lojabaterias.data.Product>,
+    val scrapStock: List<br.com.lojabaterias.data.ScrapStock>,
+    val prices: Map<Int, Long>,
+    val values: Map<Long, Long>,
+)
+
 @OptIn(ExperimentalCoroutinesApi::class)
 private data class PeriodData(
     val sales: List<br.com.lojabaterias.data.SaleWithItems>,
@@ -59,7 +66,8 @@ class ReportsViewModel(private val container: AppContainer) : MessageViewModel()
         repo.observeProducts(),
         repo.observeScrapStock(),
         repo.observeScrapPrices().map { list -> list.associate { it.amperage to it.value } },
-    ) { products, scrapStock, prices -> Triple(products, scrapStock, prices) }
+        repo.observeStockValues(),
+    ) { products, scrapStock, prices, values -> Snapshot(products, scrapStock, prices, values) }
 
     private val services = combine(repo.observeCharges(), repo.observeWarranties()) { c, w -> c to w }
 
@@ -72,7 +80,7 @@ class ReportsViewModel(private val container: AppContainer) : MessageViewModel()
                 repo.observeScrapMovementsInRange(range),
                 repo.observeExpensePayments(range),
             ) { sales, stockMoves, scrapMoves, expenses -> PeriodData(sales, stockMoves, scrapMoves, expenses) }
-            combine(period, snapshot, services) { (sales, stockMoves, scrapMoves, expenses), (products, scrapStock, prices), (charges, claims) ->
+            combine(period, snapshot, services) { (sales, stockMoves, scrapMoves, expenses), (products, scrapStock, prices, values), (charges, claims) ->
                 ReportsState(
                     selection = sel,
                     today = today,
@@ -83,6 +91,7 @@ class ReportsViewModel(private val container: AppContainer) : MessageViewModel()
                         allWarranties = claims,
                         expenses = expenses,
                         range = range,
+                        stockValues = values,
                     ),
                     loading = false,
                 )

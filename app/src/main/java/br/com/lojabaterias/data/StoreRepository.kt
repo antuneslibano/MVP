@@ -3,6 +3,8 @@ package br.com.lojabaterias.data
 import androidx.room.withTransaction
 import br.com.lojabaterias.data.sync.IdGenerator
 import br.com.lojabaterias.domain.CardFees
+import br.com.lojabaterias.domain.CostLayer
+import br.com.lojabaterias.domain.CostLayers
 import br.com.lojabaterias.domain.DateRange
 import br.com.lojabaterias.domain.Money
 import br.com.lojabaterias.domain.PaymentMethod
@@ -11,6 +13,7 @@ import br.com.lojabaterias.domain.ReportSale
 import br.com.lojabaterias.domain.SaleCalculator
 import br.com.lojabaterias.domain.SplitPayment
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.combine
 
 /** Erro de regra de negócio com mensagem pronta para o usuário. */
 class BusinessException(message: String) : Exception(message)
@@ -91,6 +94,27 @@ class StoreRepository(
     }
 
     private fun now() = System.currentTimeMillis()
+
+    /** Lotes (custo por lote) das baterias de [product] em estoque, sem as extras (custo zero, saem primeiro). */
+    private suspend fun layersOf(product: Product): List<CostLayer> =
+        costLayersFrom(product, movements.forProduct(product.id), availableExtras(product.id).size)
+
+    /** Lotes do estoque de uma bateria, do mais antigo (sai primeiro) para o mais novo. */
+    suspend fun costLayers(productId: Long): List<CostLayer> {
+        val p = products.getById(productId) ?: return emptyList()
+        return layersOf(p)
+    }
+
+    /** Valor a preço de custo (pelos lotes) do estoque de cada bateria. */
+    fun observeStockValues(): Flow<Map<Long, Long>> = combine(
+        products.observeAll(),
+        movements.observeAllRaw(),
+        warranties.observeAll(),
+    ) { list, moves, claims ->
+        val byProduct = moves.groupBy { it.productId }
+        val extras = claims.filter { it.isExtra && it.saleId == null }.groupingBy { it.returnedProductId }.eachCount()
+        list.associate { p -> p.id to costLayersFrom(p, byProduct[p.id].orEmpty(), extras[p.id] ?: 0).sumOf { it.total } }
+    }
 
     /** Registra uma movimentação de estoque e atualiza o estoque do produto. Retorna o ID da movimentação. */
     private suspend fun moveStock(
@@ -282,7 +306,9 @@ class StoreRepository(
         validateScrap(quantity, scrap)
         rebuildOrphanExtras()
         val extras = availableExtras(product.id).take(quantity)
-        val totals = totalsFor(unitPrice, quantity, discount, product.cost, scrap.charge, method, payments, extras.size)
+        // Custo pelos lotes: as baterias mais antigas saem primeiro
+        val unitCost = CostLayers.unitCostOf(layersOf(product), quantity - extras.size, product.cost)
+        val totals = totalsFor(unitPrice, quantity, discount, unitCost, scrap.charge, method, payments, extras.size)
         val saleId = sales.insertSale(
             Sale(
                 dateTime = dateTime,
@@ -306,7 +332,7 @@ class StoreRepository(
                 modelSnapshot = product.model,
                 quantity = quantity,
                 unitPrice = unitPrice,
-                unitCost = product.cost,
+                unitCost = unitCost,
                 subtotal = totals.grossAmount,
             )
         )
@@ -983,8 +1009,8 @@ class StoreRepository(
 
     /**
      * As baterias da nota chegaram. [receivedQty] diz quantas chegaram de cada item (na ordem da nota;
-     * vazio = todas). Com [addToStock], as que chegaram entram no estoque e o custo de cada bateria
-     * no cadastro passa a ser o da nota (valor unitário − desconto).
+     * vazio = todas). Com [addToStock], as que chegaram entram no estoque como um lote com o custo
+     * da nota (valor unitário − desconto); as vendas usam primeiro os lotes mais antigos.
      */
     suspend fun markInvoiceReceived(
         id: Long,
@@ -1000,10 +1026,7 @@ class StoreRepository(
             val qty = receivedQty.getOrNull(k)?.coerceAtLeast(0) ?: item.quantity
             val product = item.productId?.let { products.getById(it) }
             val moveId = if (addToStock && qty > 0 && product != null) {
-                // O custo da bateria no cadastro passa a ser o desta nota (já com o desconto)
-                if (item.unitCost > 0 && product.cost != item.unitCost) {
-                    products.update(product.copy(cost = item.unitCost, updatedAt = now(), dirty = true))
-                }
+                // Entra como um lote novo, com o custo desta nota (já com o desconto)
                 moveStock(product.id, qty, MovementType.ENTRY, label, at, item.unitCost)
             } else {
                 null
@@ -1203,6 +1226,18 @@ class StoreRepository(
     }
 
     companion object {
+        /** Movimentações que trazem baterias com custo (cada uma vira um lote). */
+        private val COST_ENTRY_TYPES = setOf(MovementType.INITIAL, MovementType.ENTRY)
+
+        /** Lotes das [product].stock − [extrasInStock] baterias em estoque, a partir das entradas com custo. */
+        fun costLayersFrom(product: Product, moves: List<StockMovement>, extrasInStock: Int): List<CostLayer> {
+            val entries = moves
+                .filter { it.productId == product.id && it.type in COST_ENTRY_TYPES && it.quantity > 0 && it.unitCost != null }
+                .sortedWith(compareBy<StockMovement>({ it.dateTime }, { it.id }))
+                .map { it.quantity to it.unitCost!! }
+            return CostLayers.build(entries, product.stock - extrasInStock, product.cost)
+        }
+
         fun toReportSale(s: SaleWithItems): ReportSale = ReportSale(
             paymentMethod = s.sale.payment,
             grossAmount = s.sale.grossAmount,

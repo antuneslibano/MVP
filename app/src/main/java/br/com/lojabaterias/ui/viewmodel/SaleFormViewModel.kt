@@ -6,6 +6,8 @@ import br.com.lojabaterias.data.Product
 import br.com.lojabaterias.data.ScrapInput
 import br.com.lojabaterias.data.StoreRepository
 import br.com.lojabaterias.domain.CardFees
+import br.com.lojabaterias.domain.CostLayer
+import br.com.lojabaterias.domain.CostLayers
 import br.com.lojabaterias.domain.PaymentMethod
 import br.com.lojabaterias.domain.PriceTable
 import br.com.lojabaterias.domain.SaleCalculator
@@ -62,7 +64,13 @@ data class SaleFormState(
     /** Pagamento dividido em várias formas (ex.: parte no dinheiro, parte no crédito). */
     val split: Boolean = false,
     val parts: List<PaymentPart> = emptyList(),
+    /** Lotes do estoque da bateria (venda nova): as mais antigas saem primeiro. */
+    val costLayers: List<CostLayer>? = null,
 ) {
+    /** Custo de cada bateria desta venda: pelos lotes (venda nova) ou o gravado na venda (edição). */
+    val effectiveUnitCost: Long
+        get() = costLayers?.let { CostLayers.unitCostOf(it, (quantity - freeUnits).coerceAtLeast(0), unitCost) } ?: unitCost
+
     val partPairs: List<Pair<PaymentMethod, Long>> get() = parts.map { it.method to it.amount }
     val partsTotal: Long get() = parts.sumOf { it.amount }
 
@@ -87,9 +95,9 @@ data class SaleFormState(
 
     val totals: SaleTotals?
         get() = if (split && quantity > 0) {
-            SplitPayment.compute(unitPrice, quantity, unitCost, scrapInput.charge, partPairs, fees::rateFor, freeUnits)
+            SplitPayment.compute(unitPrice, quantity, effectiveUnitCost, scrapInput.charge, partPairs, fees::rateFor, freeUnits)
         } else if (quantity > 0 && discount <= unitPrice * quantity) {
-            SaleCalculator.compute(unitPrice, quantity, discount, unitCost, scrapInput.charge, fees.rateFor(method), freeUnits)
+            SaleCalculator.compute(unitPrice, quantity, discount, effectiveUnitCost, scrapInput.charge, fees.rateFor(method), freeUnits)
         } else {
             null
         }
@@ -202,6 +210,7 @@ class SaleFormViewModel(
                 product = product,
                 model = product.model,
                 unitCost = product.cost,
+                costLayers = null,
                 available = product.stock,
                 quantity = if (product.stock > 0) 1 else 0,
                 unitPrice = product.prices.priceFor(it.method),
@@ -220,7 +229,8 @@ class SaleFormViewModel(
         viewModelScope.launch {
             runCatching { repo.repairExtras() }
             val free = repo.freeExtraCount(product.id)
-            _form.update { if (it.product?.id == product.id) it.copy(freeAvailable = free) else it }
+            val layers = repo.costLayers(product.id)
+            _form.update { if (it.product?.id == product.id) it.copy(freeAvailable = free, costLayers = layers) else it }
         }
     }
 

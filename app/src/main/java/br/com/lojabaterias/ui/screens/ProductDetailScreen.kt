@@ -41,6 +41,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import br.com.lojabaterias.data.MovementType
 import br.com.lojabaterias.data.MovementWithModel
 import br.com.lojabaterias.data.Product
+import br.com.lojabaterias.domain.CostLayer
 import br.com.lojabaterias.domain.Money
 import br.com.lojabaterias.domain.Periods
 import br.com.lojabaterias.ui.components.AppCard
@@ -62,6 +63,7 @@ fun ProductDetailScreen(productId: Long, onEdit: () -> Unit, onSell: () -> Unit,
     val vm = appViewModel(key = "product-$productId") { ProductDetailViewModel(it.repository, productId) }
     val loaded by vm.product.collectAsStateWithLifecycle()
     val movements by vm.movements.collectAsStateWithLifecycle()
+    val layers by vm.layers.collectAsStateWithLifecycle()
     ToastEffect(vm.messages)
 
     var showEntry by remember { mutableStateOf(false) }
@@ -87,7 +89,7 @@ fun ProductDetailScreen(productId: Long, onEdit: () -> Unit, onSell: () -> Unit,
                 contentPadding = PaddingValues(start = 16.dp, end = 16.dp, bottom = 32.dp),
                 verticalArrangement = Arrangement.spacedBy(8.dp),
             ) {
-                item { ProductHeader(product) }
+                item { ProductHeader(product, layers) }
                 item {
                     PrimaryActionButton(
                         text = "Vender esta bateria",
@@ -149,7 +151,7 @@ fun ProductDetailScreen(productId: Long, onEdit: () -> Unit, onSell: () -> Unit,
 }
 
 @Composable
-private fun ProductHeader(product: Product) {
+private fun ProductHeader(product: Product, layers: List<CostLayer>) {
     AppCard {
         Column(Modifier.padding(16.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
@@ -166,14 +168,25 @@ private fun ProductHeader(product: Product) {
                 StockBadge(product, large = true)
             }
             Spacer(Modifier.height(12.dp))
-            InfoRow("Custo", Money.format(product.cost))
+            // Custo pelos lotes: a próxima bateria a sair é a do lote mais antigo
+            val nextCost = layers.firstOrNull()?.unitCost ?: product.cost
+            InfoRow(if (layers.size > 1) "Custo (próxima a sair)" else "Custo", Money.format(nextCost))
+            if (layers.size > 1) {
+                Text(
+                    "Lotes no estoque (os de cima saem primeiro):",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.padding(top = 4.dp),
+                )
+                layers.forEach { l -> InfoRow("${l.quantity} × ${Money.format(l.unitCost)}", Money.format(l.total)) }
+            }
             InfoRow("Preço PIX / Dinheiro", Money.format(product.pricePix))
             InfoRow("Preço débito", Money.format(product.priceDebit))
             InfoRow("Preço crédito", Money.format(product.priceCredit))
             InfoRow(
                 "Lucro no PIX",
-                Money.format(product.pricePix - product.cost),
-                valueColor = if (product.pricePix >= product.cost) profitColor() else dangerColor(),
+                Money.format(product.pricePix - nextCost),
+                valueColor = if (product.pricePix >= nextCost) profitColor() else dangerColor(),
             )
         }
     }

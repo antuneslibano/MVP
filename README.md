@@ -43,6 +43,10 @@ relacionadas. O **Menu ☰** mostra tudo agrupado pelas mesmas áreas, com atalh
 
 ### Estoque
 - **Baterias**: busca, estoque baixo/zerado, cadastro, entrada, ajuste e histórico (Movimentações no menu).
+  - **Custo por lotes** (primeiro que entra, primeiro que sai): cada entrada com custo (estoque inicial, entrada
+    manual, chegada de nota fiscal) vira um lote. A venda usa primeiro as baterias mais antigas, com o custo delas.
+    Ex.: 5 M100QD a R$ 672 + 5 a R$ 650 → as 5 primeiras vendas custam R$ 672. A tela da bateria mostra os lotes,
+    e o valor do estoque (Financeiro, Relatórios e PDF) é a soma dos lotes.
 - **Sucatas**: estoque por amperagem, entrada, compra, venda (ao reciclador), ajuste e a **Tabela de sucatas**.
 - **Garantias e extras**: *Garantias* conta as trocas por modelo (não mexe no estoque); *Extras* são baterias
   ganhadas: entram com custo zero e saem com lucro de 100% (a venda usa primeiro as extras do modelo).

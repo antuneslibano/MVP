@@ -11,8 +11,10 @@ data class StockRow(
     val minStock: Int,
     val cost: Long,
     val pricePix: Long,
+    /** Valor a preço de custo pelos lotes (null = custo × estoque). */
+    val layeredValue: Long? = null,
 ) {
-    val valueAtCost: Long get() = cost * stock
+    val valueAtCost: Long get() = layeredValue ?: (cost * stock)
     val valueAtPix: Long get() = pricePix * stock
     val isOut: Boolean get() = stock <= 0
     val isLow: Boolean get() = stock in 1..minStock
@@ -125,6 +127,7 @@ data class FullReport(
             allWarranties: List<WarrantyClaim> = emptyList(),
             expenses: List<Expense> = emptyList(),
             range: br.com.lojabaterias.domain.DateRange? = null,
+            stockValues: Map<Long, Long> = emptyMap(),
         ): FullReport {
             fun inRange(t: Long?) = t != null && (range == null || t in range)
             val periodCharges = allCharges.filter { inRange(it.receivedAt) }
@@ -152,7 +155,7 @@ data class FullReport(
                 canceledSales = canceled,
                 grossTotal = active.sumOf { it.sale.grossAmount },
                 discountTotal = active.sumOf { it.sale.discount },
-                stockRows = products.map { StockRow(it.model, it.amperage, it.stock, it.minStock, it.cost, it.pricePix) },
+                stockRows = products.map { StockRow(it.model, it.amperage, it.stock, it.minStock, it.cost, it.pricePix, stockValues[it.id]) },
                 stockPeriod = StockPeriodSummary(
                     entriesQuantity = entries.sumOf { it.quantity },
                     entriesCost = entries.sumOf { it.quantity * (it.unitCost ?: 0) },

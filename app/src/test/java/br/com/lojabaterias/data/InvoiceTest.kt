@@ -63,8 +63,13 @@ class InvoiceTest {
         assertTrue(after.invoice.isReceived)
         assertEquals("Faltou: 1 BE50D • caixa amassada", after.invoice.receivedNote)
         assertEquals(14, repo.getProduct(pid)!!.stock)
-        // Na chegada, o custo passa a ser o da nota
-        assertEquals(31_000L, repo.getProduct(pid)!!.cost)
+        // Na chegada entra um lote novo com o custo da nota; o lote antigo continua com o custo antigo
+        assertEquals(30_000L, repo.getProduct(pid)!!.cost)
+        assertEquals(
+            listOf(br.com.lojabaterias.domain.CostLayer(5, 30_000), br.com.lojabaterias.domain.CostLayer(9, 31_000)),
+            repo.costLayers(pid),
+        )
+        assertEquals(5 * 30_000L + 9 * 31_000L, repo.observeStockValues().first()[pid])
         assertEquals(9, after.invoice.items.single().received)
 
         // Não dá para trocar as baterias de uma nota que já entrou no estoque
@@ -156,5 +161,17 @@ class InvoiceTest {
         assertEquals(70_666L, decoded.listPrice)
         assertEquals(5_653L, decoded.unitDiscount)
         assertEquals(260_052L, decoded.subtotal)
+    }
+
+    @Test
+    fun saleUsesOldestLotFirst() = runBlocking {
+        val pid = product() // 5 a R$ 300,00
+        repo.addStock(pid, 5, 28_000, null) // mais 5 a R$ 280,00
+        val saleId = repo.registerSale(pid, 6, br.com.lojabaterias.domain.PaymentMethod.PIX, 45_000, 0, 1_000, ScrapInput(6, 0, 60, 0))
+        val sale = repo.getSale(saleId)!!
+        // 5 × 300 + 1 × 280 = 1.780 → 296,67 cada
+        assertEquals(29_667L, sale.items.single().unitCost)
+        // Sobraram 4 do lote de R$ 280
+        assertEquals(listOf(br.com.lojabaterias.domain.CostLayer(4, 28_000)), repo.costLayers(pid))
     }
 }

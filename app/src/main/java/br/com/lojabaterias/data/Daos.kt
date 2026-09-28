@@ -156,6 +156,12 @@ interface MovementDao {
     @Query("SELECT * FROM stock_movements ORDER BY id")
     suspend fun getAll(): List<StockMovement>
 
+    @Query("SELECT * FROM stock_movements WHERE product_id = :productId ORDER BY id")
+    suspend fun forProduct(productId: Long): List<StockMovement>
+
+    @Query("SELECT * FROM stock_movements")
+    fun observeAllRaw(): Flow<List<StockMovement>>
+
     @Query(
         "SELECT m.*, p.model AS model FROM stock_movements m " +
             "LEFT JOIN products p ON p.id = m.product_id " +

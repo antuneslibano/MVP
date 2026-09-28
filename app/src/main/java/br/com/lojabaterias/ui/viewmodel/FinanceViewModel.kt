@@ -45,9 +45,10 @@ class FinanceViewModel(container: AppContainer) : MessageViewModel() {
         repo.observeScrapStock(),
         repo.observeScrapPrices().map { list -> list.associate { it.amperage to it.value } },
         repo.observeInvoiceBills(),
-    ) { products, scrapStock, prices, bills -> Stock(products, scrapStock, prices, bills) }
+        repo.observeStockValues(),
+    ) { products, scrapStock, prices, bills, values -> Stock(products, scrapStock, prices, bills, values) }
 
-    val state: StateFlow<FinanceState> = combine(selection, currentDateFlow(), money, stock) { sel, today, m, (products, scrapStock, prices, bills) ->
+    val state: StateFlow<FinanceState> = combine(selection, currentDateFlow(), money, stock) { sel, today, m, (products, scrapStock, prices, bills, values) ->
         FinanceState(
             selection = sel,
             report = FinanceReport.build(
@@ -63,6 +64,7 @@ class FinanceViewModel(container: AppContainer) : MessageViewModel() {
                 scrapStock = scrapStock,
                 scrapPrices = prices,
                 invoiceBills = bills,
+                stockValues = values,
             ),
             loading = false,
         )
@@ -98,6 +100,7 @@ class FinanceViewModel(container: AppContainer) : MessageViewModel() {
         val scrapStock: List<br.com.lojabaterias.data.ScrapStock>,
         val prices: Map<Int, Long>,
         val bills: List<br.com.lojabaterias.data.InvoiceBill>,
+        val values: Map<Long, Long>,
     )
 
     private data class Money(

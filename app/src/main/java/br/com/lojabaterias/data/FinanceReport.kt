@@ -145,6 +145,8 @@ data class FinanceReport(
             scrapPrices: Map<Int, Long>,
             zone: ZoneId = ZoneId.systemDefault(),
             invoiceBills: List<InvoiceBill> = emptyList(),
+            /** Valor a preço de custo do estoque de cada bateria, pelos lotes. */
+            stockValues: Map<Long, Long>? = null,
         ): FinanceReport {
             val sales = allSales.filter { !it.sale.isCanceled }
             val payments = expenses.filter { it.kind == ExpenseKind.PAYMENT }
@@ -207,7 +209,7 @@ data class FinanceReport(
                 extrasAllTime = extrasSummary(extras, sales, DateRange(Long.MIN_VALUE, Long.MAX_VALUE)),
                 extrasInStock = inStock.size,
                 extrasInStockValue = inStock.sumOf { w -> w.returnedProductId?.let { productsById[it]?.pricePix } ?: 0L },
-                stockAtCost = products.sumOf { (it.cost * it.stock).coerceAtLeast(0) },
+                stockAtCost = stockValues?.values?.sum() ?: products.sumOf { (it.cost * it.stock).coerceAtLeast(0) },
                 stockAtPix = products.sumOf { (it.pricePix * it.stock).coerceAtLeast(0) },
                 scrapStockValue = scrapStock.sumOf { (scrapPrices[it.amperage] ?: 0L) * it.quantity.coerceAtLeast(0) },
                 toReceive = charges.filter { !it.paid }.sumOf { it.price },
