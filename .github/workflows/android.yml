@@ -97,7 +97,7 @@ jobs:
       # e oferece a atualização automaticamente (Menu > Backup e sincronização > Atualizações).
       - name: Publicar versão para atualização automática (GitHub Release)
         if: github.event_name != 'pull_request'
-        uses: softprops/action-gh-release@v2
+        uses: softprops/action-gh-release@v3
         with:
           tag_name: build-${{ github.run_number }}
           target_commitish: ${{ github.sha }}
