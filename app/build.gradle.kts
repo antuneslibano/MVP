@@ -27,17 +27,22 @@ android {
         buildConfigField("String", "SUPABASE_ANON_KEY", "\"$supabaseKey\"")
     }
 
-    // Assinatura do app: a chave fica só nos Secrets do GitHub (nunca no código).
-    // A mesma chave em todos os builds permite atualizar o app sem desinstalar.
-    // Sem os secrets (build local), a versão release é assinada com a chave de debug.
-    val releaseKeystore = System.getenv("SIGNING_KEYSTORE_PATH")?.takeIf { it.isNotBlank() }
+    // Assinatura fixa: mantém a mesma chave entre builds para que o app possa ser
+    // atualizado no celular sem desinstalar (e sem perder os dados).
+    // Pode ser substituída por secrets do GitHub (ver README).
     signingConfigs {
-        if (releaseKeystore != null) {
-            create("release") {
-                storeFile = file(releaseKeystore)
+        create("release") {
+            val customKeystore = System.getenv("SIGNING_KEYSTORE_PATH")
+            if (!customKeystore.isNullOrBlank()) {
+                storeFile = file(customKeystore)
                 storePassword = System.getenv("SIGNING_STORE_PASSWORD")
                 keyAlias = System.getenv("SIGNING_KEY_ALIAS")
                 keyPassword = System.getenv("SIGNING_KEY_PASSWORD")
+            } else {
+                storeFile = file("signing/loja-baterias.jks")
+                storePassword = "lojabaterias"
+                keyAlias = "lojabaterias"
+                keyPassword = "lojabaterias"
             }
         }
     }
@@ -50,7 +55,7 @@ android {
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro"
             )
-            signingConfig = if (releaseKeystore != null) signingConfigs.getByName("release") else signingConfigs.getByName("debug")
+            signingConfig = signingConfigs.getByName("release")
         }
         debug {
             applicationIdSuffix = ".debug"
