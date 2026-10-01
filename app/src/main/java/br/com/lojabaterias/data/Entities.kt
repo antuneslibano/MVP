@@ -160,6 +160,7 @@ object MovementType {
     const val WARRANTY_OUT = "WARRANTY_OUT"
     const val WARRANTY_IN = "WARRANTY_IN"
     const val EXTRA_IN = "EXTRA_IN"
+    const val VITOR_IN = "VITOR_IN"
 
     fun label(type: String): String = when (type) {
         LOAN_OUT -> "Emprestada (carga)"
@@ -167,6 +168,7 @@ object MovementType {
         WARRANTY_OUT -> "Troca em garantia"
         WARRANTY_IN -> "Reposição da fábrica"
         EXTRA_IN -> "Extra (ganhada)"
+        VITOR_IN -> "Bateria do Vitor"
         INITIAL -> "Estoque inicial"
         ENTRY -> "Entrada"
         ADJUSTMENT -> "Ajuste"
@@ -338,7 +340,12 @@ object WarrantyStatus {
     const val EXCHANGE = "EXCHANGE"
     /** Bateria extra ganhada: entra no estoque com custo zero. */
     const val EXTRA = "EXTRA"
+    /** Bateria Heliar do Vitor: entra no estoque com o custo pago a ele (padrão R$ 150, em [WarrantyClaim.replacementCost]). */
+    const val VITOR = "VITOR"
 }
+
+/** Valor padrão pago ao Vitor por bateria (centavos). */
+const val VITOR_DEFAULT_COST = 15_000L
 
 /**
  * Registro da tela de Garantias: uma bateria trocada ([WarrantyStatus.EXCHANGE]) ou uma extra ganhada
@@ -392,6 +399,8 @@ data class WarrantyClaim(
     @ColumnInfo(name = "dirty", defaultValue = "1") val dirty: Boolean = true,
 ) {
     val isExtra: Boolean get() = status == WarrantyStatus.EXTRA
+    val isVitor: Boolean get() = status == WarrantyStatus.VITOR
+    val isExchange: Boolean get() = status == WarrantyStatus.EXCHANGE
 }
 
 /** Registro de exclusão local, ainda não enviado para a nuvem. */

@@ -50,6 +50,8 @@ relacionadas. O **Menu ☰** mostra tudo agrupado pelas mesmas áreas, com atalh
 - **Sucatas**: estoque por amperagem, entrada, compra, venda (ao reciclador), ajuste e a **Tabela de sucatas**.
 - **Garantias e extras**: *Garantias* conta as trocas por modelo (não mexe no estoque); *Extras* são baterias
   ganhadas: entram com custo zero e saem com lucro de 100% (a venda usa primeiro as extras do modelo).
+  *Vitor*: baterias Heliar (modelos que começam com H) do Vitor; entram no estoque como um lote com o custo pago a
+  ele (R$ 150 por padrão, editável), então na venda o lucro é o preço menos esse valor. O pagamento não entra no caixa.
 
 ### Dinheiro
 - **Resumo** (mês, ano ou tudo), em três partes:
@@ -67,9 +69,10 @@ relacionadas. O **Menu ☰** mostra tudo agrupado pelas mesmas áreas, com atalh
   marque ao lançar e ela não mexe no estoque. Aba de boletos a pagar/pagos com "Paguei".
   Boletos pagos **não saem do lucro** (o custo já sai na venda), mas saem do **caixa**.
 - **Despesas**: despesas pagas no mês, por categoria.
-- **Relatórios e PDF**: diário, semanal e mensal, com o **PDF completo** do período: vendas, estoque, sucatas,
-  carga, garantias e extras (inclusive valor e lucro das extras vendidas), despesas, **notas fiscais e boletos**
-  (lançadas, chegadas, boletos pagos, dívida atual) e **caixa e retiradas dos sócios**.
+- **Relatórios e PDF** (diário, semanal e mensal): faturamento, lucro, baterias vendidas, **média por dia**
+  (contando só os dias com venda), **baterias vendidas por dia** (cada dia com uma tabela de modelos, iguais somados),
+  total por modelo e um **resumo curto** do resto (estoque, sucatas, carga, garantias/extras/Vitor, notas e caixa).
+  Sem listas de cada venda ou movimentação.
 
 ### Geral
 - **Senha** ao abrir e após 2 minutos fora; bloqueio após tentativas erradas; "Esqueci a senha" com pergunta secreta.

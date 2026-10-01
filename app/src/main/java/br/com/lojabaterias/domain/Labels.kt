@@ -7,4 +7,13 @@ object Labels {
 
     /** Ex.: "4 vendas • 5 baterias" */
     fun salesAndBatteries(sales: Int, batteries: Int): String = "${sales(sales)} • ${batteries(batteries)}"
+
+    private val WEEKDAYS = listOf("Seg", "Ter", "Qua", "Qui", "Sex", "Sáb", "Dom")
+    private val DAY_MONTH = java.time.format.DateTimeFormatter.ofPattern("dd/MM")
+
+    /** Ex.: "Seg, 21/09" */
+    fun dayTitle(date: java.time.LocalDate): String = "${WEEKDAYS[date.dayOfWeek.value - 1]}, ${date.format(DAY_MONTH)}"
+
+    /** 10.5 → "10,5"; 10.0 → "10" */
+    fun oneDecimal(v: Double): String = String.format(java.util.Locale.US, "%.1f", v).replace('.', ',').removeSuffix(",0")
 }

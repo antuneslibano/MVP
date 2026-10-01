@@ -5,11 +5,10 @@ import android.graphics.Color
 import android.graphics.Paint
 import android.graphics.Typeface
 import android.graphics.pdf.PdfDocument
-import br.com.lojabaterias.domain.ModelStats
+import br.com.lojabaterias.domain.Labels
 import br.com.lojabaterias.domain.Money
 import br.com.lojabaterias.domain.PeriodType
 import br.com.lojabaterias.domain.Periods
-import br.com.lojabaterias.domain.Report
 import java.io.OutputStream
 
 /** Dados necessários para gerar o PDF de um relatório. */
@@ -55,33 +54,12 @@ object ReportPdfWriter {
                 val f = doc.full
                 header(doc)
                 chapter("1. Vendas")
-                summary(f.sales)
-                salesExtras(f)
-                ranking("Modelos mais vendidos", f.sales.topByQuantity)
-                ranking("Modelos com maior faturamento", f.sales.topByRevenue)
-                ranking("Modelos com maior lucro", f.sales.topByProfit)
-                payments(f.sales)
-                salesList(f.activeSales)
-                canceledList(f.canceledSales)
-                chapter("2. Estoque de baterias")
-                stockPeriod(f)
-                stockSnapshot(f)
-                stockAlerts(f)
-                stockMovements(f.stockMovements)
-                chapter("3. Sucatas")
-                scraps(f.scrap)
-                scrapStock(f)
-                scrapMovements(f.scrapMovements)
-                chapter("4. Baterias na carga")
-                chargesSection(f)
-                chapter("5. Garantias e extras")
-                warrantySection(f)
-                chapter("6. Despesas e resultado")
-                expensesSection(f)
-                chapter("7. Notas fiscais e boletos")
-                invoicesSection(f)
-                chapter("8. Caixa e retiradas dos sócios")
-                cashSection(f)
+                salesSummary(f)
+                chapter("2. Baterias vendidas por dia")
+                daily(f)
+                if (doc.type != PeriodType.DAY && f.daily.size > 1) modelsTotal(f)
+                chapter("3. Resumo geral")
+                generalSummary(f)
                 finish()
             }
             pdf.writeTo(output)
@@ -187,348 +165,11 @@ object ReportPdfWriter {
             )
         }
 
-        fun salesExtras(f: FullReport) {
-            sectionTitle("Detalhes das vendas")
-            keyValueTable(
-                listOf(
-                    "Valor bruto (preço × quantidade)" to Money.format(f.grossTotal),
-                    "Descontos concedidos" to Money.format(f.discountTotal),
-                    "Casco cobrado (faturamento, entra como custo)" to Money.format(f.scrap.charged),
-                    "Faturamento (valor final)" to Money.format(f.sales.revenue),
-                    "Taxas das maquininhas (descontadas do lucro)" to Money.format(f.sales.fees),
-                    "Vendas canceladas no período" to "${f.canceledSales.size} • ${Money.format(f.canceledAmount)}",
-                ),
-            )
-        }
-
-        fun canceledList(sales: List<SaleWithItems>) {
-            if (sales.isEmpty()) return
-            sectionTitle("Vendas canceladas (${sales.size}) — não entram nos totais")
-            table(
-                listOf(Col(1.7f), Col(2.2f), Col(0.6f, true), Col(1.2f), Col(1.4f, true)),
-                listOf("Data/hora", "Modelo", "Qtd.", "Pagamento", "Valor"),
-                sales.map { s ->
-                    listOf(
-                        Periods.formatDateTime(s.sale.dateTime),
-                        s.modelsLabel,
-                        s.quantity.toString(),
-                        s.paymentLabel,
-                        Money.format(s.sale.finalAmount),
-                    )
-                },
-            )
-        }
-
-        fun stockPeriod(f: FullReport) {
-            sectionTitle("Movimentação no período")
-            val p = f.stockPeriod
-            keyValueTable(
-                listOf(
-                    "Baterias vendidas" to p.soldUnits.toString(),
-                    "Entradas de mercadoria" to "${p.entriesQuantity} un. • ${Money.format(p.entriesCost)}",
-                    "Estoque inicial cadastrado" to "${p.initialQuantity} un.",
-                    "Ajustes para mais" to "+${p.adjustmentsIn}",
-                    "Ajustes para menos" to "-${p.adjustmentsOut}",
-                ),
-            )
-        }
-
-        fun stockSnapshot(f: FullReport) {
-            sectionTitle("Posição atual do estoque (no momento da geração)")
-            if (f.stockRows.isEmpty()) return emptyLine("Nenhuma bateria cadastrada.")
-            val cols = listOf(Col(2f), Col(0.7f, true), Col(0.7f, true), Col(1.2f, true), Col(1.4f, true), Col(1.4f, true))
-            val rows = f.stockRows.map { r ->
-                listOf(
-                    r.model,
-                    if (r.amperage > 0) "${r.amperage}Ah" else "—",
-                    r.stock.toString(),
-                    Money.format(r.cost),
-                    Money.format(r.valueAtCost),
-                    Money.format(r.valueAtPix),
-                )
-            } + listOf(
-                listOf("TOTAL", "", f.stockUnits.toString(), "", Money.format(f.stockValueAtCost), Money.format(f.stockValueAtPix)),
-            )
-            table(
-                cols,
-                listOf("Modelo", "Amp.", "Qtd.", "Custo un.", "Valor (custo)", "Valor (PIX)"),
-                rows,
-                rowColors = { i ->
-                    val r = f.stockRows.getOrNull(i)
-                    when {
-                        r == null -> null
-                        r.isOut -> listOf(null, null, RED, null, null, null)
-                        r.isLow -> listOf(null, null, ORANGE, null, null, null)
-                        else -> null
-                    }
-                },
-            )
-        }
-
-        fun stockAlerts(f: FullReport) {
-            if (f.outOfStock.isEmpty() && f.lowStock.isEmpty()) return
-            sectionTitle("Alertas de estoque")
-            keyValueTable(
-                f.outOfStock.map { it.model to "ZERADO" } + f.lowStock.map { it.model to "baixo (${it.stock})" },
-                colors = (f.outOfStock.indices.associateWith { RED } +
-                    f.lowStock.indices.associate { (it + f.outOfStock.size) to ORANGE }),
-            )
-        }
-
-        fun stockMovements(list: List<MovementWithModel>) {
-            sectionTitle("Movimentações de estoque no período (${list.size})")
-            if (list.isEmpty()) return emptyLine("Sem movimentações no período.")
-            table(
-                listOf(Col(1.7f), Col(1.7f), Col(1.8f), Col(0.8f, true), Col(0.8f, true), Col(2f)),
-                listOf("Data/hora", "Modelo", "Tipo", "Qtd.", "Saldo", "Obs."),
-                list.map { m ->
-                    listOf(
-                        Periods.formatDateTime(m.movement.dateTime),
-                        m.model ?: "(excluído)",
-                        MovementType.label(m.movement.type),
-                        (if (m.movement.quantity > 0) "+" else "") + m.movement.quantity,
-                        m.movement.stockAfter.toString(),
-                        m.movement.note ?: (m.movement.saleId?.let { "Venda #$it" } ?: ""),
-                    )
-                },
-            )
-        }
-
-        fun scrapStock(f: FullReport) {
-            sectionTitle("Estoque atual de sucatas (no momento da geração)")
-            if (f.scrapStock.isEmpty()) return emptyLine("Nenhuma sucata em estoque.")
-            table(
-                listOf(Col(1.5f), Col(1f, true), Col(1.5f, true), Col(1.5f, true)),
-                listOf("Amperagem", "Qtd.", "Valor un. (tabela)", "Valor total"),
-                f.scrapStock.map {
-                    listOf("${it.amperage}Ah", it.quantity.toString(), it.unitValue?.let(Money::format) ?: "—", Money.format(it.totalValue))
-                } + listOf(listOf("TOTAL", f.scrapStockQuantity.toString(), "", Money.format(f.scrapStockValue))),
-            )
-        }
-
-        fun scrapMovements(list: List<ScrapMovement>) {
-            sectionTitle("Movimentações de sucatas no período (${list.size})")
-            if (list.isEmpty()) return emptyLine("Sem movimentações de sucata no período.")
-            table(
-                listOf(Col(1.7f), Col(0.9f), Col(1.9f), Col(0.7f, true), Col(1.3f, true), Col(1.6f)),
-                listOf("Data/hora", "Amp.", "Tipo", "Qtd.", "Valor", "Obs."),
-                list.map { m ->
-                    listOf(
-                        Periods.formatDateTime(m.dateTime),
-                        "${m.amperage}Ah",
-                        ScrapMovementType.label(m.type),
-                        (if (m.quantity > 0) "+" else "") + m.quantity,
-                        if (m.amount > 0) Money.format(m.amount) else "",
-                        m.note ?: (m.saleId?.let { "Venda #$it" } ?: ""),
-                    )
-                },
-            )
-        }
-
-        fun chargesSection(f: FullReport) {
-            val c = f.charges
-            sectionTitle("Resumo")
-            keyValueTable(
-                listOf(
-                    "Recebidas no período" to c.received.toString(),
-                    "Valor cobrado" to Money.format(c.charged),
-                    "Pago" to Money.format(c.paid),
-                    "Não pago" to Money.format(c.unpaid),
-                    "Na loja agora" to c.openNow.toString(),
-                    "Baterias da loja emprestadas agora" to c.loansOutNow.toString(),
-                    "Total a receber (todas)" to Money.format(c.unpaidTotalNow),
-                ),
-            )
-            sectionTitle("Recebidas no período (${f.chargesInPeriod.size})")
-            if (f.chargesInPeriod.isEmpty()) return emptyLine("Nenhuma bateria recebida para carga no período.")
-            table(
-                listOf(Col(1.6f), Col(2f), Col(1.5f), Col(1.2f, true), Col(1f), Col(1.3f)),
-                listOf("Recebida", "Cliente", "Telefone", "Valor", "Pago", "Situação"),
-                f.chargesInPeriod.map { ch ->
-                    listOf(
-                        Periods.formatDateTime(ch.receivedAt),
-                        ch.customerName + (if (ch.hasLoan) " (emprestou bateria)" else ""),
-                        ch.phone,
-                        Money.format(ch.price),
-                        if (ch.paid) "Sim" else "Não",
-                        ChargeStatus.label(ch.status),
-                    )
-                },
-                rowColors = { i -> listOf(null, null, null, null, if (f.chargesInPeriod[i].paid) GREEN else RED, null) },
-            )
-        }
-
-        fun expensesSection(f: FullReport) {
-            sectionTitle("Resultado do período")
-            keyValueTable(
-                listOf(
-                    "Lucro bruto das vendas" to Money.format(f.sales.profit),
-                    "Despesas pagas" to "-" + Money.format(f.expensesTotal),
-                    "Lucro líquido" to Money.format(f.netProfit),
-                ),
-                colors = mapOf(2 to if (f.netProfit < 0) RED else GREEN),
-            )
-            sectionTitle("Despesas por categoria")
-            if (f.expensesByCategory.isEmpty()) {
-                emptyLine("Nenhuma despesa paga no período.")
-                return
-            }
-            keyValueTable(f.expensesByCategory.map { (c, v) -> c to Money.format(v) })
-            sectionTitle("Despesas pagas no período (${f.expenses.size})")
-            table(
-                listOf(Col(1.3f), Col(1.8f), Col(2.8f), Col(1.3f, true)),
-                listOf("Data", "Categoria", "Descrição", "Valor"),
-                f.expenses.sortedBy { it.date }.map { e ->
-                    listOf(Periods.formatDate(e.date), e.category, e.description, Money.format(e.amount))
-                },
-            )
-        }
-
-        fun warrantySection(f: FullReport) {
-            val g = f.warranty
-            sectionTitle("Garantias trocadas no período (${g.exchangedTotal})")
-            if (g.exchanged.isEmpty()) {
-                emptyLine("Nenhuma troca em garantia no período.")
-            } else {
-                keyValueTable(g.exchanged.map { it.model to "${it.count}" })
-            }
-            sectionTitle("Extras ganhadas no período (${g.extrasTotal})")
-            if (g.extras.isEmpty()) {
-                emptyLine("Nenhuma bateria extra no período.")
-            } else {
-                keyValueTable(g.extras.map { it.model to "${it.count}" })
-            }
-            val x = f.extrasSold
-            sectionTitle("Extras vendidas no período (${x.sold})")
-            keyValueTable(listOf("Valor de venda" to Money.format(x.saleValue), "Lucro (custo zero, menos taxa)" to Money.format(x.profit)))
-        }
-
-        fun invoicesSection(f: FullReport) {
-            val n = f.invoices
-            sectionTitle("Resumo")
-            keyValueTable(
-                listOf(
-                    "Notas lançadas no período" to "${n.issued.size} • ${Money.format(n.issuedTotal)}",
-                    "Notas que chegaram no período" to "${n.received.size} • ${n.receivedUnits} baterias",
-                    "Boletos pagos no período" to "${n.paid.size} • ${Money.format(n.paidTotal)}",
-                    "Devemos aos fornecedores (hoje)" to "${n.debt.openCount} boletos • ${Money.format(n.debt.open)}",
-                    "Boletos vencidos (hoje)" to if (n.debt.overdueCount == 0) "Nenhum" else "${n.debt.overdueCount} • ${Money.format(n.debt.overdue)}",
-                    "Notas aguardando baterias (hoje)" to n.waitingNow.toString(),
-                ),
-                colors = if (n.debt.overdueCount > 0) mapOf(4 to RED) else emptyMap(),
-            )
-            sectionTitle("Notas lançadas no período (${n.issued.size})")
-            if (n.issued.isEmpty()) {
-                emptyLine("Nenhuma nota lançada no período.")
-            } else {
-                table(
-                    listOf(Col(1.2f), Col(1.1f), Col(2.2f), Col(1.3f), Col(1.3f, true), Col(1.3f, true)),
-                    listOf("Data", "Nota", "Fornecedor", "Situação", "Total", "Falta pagar"),
-                    n.issued.map { inv ->
-                        val i = inv.invoice
-                        listOf(
-                            Periods.formatDate(i.issueDate), i.number, i.supplier.ifBlank { "-" },
-                            if (i.isReceived) "Chegou" else "Aguardando",
-                            Money.format(i.total), Money.format(inv.openAmount),
-                        )
-                    },
-                )
-                val lines = n.issued.flatMap { inv -> inv.invoice.items.map { inv.invoice.number to it } }
-                sectionTitle("Baterias das notas lançadas")
-                table(
-                    listOf(Col(1.1f), Col(1.8f), Col(0.8f, true), Col(1.4f, true), Col(1.2f, true), Col(1.4f, true)),
-                    listOf("Nota", "Modelo", "Qtd", "Sem desconto", "Desconto", "Custo cada"),
-                    lines.map { (num, it) ->
-                        listOf(
-                            num, it.model, it.quantity.toString(), Money.format(it.grossTotal ?: it.subtotal),
-                            Money.format(it.discountTotal), Money.format(it.unitCost),
-                        )
-                    },
-                )
-            }
-            sectionTitle("Boletos pagos no período (${n.paid.size})")
-            if (n.paid.isEmpty()) {
-                emptyLine("Nenhum boleto pago no período.")
-            } else {
-                table(
-                    listOf(Col(1.3f), Col(1.2f), Col(2.4f), Col(1.3f), Col(1.4f, true)),
-                    listOf("Pago em", "Nota", "Fornecedor", "Vencimento", "Valor"),
-                    n.paid.map { p ->
-                        listOf(
-                            Periods.formatDate(p.bill.paidAt ?: 0), p.invoice.number, p.invoice.supplier.ifBlank { "-" },
-                            Periods.formatDate(p.bill.dueDate), Money.format(p.bill.amount),
-                        )
-                    },
-                )
-            }
-        }
-
-        fun cashSection(f: FullReport) {
-            val k = f.cash
-            sectionTitle("Caixa do período (dinheiro que entrou e saiu)")
-            keyValueTable(
-                listOf(
-                    "Vendas (sem a taxa da maquininha)" to Money.format(k.salesCashIn),
-                    "Carga de baterias recebida" to Money.format(k.chargesPaid),
-                    "Sucatas vendidas" to Money.format(k.scrapSold),
-                    "Total que entrou" to Money.format(k.cashIn),
-                    "Boletos de fornecedor pagos" to "-" + Money.format(k.supplierPaid),
-                    "Despesas pagas" to "-" + Money.format(k.expenses),
-                    "Sucatas compradas" to "-" + Money.format(k.scrapPurchased),
-                    "Vales de casco devolvidos" to "-" + Money.format(k.vouchersPaid),
-                    "Total que saiu" to "-" + Money.format(k.cashOut),
-                    "Sobrou antes das retiradas" to Money.format(k.cashBeforeWithdrawals),
-                    "Retiradas dos sócios" to "-" + Money.format(f.withdrawalsTotal),
-                    "Ficou na loja" to Money.format(k.cashBeforeWithdrawals - f.withdrawalsTotal),
-                ),
-                colors = mapOf(11 to if (k.cashBeforeWithdrawals - f.withdrawalsTotal < 0) RED else GREEN),
-            )
-            sectionTitle("Retiradas dos sócios no período (${f.withdrawals.size})")
-            if (f.withdrawals.isEmpty()) {
-                emptyLine("Nenhuma retirada no período.")
-                return
-            }
-            if (f.withdrawalsByPartner.size > 1) keyValueTable(f.withdrawalsByPartner.map { (n, v) -> n to Money.format(v) })
-            table(
-                listOf(Col(1.3f), Col(3f), Col(1.4f, true)),
-                listOf("Data", "Sócio", "Valor"),
-                f.withdrawals.map { listOf(Periods.formatDate(it.date), it.category, Money.format(it.amount)) },
-            )
-        }
-
         private fun sectionTitle(text: String) {
             ensure(60f)
             y += 8f
             canvas.drawText(text, MARGIN, y, section)
             y += 10f
-        }
-
-        fun summary(r: Report) {
-            sectionTitle("Resumo")
-            val cells = listOf(
-                Triple("Faturamento", Money.format(r.revenue), TEXT),
-                Triple("Custo", Money.format(r.cost), TEXT),
-                Triple("Lucro bruto", Money.format(r.profit), if (r.profit < 0) RED else GREEN),
-                Triple("Vendas", r.salesCount.toString(), TEXT),
-                Triple("Baterias vendidas", r.unitsSold.toString(), TEXT),
-                Triple("Ticket médio", Money.format(r.averageTicket), TEXT),
-            )
-            val cellW = CONTENT_WIDTH / 3
-            val cellH = 44f
-            cells.chunked(3).forEach { row ->
-                ensure(cellH + 6f)
-                row.forEachIndexed { i, (label, value, color) ->
-                    val x = MARGIN + i * cellW
-                    fill.color = ZEBRA_BG
-                    canvas.drawRect(x + 2f, y, x + cellW - 2f, y + cellH, fill)
-                    canvas.drawText(label, x + 10f, y + 15f, small)
-                    big.color = color
-                    canvas.drawText(fit(value, big, cellW - 20f), x + 10f, y + 34f, big)
-                }
-                y += cellH + 4f
-            }
-            big.color = TEXT
-            y += 6f
         }
 
         private fun tableRow(cols: List<Col>, values: List<String>, p: Paint, bg: Int?, colors: List<Int?>? = null) {
@@ -568,75 +209,91 @@ object ReportPdfWriter {
             y += 22f
         }
 
-        fun ranking(titleText: String, list: List<ModelStats>) {
-            sectionTitle(titleText)
-            if (list.isEmpty()) return emptyLine()
-            val cols = listOf(Col(0.5f), Col(2.5f), Col(1f, true), Col(1.6f, true), Col(1.6f, true))
+        /** Números principais das vendas, em quadros. */
+        fun salesSummary(f: FullReport) {
+            val r = f.sales
+            sectionTitle("Vendas do período")
+            val cells = listOf(
+                Triple("Faturamento", Money.format(r.revenue), TEXT),
+                Triple("Lucro das vendas", Money.format(r.profit), if (r.profit < 0) RED else GREEN),
+                Triple("Lucro líquido", Money.format(f.netProfit), if (f.netProfit < 0) RED else GREEN),
+                Triple("Baterias vendidas", r.unitsSold.toString(), TEXT),
+                Triple("Média por dia", Labels.oneDecimal(f.averagePerSalesDay), TEXT),
+                Triple("Vendas", r.salesCount.toString(), TEXT),
+            )
+            val cellW = CONTENT_WIDTH / 3
+            val cellH = 44f
+            cells.chunked(3).forEach { row ->
+                ensure(cellH + 6f)
+                row.forEachIndexed { i, (label, value, color) ->
+                    val x = MARGIN + i * cellW
+                    fill.color = ZEBRA_BG
+                    canvas.drawRect(x + 2f, y, x + cellW - 2f, y + cellH, fill)
+                    canvas.drawText(label, x + 10f, y + 15f, small)
+                    big.color = color
+                    canvas.drawText(fit(value, big, cellW - 20f), x + 10f, y + 34f, big)
+                }
+                y += cellH + 4f
+            }
+            big.color = TEXT
+            ensure(16f)
+            val days = f.daily.size
+            canvas.drawText(
+                "Média calculada sobre ${if (days == 1) "1 dia" else "$days dias"} com venda. Vendas canceladas não entram.",
+                MARGIN, y + 10f, small,
+            )
+            y += 22f
+        }
+
+        /** Uma seção por dia: quantas baterias e quais modelos (modelos iguais somados). */
+        fun daily(f: FullReport) {
+            if (f.daily.isEmpty()) {
+                emptyLine()
+                return
+            }
+            f.daily.forEach { d ->
+                sectionTitle("${Labels.dayTitle(d.date)}  •  ${Labels.batteries(d.units)}  •  ${Money.format(d.revenue)}")
+                table(
+                    listOf(Col(3f), Col(1f, true)),
+                    listOf("Modelo", "Quantidade"),
+                    d.models.map { listOf(it.model, it.count.toString()) },
+                )
+            }
+        }
+
+        fun modelsTotal(f: FullReport) {
+            sectionTitle("Total por modelo no período")
             table(
-                cols,
-                listOf("#", "Modelo", "Qtd.", "Faturamento", "Lucro"),
-                list.mapIndexed { i, m ->
-                    listOf("${i + 1}º", m.model, m.quantity.toString(), Money.format(m.revenue), Money.format(m.profit))
-                },
-                rowColors = { i -> listOf(null, null, null, null, if (list[i].profit < 0) RED else GREEN) },
+                listOf(Col(3f), Col(1f, true)),
+                listOf("Modelo", "Quantidade"),
+                f.modelsTotal.map { listOf(it.model, it.count.toString()) } + listOf(listOf("TOTAL", f.sales.unitsSold.toString())),
             )
         }
 
-        fun payments(r: Report) {
-            sectionTitle("Vendas por forma de pagamento")
-            if (r.byPayment.isEmpty()) return emptyLine()
-            val cols = listOf(Col(2f), Col(1f, true), Col(1f, true), Col(1.6f, true), Col(1f, true))
-            table(
-                cols,
-                listOf("Forma de pagamento", "Vendas", "Baterias", "Faturamento", "% do total"),
-                r.byPayment.map { p ->
-                    val pct = if (r.revenue > 0) "${p.revenue * 100 / r.revenue}%" else "-"
-                    listOf(p.method.label, p.salesCount.toString(), p.units.toString(), Money.format(p.revenue), pct)
-                },
-            )
-        }
-
-        fun scraps(s: ScrapPeriodSummary) {
-            sectionTitle("Resumo de sucatas no período")
+        /** Resumo curto de todo o resto (sem listas de movimentações). */
+        fun generalSummary(f: FullReport) {
+            val left = f.cash.cashBeforeWithdrawals - f.withdrawalsTotal
             keyValueTable(
                 listOf(
-                    "Recebidas nas vendas" to s.returnedInSales.toString(),
-                    "Clientes sem sucata (faltantes)" to s.missingInSales.toString(),
-                    "Cobrado por sucata faltante (no faturamento)" to Money.format(s.charged),
-                    "Entradas manuais" to s.manualInQuantity.toString(),
-                    "Compradas" to "${s.purchasedQuantity} • ${Money.format(s.purchasedAmount)}",
-                    "Vendidas" to "${s.soldQuantity} • ${Money.format(s.soldAmount)}",
-                    "Ajustes (saldo)" to ((if (s.adjustmentNet > 0) "+" else "") + s.adjustmentNet),
-                    "Vales pagos (casco devolvido)" to "${s.voucherPaidQuantity} • ${Money.format(s.voucherPaidAmount)}",
-                    "Resultado das sucatas (vendido − comprado − vales)" to Money.format(s.netAmount),
+                    "Despesas pagas" to Money.format(f.expensesTotal),
+                    "Lucro líquido" to Money.format(f.netProfit),
+                    "Baterias em estoque (agora)" to "${f.stockUnits} • ${Money.format(f.stockValueAtCost)}",
+                    "Entradas no estoque no período" to "${f.stockPeriod.entriesQuantity} un.",
+                    "Estoque baixo / zerado (agora)" to "${f.lowStock.size} / ${f.outOfStock.size} modelos",
+                    "Sucatas em estoque (agora)" to f.scrapStockQuantity.toString(),
+                    "Sucatas vendidas no período" to "${f.scrap.soldQuantity} • ${Money.format(f.scrap.soldAmount)}",
+                    "Baterias na carga recebidas" to "${f.charges.received} • a receber ${Money.format(f.charges.unpaidTotalNow)}",
+                    "Trocas em garantia" to f.warranty.exchangedTotal.toString(),
+                    "Extras ganhas / vendidas" to "${f.warranty.extrasTotal} / ${f.extrasSold.sold} • lucro ${Money.format(f.extrasSold.profit)}",
+                    "Do Vitor registradas" to "${f.warranty.vitorTotal} • pago ${Money.format(f.warranty.vitorPaid)}",
+                    "Boletos pagos no período" to "${f.invoices.paid.size} • ${Money.format(f.invoices.paidTotal)}",
+                    "Devemos aos fornecedores (hoje)" to Money.format(f.invoices.debt.open),
+                    "Caixa: entrou / saiu" to "${Money.format(f.cash.cashIn)} / ${Money.format(f.cash.cashOut)}",
+                    "Retiradas dos sócios" to Money.format(f.withdrawalsTotal),
+                    "Ficou na loja" to Money.format(left),
                 ),
-                colors = mapOf(8 to if (s.netAmount < 0) RED else GREEN),
+                colors = mapOf(1 to if (f.netProfit < 0) RED else GREEN, 15 to if (left < 0) RED else GREEN),
             )
-        }
-
-        fun salesList(sales: List<SaleWithItems>) {
-            sectionTitle("Vendas do período (${sales.size})")
-            if (sales.isEmpty()) return emptyLine()
-            val cols = listOf(Col(1.7f), Col(1.9f), Col(0.6f, true), Col(1.1f), Col(1.4f, true), Col(1.4f, true), Col(1.4f, true))
-            table(
-                cols,
-                listOf("Data/hora", "Modelo", "Qtd.", "Pagamento", "Valor", "Custo", "Lucro"),
-                sales.map { s ->
-                    listOf(
-                        Periods.formatDateTime(s.sale.dateTime),
-                        s.modelsLabel,
-                        s.quantity.toString(),
-                        s.paymentLabel,
-                        Money.format(s.sale.finalAmount),
-                        Money.format(s.sale.totalCost),
-                        Money.format(s.sale.grossProfit),
-                    )
-                },
-                rowColors = { i -> listOf(null, null, null, null, null, null, if (sales[i].sale.grossProfit < 0) RED else GREEN) },
-            )
-            ensure(16f)
-            canvas.drawText("Vendas canceladas não entram neste relatório.", MARGIN, y + 8f, small)
-            y += 16f
         }
     }
 }

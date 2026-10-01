@@ -738,6 +738,30 @@ class StoreRepository(
         }
     }
 
+    /**
+     * Baterias Heliar do Vitor: entram no estoque como um lote com custo [unitPaid] (o que pagamos a ele),
+     * então na venda o lucro é o preço menos esse valor. Só modelos que começam com "H".
+     */
+    suspend fun registerVitor(productId: Long, quantity: Int, unitPaid: Long = VITOR_DEFAULT_COST, at: Long = now()): Unit = write {
+        if (quantity <= 0) throw BusinessException("Informe a quantidade")
+        if (unitPaid < 0) throw BusinessException("Valor inválido")
+        val p = products.getById(productId) ?: throw BusinessException("Bateria não encontrada")
+        if (!p.model.trim().startsWith("H", ignoreCase = true)) {
+            throw BusinessException("Na aba Vitor entram só baterias Heliar (modelos que começam com H)")
+        }
+        repeat(quantity) {
+            val moveId = moveStock(p.id, +1, MovementType.VITOR_IN, "Bateria do Vitor", at, unitPaid)
+            warranties.insert(
+                WarrantyClaim(
+                    id = moveId,
+                    createdAt = at, returnedProductId = p.id, returnedModel = p.model,
+                    defective = false, status = WarrantyStatus.VITOR, inMovementId = moveId,
+                    replacementCost = unitPaid,
+                )
+            )
+        }
+    }
+
     /** Exclui uma troca ou uma extra (a extra sai do estoque, se ainda não foi vendida). */
     suspend fun deleteWarranty(id: Long) = deleteWarranties(listOf(id))
 
@@ -749,6 +773,12 @@ class StoreRepository(
                 if (w.saleId != null) {
                     throw BusinessException("Uma dessas extras já foi vendida. Para excluí-la, cancele ou exclua a venda antes.")
                 }
+                val p = w.returnedProductId?.let { products.getById(it) }
+                if (p != null && p.stock <= 0) {
+                    throw BusinessException("Não é possível excluir: o estoque de ${p.model} ficaria negativo")
+                }
+                undoStockMovement(w.inMovementId)
+            } else if (w.isVitor) {
                 val p = w.returnedProductId?.let { products.getById(it) }
                 if (p != null && p.stock <= 0) {
                     throw BusinessException("Não é possível excluir: o estoque de ${p.model} ficaria negativo")
@@ -1204,7 +1234,7 @@ class StoreRepository(
 
     companion object {
         /** Movimentações que trazem baterias com custo (cada uma vira um lote). */
-        private val COST_ENTRY_TYPES = setOf(MovementType.INITIAL, MovementType.ENTRY)
+        private val COST_ENTRY_TYPES = setOf(MovementType.INITIAL, MovementType.ENTRY, MovementType.VITOR_IN)
 
         /** Lotes das [product].stock − [extrasInStock] baterias em estoque, a partir das entradas com custo. */
         fun costLayersFrom(product: Product, moves: List<StockMovement>, extrasInStock: Int): List<CostLayer> {

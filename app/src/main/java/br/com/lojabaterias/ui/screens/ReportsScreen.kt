@@ -2,6 +2,7 @@ package br.com.lojabaterias.ui.screens
 
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
@@ -11,6 +12,8 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.KeyboardArrowLeft
 import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
@@ -31,34 +34,34 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
-import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
-import br.com.lojabaterias.domain.ModelStats
+import br.com.lojabaterias.data.DaySales
+import br.com.lojabaterias.data.FullReport
+import br.com.lojabaterias.data.ModelCount
 import br.com.lojabaterias.domain.Labels
 import br.com.lojabaterias.domain.Money
 import br.com.lojabaterias.domain.PeriodType
-import br.com.lojabaterias.ui.components.FitText
 import br.com.lojabaterias.ui.components.AppCard
+import br.com.lojabaterias.ui.components.FitText
 import br.com.lojabaterias.ui.components.InfoRow
 import br.com.lojabaterias.ui.components.SectionTitle
 import br.com.lojabaterias.ui.components.ToastEffect
 import br.com.lojabaterias.ui.theme.dangerColor
 import br.com.lojabaterias.ui.theme.moneyResultColor
-import br.com.lojabaterias.ui.theme.warningColor
 import br.com.lojabaterias.ui.viewmodel.ReportsViewModel
 import br.com.lojabaterias.ui.viewmodel.appViewModel
 
+/** Relatório simples: vendas do período, baterias por dia e um resumo curto do resto. */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun ReportsScreen() {
     val vm = appViewModel { ReportsViewModel(it) }
     val state by vm.state.collectAsStateWithLifecycle()
     val exporting by vm.exporting.collectAsStateWithLifecycle()
-    val r = state.report
     val f = state.full
     ToastEffect(vm.messages)
 
@@ -107,249 +110,40 @@ fun ReportsScreen() {
                     IconButton(onClick = vm::previous) {
                         Icon(Icons.AutoMirrored.Filled.KeyboardArrowLeft, contentDescription = "Período anterior")
                     }
-                    Text(
-                        state.label,
-                        style = MaterialTheme.typography.titleMedium,
-                        textAlign = TextAlign.Center,
-                        modifier = Modifier.weight(1f),
-                    )
+                    Text(state.label, style = MaterialTheme.typography.titleMedium, textAlign = TextAlign.Center, modifier = Modifier.weight(1f))
                     IconButton(onClick = vm::next, enabled = state.selection.offset < 0) {
                         Icon(Icons.AutoMirrored.Filled.KeyboardArrowRight, contentDescription = "Próximo período")
                     }
                 }
             }
-            item {
-                AppCard(containerColor = MaterialTheme.colorScheme.primary) {
-                    Column(Modifier.padding(20.dp)) {
-                        val on = MaterialTheme.colorScheme.onPrimary
-                        Text("Faturamento", style = MaterialTheme.typography.bodyMedium, color = on.copy(alpha = 0.8f))
-                        FitText(
-                            Money.format(r.revenue),
-                            style = MaterialTheme.typography.headlineMedium,
-                            color = on,
-                            fontWeight = FontWeight.Bold,
-                        )
-                        Row(Modifier.padding(top = 12.dp)) {
-                            Column(Modifier.weight(1f).padding(end = 8.dp)) {
-                                Text("Custo", style = MaterialTheme.typography.bodyMedium, color = on.copy(alpha = 0.8f))
-                                FitText(Money.format(r.cost), style = MaterialTheme.typography.titleMedium, color = on)
-                            }
-                            Column(Modifier.weight(1f)) {
-                                Text("Lucro bruto", style = MaterialTheme.typography.bodyMedium, color = on.copy(alpha = 0.8f))
-                                FitText(Money.format(r.profit), style = MaterialTheme.typography.titleMedium, color = on)
-                            }
-                        }
-                    }
-                }
-            }
+
+            item { SalesCard(f) }
             item {
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    MetricCard("Vendas", r.salesCount.toString(), Modifier.weight(1f))
-                    MetricCard("Baterias", r.unitsSold.toString(), Modifier.weight(1f))
-                    MetricCard("Ticket médio", Money.format(r.averageTicket), Modifier.weight(1.4f))
+                    Metric("Baterias", f.sales.unitsSold.toString(), null, Modifier.weight(1f))
+                    Metric("Média por dia", Labels.oneDecimal(f.averagePerSalesDay), daysLabel(f.daily.size), Modifier.weight(1.2f))
+                    Metric("Vendas", f.sales.salesCount.toString(), null, Modifier.weight(1f))
                 }
             }
 
-            item {
-                AppCard {
-                    Column(Modifier.padding(horizontal = 16.dp, vertical = 8.dp)) {
-                        InfoRow("Valor bruto", Money.format(f.grossTotal))
-                        InfoRow("Descontos concedidos", Money.format(f.discountTotal))
-                        InfoRow("Taxas das maquininhas", Money.format(r.fees))
-                        InfoRow("Casco cobrado (faturamento, entra como custo)", Money.format(f.scrap.charged))
-                        InfoRow("Vendas canceladas", "${f.canceledSales.size} • ${Money.format(f.canceledAmount)}")
-                    }
+            item { SectionTitle("Baterias vendidas por dia") }
+            if (f.daily.isEmpty()) {
+                item { Text("Sem vendas no período.", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant) }
+            }
+            items(f.daily, key = { it.date.toString() }) { DayCard(it) }
+
+            if (state.selection.type != PeriodType.DAY && f.daily.size > 1) {
+                item { SectionTitle("Total por modelo no período") }
+                item {
+                    AppCard { Column(Modifier.padding(16.dp)) { ModelTable(f.modelsTotal) } }
                 }
             }
 
-            item { SectionTitle("Resultado (vendas − despesas)") }
-            item {
-                AppCard {
-                    Column(Modifier.padding(horizontal = 16.dp, vertical = 8.dp)) {
-                        InfoRow("Lucro bruto das vendas", Money.format(r.profit), valueColor = moneyResultColor(r.profit))
-                        InfoRow("Despesas pagas", "-" + Money.format(f.expensesTotal), valueColor = if (f.expensesTotal > 0) dangerColor() else Color.Unspecified)
-                        HorizontalDivider(Modifier.padding(vertical = 6.dp))
-                        InfoRow("Lucro líquido", Money.format(f.netProfit), bold = true, valueColor = moneyResultColor(f.netProfit))
-                        if (f.expensesByCategory.isNotEmpty()) {
-                            Text(
-                                "Despesas por categoria",
-                                style = MaterialTheme.typography.labelLarge,
-                                color = MaterialTheme.colorScheme.primary,
-                                modifier = Modifier.padding(top = 8.dp),
-                            )
-                            f.expensesByCategory.forEach { (cat, total) -> InfoRow(cat, Money.format(total)) }
-                        }
-                    }
-                }
-            }
-
-            item { SectionTitle("Modelos mais vendidos") }
-            item {
-                RankingCard(r.topByQuantity) { "${it.quantity} un." }
-            }
-            item { SectionTitle("Maior faturamento") }
-            item {
-                RankingCard(r.topByRevenue) { Money.format(it.revenue) }
-            }
-            item { SectionTitle("Maior lucro") }
-            item {
-                RankingCard(r.topByProfit, valueColor = { moneyResultColor(it.profit) }) { Money.format(it.profit) }
-            }
-            item { SectionTitle("Vendas por forma de pagamento") }
-            item {
-                AppCard {
-                    Column(Modifier.padding(horizontal = 16.dp, vertical = 8.dp)) {
-                        if (r.byPayment.isEmpty()) {
-                            EmptyLine()
-                        }
-                        r.byPayment.forEachIndexed { index, p ->
-                            if (index > 0) HorizontalDivider()
-                            Row(Modifier.padding(vertical = 10.dp), verticalAlignment = Alignment.CenterVertically) {
-                                Column(Modifier.weight(1f)) {
-                                    Text(p.method.label, style = MaterialTheme.typography.titleSmall)
-                                    Text(
-                                        Labels.salesAndBatteries(p.salesCount, p.units) +
-                                            if (r.revenue > 0) " • ${p.revenue * 100 / r.revenue}%" else "",
-                                        style = MaterialTheme.typography.bodySmall,
-                                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                    )
-                                }
-                                Text(Money.format(p.revenue), style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold)
-                            }
-                        }
-                    }
-                }
-            }
-            item { SectionTitle("Estoque de baterias") }
-            item {
-                AppCard {
-                    Column(Modifier.padding(horizontal = 16.dp, vertical = 8.dp)) {
-                        val p = f.stockPeriod
-                        Text("No período", style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.primary)
-                        InfoRow("Baterias vendidas", p.soldUnits.toString())
-                        InfoRow("Entradas", "${p.entriesQuantity} un. • ${Money.format(p.entriesCost)}")
-                        if (p.initialQuantity > 0) InfoRow("Estoque inicial cadastrado", "${p.initialQuantity} un.")
-                        if (p.adjustmentsIn > 0 || p.adjustmentsOut > 0) {
-                            InfoRow("Ajustes", "+${p.adjustmentsIn} / -${p.adjustmentsOut}")
-                        }
-                        HorizontalDivider(Modifier.padding(vertical = 6.dp))
-                        Text("Posição atual", style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.primary)
-                        InfoRow("Baterias em estoque", "${f.stockUnits} (${f.stockRows.size} modelos)")
-                        InfoRow("Valor a preço de custo", Money.format(f.stockValueAtCost))
-                        InfoRow("Valor a preço PIX", Money.format(f.stockValueAtPix))
-                        if (f.lowStock.isNotEmpty()) {
-                            InfoRow("Estoque baixo", f.lowStock.joinToString { it.model }, valueColor = warningColor())
-                        }
-                        if (f.outOfStock.isNotEmpty()) {
-                            InfoRow("Zerados", f.outOfStock.joinToString { it.model }, valueColor = dangerColor())
-                        }
-                    }
-                }
-            }
-
-            item { SectionTitle("Sucatas") }
-            item {
-                AppCard {
-                    Column(Modifier.padding(horizontal = 16.dp, vertical = 8.dp)) {
-                        Text("No período", style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.primary)
-                        ScrapSummaryRows(f.scrap)
-                        HorizontalDivider(Modifier.padding(vertical = 6.dp))
-                        Text("Posição atual", style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.primary)
-                        InfoRow("Sucatas em estoque", f.scrapStockQuantity.toString())
-                        InfoRow("Valor estimado", Money.format(f.scrapStockValue))
-                    }
-                }
-            }
-            item { SectionTitle("Baterias na carga") }
-            item {
-                AppCard {
-                    Column(Modifier.padding(horizontal = 16.dp, vertical = 8.dp)) {
-                        val c = f.charges
-                        Text("No período", style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.primary)
-                        InfoRow("Recebidas", c.received.toString())
-                        InfoRow("Valor cobrado", Money.format(c.charged))
-                        InfoRow("Pago", Money.format(c.paid))
-                        InfoRow("Não pago", Money.format(c.unpaid), valueColor = if (c.unpaid > 0) warningColor() else Color.Unspecified)
-                        HorizontalDivider(Modifier.padding(vertical = 6.dp))
-                        Text("Situação atual", style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.primary)
-                        InfoRow("Na loja", c.openNow.toString())
-                        InfoRow("Baterias emprestadas", c.loansOutNow.toString())
-                        InfoRow("Total a receber", Money.format(c.unpaidTotalNow))
-                    }
-                }
-            }
-            item { SectionTitle("Garantias e extras") }
-            item {
-                AppCard {
-                    Column(Modifier.padding(horizontal = 16.dp, vertical = 8.dp)) {
-                        val g = f.warranty
-                        Text(
-                            "Trocadas em garantia (${g.exchangedTotal})",
-                            style = MaterialTheme.typography.labelLarge,
-                            color = MaterialTheme.colorScheme.primary,
-                        )
-                        if (g.exchanged.isEmpty()) Text("Nenhuma no período.", style = MaterialTheme.typography.bodyMedium)
-                        g.exchanged.forEach { InfoRow(it.model, it.count.toString()) }
-                        HorizontalDivider(Modifier.padding(vertical = 6.dp))
-                        Text(
-                            "Extras ganhadas (${g.extrasTotal})",
-                            style = MaterialTheme.typography.labelLarge,
-                            color = MaterialTheme.colorScheme.primary,
-                        )
-                        if (g.extras.isEmpty()) Text("Nenhuma no período.", style = MaterialTheme.typography.bodyMedium)
-                        g.extras.forEach { InfoRow(it.model, it.count.toString()) }
-                        HorizontalDivider(Modifier.padding(vertical = 6.dp))
-                        val x = f.extrasSold
-                        Text("Extras vendidas (${x.sold})", style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.primary)
-                        InfoRow("Valor de venda", Money.format(x.saleValue))
-                        InfoRow("Lucro", Money.format(x.profit), valueColor = moneyResultColor(x.profit))
-                    }
-                }
-            }
-            item { SectionTitle("Notas fiscais e boletos") }
-            item {
-                AppCard {
-                    Column(Modifier.padding(horizontal = 16.dp, vertical = 8.dp)) {
-                        val n = f.invoices
-                        Text("No período", style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.primary)
-                        InfoRow("Notas lançadas", "${n.issued.size} • ${Money.format(n.issuedTotal)}")
-                        InfoRow("Notas que chegaram", "${n.received.size} • ${n.receivedUnits} baterias")
-                        InfoRow("Boletos pagos", "${n.paid.size} • ${Money.format(n.paidTotal)}")
-                        HorizontalDivider(Modifier.padding(vertical = 6.dp))
-                        Text("Situação atual", style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.primary)
-                        InfoRow("Devemos aos fornecedores", "${n.debt.openCount} boletos • ${Money.format(n.debt.open)}")
-                        InfoRow(
-                            "Vencidos",
-                            if (n.debt.overdueCount == 0) "Nenhum" else "${n.debt.overdueCount} • ${Money.format(n.debt.overdue)}",
-                            valueColor = if (n.debt.overdueCount > 0) dangerColor() else Color.Unspecified,
-                        )
-                        InfoRow("Notas aguardando baterias", n.waitingNow.toString())
-                    }
-                }
-            }
-            item { SectionTitle("Caixa e retiradas") }
-            item {
-                AppCard {
-                    Column(Modifier.padding(horizontal = 16.dp, vertical = 8.dp)) {
-                        val k = f.cash
-                        InfoRow("Entrou (vendas sem taxa, carga, sucatas)", Money.format(k.cashIn))
-                        InfoRow("Saiu (boletos, despesas, sucatas, vales)", "-" + Money.format(k.cashOut))
-                        InfoRow("Sobrou antes das retiradas", Money.format(k.cashBeforeWithdrawals), valueColor = moneyResultColor(k.cashBeforeWithdrawals))
-                        HorizontalDivider(Modifier.padding(vertical = 6.dp))
-                        Text("Retiradas dos sócios", style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.primary)
-                        if (f.withdrawals.isEmpty()) Text("Nenhuma no período.", style = MaterialTheme.typography.bodyMedium)
-                        f.withdrawalsByPartner.forEach { (name, total) -> InfoRow(name, Money.format(total)) }
-                        InfoRow("Total retirado", "-" + Money.format(f.withdrawalsTotal))
-                        HorizontalDivider(Modifier.padding(vertical = 6.dp))
-                        InfoRow("Ficou na loja", Money.format(k.cashBeforeWithdrawals - f.withdrawalsTotal), bold = true,
-                            valueColor = moneyResultColor(k.cashBeforeWithdrawals - f.withdrawalsTotal))
-                    }
-                }
-            }
+            item { SectionTitle("Resumo geral") }
+            item { SummaryCard(f) }
             item {
                 Text(
-                    "O PDF traz tudo isso e mais: lista de vendas e cancelamentos, estoque modelo a modelo, " +
-                        "todas as movimentações de estoque e de sucatas, as notas e os boletos pagos e as retiradas do período.",
+                    "O PDF traz este mesmo resumo, pronto para imprimir ou enviar.",
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     modifier = Modifier.padding(vertical = 8.dp),
@@ -360,40 +154,21 @@ fun ReportsScreen() {
 }
 
 @Composable
-private fun MetricCard(label: String, value: String, modifier: Modifier = Modifier) {
-    AppCard(modifier = modifier) {
-        Column(Modifier.padding(12.dp)) {
-            FitText(label, style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
-            FitText(value, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
-        }
-    }
-}
-
-@Composable
-private fun RankingCard(
-    list: List<ModelStats>,
-    valueColor: @Composable (ModelStats) -> Color = { Color.Unspecified },
-    value: (ModelStats) -> String,
-) {
-    AppCard {
-        Column(Modifier.padding(horizontal = 16.dp, vertical = 8.dp)) {
-            if (list.isEmpty()) EmptyLine()
-            list.forEachIndexed { index, m ->
-                if (index > 0) HorizontalDivider()
-                Row(Modifier.padding(vertical = 10.dp), verticalAlignment = Alignment.CenterVertically) {
-                    Text(
-                        "${index + 1}º",
-                        style = MaterialTheme.typography.titleSmall,
-                        color = MaterialTheme.colorScheme.primary,
-                        modifier = Modifier.padding(end = 12.dp),
-                    )
-                    Text(m.model, style = MaterialTheme.typography.titleSmall, modifier = Modifier.weight(1f))
-                    Text(
-                        value(m),
-                        style = MaterialTheme.typography.titleSmall,
-                        fontWeight = FontWeight.Bold,
-                        color = valueColor(m),
-                    )
+private fun SalesCard(f: FullReport) {
+    val r = f.sales
+    AppCard(containerColor = MaterialTheme.colorScheme.primary) {
+        Column(Modifier.padding(20.dp)) {
+            val on = MaterialTheme.colorScheme.onPrimary
+            Text("Faturamento", style = MaterialTheme.typography.bodyMedium, color = on.copy(alpha = 0.8f))
+            FitText(Money.format(r.revenue), style = MaterialTheme.typography.headlineMedium, color = on, fontWeight = FontWeight.Bold)
+            Row(Modifier.padding(top = 12.dp)) {
+                Column(Modifier.weight(1f).padding(end = 8.dp)) {
+                    Text("Lucro das vendas", style = MaterialTheme.typography.bodyMedium, color = on.copy(alpha = 0.8f))
+                    FitText(Money.format(r.profit), style = MaterialTheme.typography.titleMedium, color = on)
+                }
+                Column(Modifier.weight(1f)) {
+                    Text("Lucro líquido", style = MaterialTheme.typography.bodyMedium, color = on.copy(alpha = 0.8f))
+                    FitText(Money.format(f.netProfit), style = MaterialTheme.typography.titleMedium, color = on)
                 }
             }
         }
@@ -401,11 +176,96 @@ private fun RankingCard(
 }
 
 @Composable
-private fun EmptyLine() {
-    Text(
-        "Sem vendas no período.",
-        style = MaterialTheme.typography.bodyMedium,
-        color = MaterialTheme.colorScheme.onSurfaceVariant,
-        modifier = Modifier.padding(vertical = 10.dp),
-    )
+private fun Metric(label: String, value: String, detail: String?, modifier: Modifier = Modifier) {
+    AppCard(modifier = modifier) {
+        Column(Modifier.padding(12.dp)) {
+            FitText(label, style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            FitText(value, style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
+            if (detail != null) FitText(detail, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        }
+    }
+}
+
+private fun daysLabel(n: Int) = if (n == 1) "em 1 dia com venda" else "em $n dias com venda"
+
+@Composable
+private fun DayCard(d: DaySales) {
+    AppCard {
+        Column(Modifier.padding(16.dp)) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text(Labels.dayTitle(d.date), style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold, modifier = Modifier.weight(1f))
+                Column(horizontalAlignment = Alignment.End) {
+                    Text("${d.units} bateria${if (d.units == 1) "" else "s"}", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+                    Text(Money.format(d.revenue), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                }
+            }
+            Column(Modifier.padding(top = 8.dp)) { ModelTable(d.models) }
+        }
+    }
+}
+
+/** Tabela "Modelo | Quantidade", com linhas alternadas. */
+@Composable
+private fun ModelTable(rows: List<ModelCount>) {
+    val stripe = MaterialTheme.colorScheme.surfaceVariant
+    Row(Modifier.fillMaxWidth().padding(horizontal = 8.dp, vertical = 4.dp)) {
+        Text("Modelo", style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.primary, modifier = Modifier.weight(1f))
+        Text("Qtd", style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.primary)
+    }
+    rows.forEachIndexed { i, m ->
+        Row(
+            Modifier
+                .fillMaxWidth()
+                .clip(RoundedCornerShape(6.dp))
+                .let { if (i % 2 == 0) it.background(stripe) else it }
+                .padding(horizontal = 8.dp, vertical = 6.dp),
+        ) {
+            Text(m.model, style = MaterialTheme.typography.bodyLarge, modifier = Modifier.weight(1f))
+            Text(m.count.toString(), style = MaterialTheme.typography.bodyLarge, fontWeight = FontWeight.Bold)
+        }
+    }
+}
+
+@Composable
+private fun SummaryCard(f: FullReport) {
+    AppCard {
+        Column(Modifier.padding(horizontal = 16.dp, vertical = 8.dp)) {
+            Group("Resultado")
+            InfoRow("Despesas pagas", Money.format(f.expensesTotal))
+            InfoRow("Lucro líquido", Money.format(f.netProfit), valueColor = moneyResultColor(f.netProfit))
+
+            Group("Estoque de baterias")
+            InfoRow("Em estoque (agora)", "${f.stockUnits} • ${Money.format(f.stockValueAtCost)}")
+            InfoRow("Entradas no período", "${f.stockPeriod.entriesQuantity} un.")
+            if (f.lowStock.isNotEmpty() || f.outOfStock.isNotEmpty()) {
+                InfoRow("Baixo / zerado", "${f.lowStock.size} / ${f.outOfStock.size} modelos", valueColor = dangerColor())
+            }
+
+            Group("Sucatas")
+            InfoRow("Em estoque (agora)", f.scrapStockQuantity.toString())
+            InfoRow("Vendidas no período", "${f.scrap.soldQuantity} • ${Money.format(f.scrap.soldAmount)}")
+
+            Group("Carga, garantias, extras e Vitor")
+            InfoRow("Baterias na carga recebidas", "${f.charges.received} • a receber ${Money.format(f.charges.unpaidTotalNow)}")
+            InfoRow("Trocas em garantia", f.warranty.exchangedTotal.toString())
+            InfoRow("Extras ganhas / vendidas", "${f.warranty.extrasTotal} / ${f.extrasSold.sold} • lucro ${Money.format(f.extrasSold.profit)}")
+            InfoRow("Do Vitor registradas", "${f.warranty.vitorTotal} • pago ${Money.format(f.warranty.vitorPaid)}")
+
+            Group("Notas e boletos")
+            InfoRow("Boletos pagos no período", "${f.invoices.paid.size} • ${Money.format(f.invoices.paidTotal)}")
+            InfoRow("Devemos aos fornecedores (hoje)", Money.format(f.invoices.debt.open))
+
+            Group("Caixa")
+            InfoRow("Entrou / saiu", "${Money.format(f.cash.cashIn)} / ${Money.format(f.cash.cashOut)}")
+            InfoRow("Retiradas dos sócios", Money.format(f.withdrawalsTotal))
+            val left = f.cash.cashBeforeWithdrawals - f.withdrawalsTotal
+            InfoRow("Ficou na loja", Money.format(left), bold = true, valueColor = moneyResultColor(left))
+        }
+    }
+}
+
+@Composable
+private fun Group(title: String) {
+    HorizontalDivider(Modifier.padding(top = 8.dp))
+    Text(title, style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.primary, modifier = Modifier.padding(top = 8.dp))
 }

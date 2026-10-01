@@ -32,6 +32,7 @@ import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
@@ -42,6 +43,9 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import br.com.lojabaterias.data.Product
+import br.com.lojabaterias.data.VITOR_DEFAULT_COST
+import br.com.lojabaterias.domain.Money
+import br.com.lojabaterias.ui.components.MoneyField
 import br.com.lojabaterias.domain.Periods
 import br.com.lojabaterias.ui.components.AppCard
 import br.com.lojabaterias.ui.components.ConfirmDialog
@@ -58,7 +62,7 @@ import br.com.lojabaterias.ui.viewmodel.WarrantyGroup
 import br.com.lojabaterias.ui.viewmodel.WarrantyTab
 import br.com.lojabaterias.ui.viewmodel.appViewModel
 
-/** Garantias (baterias trocadas) e Extras (baterias ganhadas), contadas por modelo e mês. */
+/** Garantias (baterias trocadas), Extras (ganhadas) e Vitor (Heliar compradas do Vitor), por modelo e mês. */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun WarrantiesScreen() {
@@ -66,7 +70,7 @@ fun WarrantiesScreen() {
     val state by vm.state.collectAsStateWithLifecycle()
     val products by vm.products.collectAsStateWithLifecycle()
     ToastEffect(vm.messages)
-    val extras = state.tab == WarrantyTab.EXTRAS
+    val tab = state.tab
     var picking by remember { mutableStateOf(false) }
     var chosen by remember { mutableStateOf<Product?>(null) }
     var toDelete by remember { mutableStateOf<WarrantyGroup?>(null) }
@@ -82,7 +86,15 @@ fun WarrantiesScreen() {
             ExtendedFloatingActionButton(
                 onClick = { picking = true },
                 icon = { Icon(Icons.Filled.Add, contentDescription = null) },
-                text = { Text(if (extras) "Registrar extra" else "Registrar troca") },
+                text = {
+                    Text(
+                        when (tab) {
+                            WarrantyTab.EXTRAS -> "Registrar extra"
+                            WarrantyTab.VITOR -> "Registrar do Vitor"
+                            WarrantyTab.EXCHANGES -> "Registrar troca"
+                        }
+                    )
+                },
             )
         },
         containerColor = MaterialTheme.colorScheme.background,
@@ -109,11 +121,15 @@ fun WarrantiesScreen() {
             }
             item {
                 Text(
-                    if (extras) {
-                        "Baterias que a loja ganhou (o cliente comprou uma nova e deixou a da garantia). " +
-                            "Entram no estoque com custo zero: na venda, o lucro delas é de 100%."
-                    } else {
-                        "Baterias trocadas em garantia. Só conta o modelo e a quantidade; o estoque não muda."
+                    when (tab) {
+                        WarrantyTab.EXTRAS ->
+                            "Baterias que a loja ganhou (o cliente comprou uma nova e deixou a da garantia). " +
+                                "Entram no estoque com custo zero: na venda, o lucro delas é de 100%."
+                        WarrantyTab.VITOR ->
+                            "Baterias Heliar (modelos com H) do Vitor. Entram no estoque com o custo pago a ele " +
+                                "(R$ 150 por padrão): na venda, o lucro é o preço menos esse valor."
+                        WarrantyTab.EXCHANGES ->
+                            "Baterias trocadas em garantia. Só conta o modelo e a quantidade; o estoque não muda."
                     },
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
@@ -139,7 +155,11 @@ fun WarrantiesScreen() {
                 AppCard(containerColor = MaterialTheme.colorScheme.primaryContainer) {
                     Column(Modifier.padding(16.dp)) {
                         FitText(
-                            "${state.total} " + if (extras) "extra(s) no mês" else "trocada(s) no mês",
+                            "${state.total} " + when (tab) {
+                                WarrantyTab.EXTRAS -> "extra(s) no mês"
+                                WarrantyTab.VITOR -> "do Vitor no mês"
+                                WarrantyTab.EXCHANGES -> "trocada(s) no mês"
+                            },
                             style = MaterialTheme.typography.headlineSmall,
                             fontWeight = FontWeight.Bold,
                             color = MaterialTheme.colorScheme.onPrimaryContainer,
@@ -152,7 +172,15 @@ fun WarrantiesScreen() {
                             )
                         }
                         state.byModel.forEach { InfoRow(it.model, "${it.count}", bold = true) }
-                        if (extras) {
+                        if (tab == WarrantyTab.VITOR && state.total > 0) {
+                            Text(
+                                "Pago ao Vitor no mês: ${Money.format(state.vitorPaid)}",
+                                style = MaterialTheme.typography.titleSmall,
+                                color = MaterialTheme.colorScheme.onPrimaryContainer,
+                                modifier = Modifier.padding(top = 8.dp),
+                            )
+                        }
+                        if (tab == WarrantyTab.EXTRAS) {
                             Text(
                                 "Extras ainda no estoque (todos os meses): ${state.extrasInStock}",
                                 style = MaterialTheme.typography.bodySmall,
@@ -167,8 +195,11 @@ fun WarrantiesScreen() {
             if (!state.loading && state.list.isEmpty()) {
                 item {
                     EmptyState(
-                        if (extras) "Toque em \"Registrar extra\" para anotar uma bateria ganhada."
-                        else "Toque em \"Registrar troca\" para anotar uma troca."
+                        when (tab) {
+                            WarrantyTab.EXTRAS -> "Toque em \"Registrar extra\" para anotar uma bateria ganhada."
+                            WarrantyTab.VITOR -> "Toque em \"Registrar do Vitor\" para anotar baterias Heliar do Vitor."
+                            WarrantyTab.EXCHANGES -> "Toque em \"Registrar troca\" para anotar uma troca."
+                        }
                     )
                 }
             }
@@ -178,8 +209,13 @@ fun WarrantiesScreen() {
 
     if (picking) {
         ProductPickerDialog(
-            title = if (extras) "Qual bateria a loja ganhou?" else "Qual bateria foi trocada?",
-            products = products,
+            title = when (tab) {
+                WarrantyTab.EXTRAS -> "Qual bateria a loja ganhou?"
+                WarrantyTab.VITOR -> "Qual bateria Heliar do Vitor?"
+                WarrantyTab.EXCHANGES -> "Qual bateria foi trocada?"
+            },
+            // Vitor: só Heliar (modelos que começam com H)
+            products = if (tab == WarrantyTab.VITOR) products.filter { it.model.trim().startsWith("H", ignoreCase = true) } else products,
             onPick = { chosen = it; picking = false },
             onDismiss = { picking = false },
         )
@@ -187,16 +223,20 @@ fun WarrantiesScreen() {
     chosen?.let { p ->
         QuantityDialog(
             product = p,
-            extra = extras,
-            onConfirm = { q -> vm.register(p, q); chosen = null },
+            tab = tab,
+            onConfirm = { q, cost -> vm.register(p, q, cost); chosen = null },
             onDismiss = { chosen = null },
         )
     }
     toDelete?.let { g ->
         ConfirmDialog(
-            title = if (g.extra) "Excluir extra?" else "Excluir troca?",
+            title = when (g.tab) {
+                WarrantyTab.EXTRAS -> "Excluir extra?"
+                WarrantyTab.VITOR -> "Excluir bateria do Vitor?"
+                WarrantyTab.EXCHANGES -> "Excluir troca?"
+            },
             text = "${g.count}× ${g.model} de ${Periods.formatDate(g.createdAt)}." +
-                if (g.extra) " As baterias saem do estoque." else "",
+                if (g.tab != WarrantyTab.EXCHANGES) " As baterias saem do estoque." else "",
             confirmLabel = "Excluir",
             destructive = true,
             onConfirm = { vm.delete(g); toDelete = null },
@@ -216,7 +256,14 @@ private fun WarrantyRow(g: WarrantyGroup, onDelete: () -> Unit) {
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
-                if (g.extra) {
+                if (g.tab == WarrantyTab.VITOR) {
+                    Text(
+                        "Pago ao Vitor: ${Money.format(g.paid)}",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.primary,
+                    )
+                }
+                if (g.tab == WarrantyTab.EXTRAS) {
                     val inStock = g.count - g.soldCount
                     Text(
                         listOfNotNull(
@@ -236,23 +283,37 @@ private fun WarrantyRow(g: WarrantyGroup, onDelete: () -> Unit) {
 }
 
 @Composable
-private fun QuantityDialog(product: Product, extra: Boolean, onConfirm: (Int) -> Unit, onDismiss: () -> Unit) {
+private fun QuantityDialog(product: Product, tab: WarrantyTab, onConfirm: (Int, Long) -> Unit, onDismiss: () -> Unit) {
     var quantity by remember { mutableIntStateOf(1) }
+    var cost by remember { mutableLongStateOf(VITOR_DEFAULT_COST) }
     AlertDialog(
         onDismissRequest = onDismiss,
         title = { Text(product.model) },
         text = {
             Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                Text(if (extra) "Quantas a loja ganhou?" else "Quantas foram trocadas?")
-                QuantityStepper(value = quantity, onValueChange = { quantity = it }, min = 1, max = 50)
                 Text(
-                    if (extra) "Entra no estoque com custo zero." else "O estoque não muda.",
+                    when (tab) {
+                        WarrantyTab.EXTRAS -> "Quantas a loja ganhou?"
+                        WarrantyTab.VITOR -> "Quantas vieram do Vitor?"
+                        WarrantyTab.EXCHANGES -> "Quantas foram trocadas?"
+                    }
+                )
+                QuantityStepper(value = quantity, onValueChange = { quantity = it }, min = 1, max = 50)
+                if (tab == WarrantyTab.VITOR) {
+                    MoneyField(value = cost, onValueChange = { cost = it }, label = "Pago ao Vitor por bateria")
+                }
+                Text(
+                    when (tab) {
+                        WarrantyTab.EXTRAS -> "Entra no estoque com custo zero."
+                        WarrantyTab.VITOR -> "Entra no estoque com custo de ${Money.format(cost)} cada. Total: ${Money.format(cost * quantity)}."
+                        WarrantyTab.EXCHANGES -> "O estoque não muda."
+                    },
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
             }
         },
-        confirmButton = { TextButton(onClick = { onConfirm(quantity) }) { Text("Registrar") } },
+        confirmButton = { TextButton(onClick = { onConfirm(quantity, cost) }) { Text("Registrar") } },
         dismissButton = { TextButton(onClick = onDismiss) { Text("Cancelar") } },
     )
 }

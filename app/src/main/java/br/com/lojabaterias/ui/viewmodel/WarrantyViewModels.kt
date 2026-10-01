@@ -5,7 +5,10 @@ import br.com.lojabaterias.data.ModelCount
 import br.com.lojabaterias.data.Product
 import br.com.lojabaterias.data.StoreRepository
 import br.com.lojabaterias.data.WarrantyClaim
+import br.com.lojabaterias.data.VITOR_DEFAULT_COST
 import br.com.lojabaterias.data.WarrantyPeriodSummary
+import br.com.lojabaterias.data.WarrantyStatus
+import br.com.lojabaterias.domain.Money
 import br.com.lojabaterias.domain.PeriodType
 import br.com.lojabaterias.domain.Periods
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -16,9 +19,10 @@ import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 
-enum class WarrantyTab(val label: String) {
-    EXCHANGES("Garantias"),
-    EXTRAS("Extras"),
+enum class WarrantyTab(val label: String, val status: String) {
+    EXCHANGES("Garantias", WarrantyStatus.EXCHANGE),
+    EXTRAS("Extras", WarrantyStatus.EXTRA),
+    VITOR("Vitor", WarrantyStatus.VITOR),
 }
 
 data class WarrantiesState(
@@ -34,16 +38,20 @@ data class WarrantiesState(
     val groups: List<WarrantyGroup> = emptyList(),
     /** Extras ainda no estoque (não vendidas), considerando todos os meses. */
     val extrasInStock: Int = 0,
+    /** Vitor: total pago a ele pelas baterias do mês. */
+    val vitorPaid: Long = 0,
     val loading: Boolean = true,
 ) {
     val total: Int get() = list.size
 }
 
 /** Baterias do mesmo modelo lançadas no mesmo dia. */
-data class WarrantyGroup(val model: String, val createdAt: Long, val extra: Boolean, val items: List<WarrantyClaim>) {
+data class WarrantyGroup(val model: String, val createdAt: Long, val tab: WarrantyTab, val items: List<WarrantyClaim>) {
     val count: Int get() = items.size
     val soldCount: Int get() = items.count { it.saleId != null }
-    val key: String get() = "$extra-${items.first().id}"
+    /** Vitor: quanto foi pago a ele por este grupo. */
+    val paid: Long get() = items.sumOf { it.replacementCost }
+    val key: String get() = "${tab.name}-${items.first().id}"
 }
 
 class WarrantiesViewModel(private val repo: StoreRepository) : MessageViewModel() {
@@ -56,7 +64,7 @@ class WarrantiesViewModel(private val repo: StoreRepository) : MessageViewModel(
     val state: StateFlow<WarrantiesState> =
         combine(repo.observeWarranties(), tab, offset, currentDateFlow()) { all, t, off, today ->
             val range = Periods.range(PeriodType.MONTH, today, off)
-            val ofTab = all.filter { it.isExtra == (t == WarrantyTab.EXTRAS) }
+            val ofTab = all.filter { it.status == t.status }
             val inMonth = ofTab.filter { it.createdAt in range }
             WarrantiesState(
                 tab = t,
@@ -64,10 +72,11 @@ class WarrantiesViewModel(private val repo: StoreRepository) : MessageViewModel(
                 monthLabel = Periods.label(PeriodType.MONTH, today, off),
                 byModel = WarrantyPeriodSummary.byModel(inMonth),
                 list = inMonth,
-                groups = inMonth.groupBy { Triple(it.returnedModel, Periods.formatDate(it.createdAt), it.isExtra) }
-                    .map { (key, items) -> WarrantyGroup(key.first, items.maxOf { it.createdAt }, key.third, items) }
+                groups = inMonth.groupBy { it.returnedModel to Periods.formatDate(it.createdAt) }
+                    .map { (key, items) -> WarrantyGroup(key.first, items.maxOf { it.createdAt }, t, items) }
                     .sortedByDescending { it.createdAt },
                 extrasInStock = all.count { it.isExtra && it.saleId == null },
+                vitorPaid = if (t == WarrantyTab.VITOR) inMonth.sumOf { it.replacementCost } else 0,
                 loading = false,
             )
         }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), WarrantiesState())
@@ -80,15 +89,22 @@ class WarrantiesViewModel(private val repo: StoreRepository) : MessageViewModel(
     fun previousMonth() = offset.update { it - 1 }
     fun nextMonth() = offset.update { if (it < 0) it + 1 else it }
 
-    fun register(product: Product, quantity: Int) {
-        val extra = tab.value == WarrantyTab.EXTRAS
+    fun register(product: Product, quantity: Int, vitorCost: Long = VITOR_DEFAULT_COST) {
+        val t = tab.value
         viewModelScope.launch {
             try {
-                if (extra) repo.registerExtra(product.id, quantity) else repo.registerExchange(product.id, quantity)
+                when (t) {
+                    WarrantyTab.EXTRAS -> repo.registerExtra(product.id, quantity)
+                    WarrantyTab.VITOR -> repo.registerVitor(product.id, quantity, vitorCost)
+                    WarrantyTab.EXCHANGES -> repo.registerExchange(product.id, quantity)
+                }
                 offset.value = 0
                 message(
-                    if (extra) "$quantity× ${product.model} extra: entrou no estoque com custo zero"
-                    else "$quantity× ${product.model} trocada(s) em garantia"
+                    when (t) {
+                        WarrantyTab.EXTRAS -> "$quantity× ${product.model} extra: entrou no estoque com custo zero"
+                        WarrantyTab.VITOR -> "$quantity× ${product.model} do Vitor: entrou no estoque com custo de ${Money.format(vitorCost)} cada"
+                        WarrantyTab.EXCHANGES -> "$quantity× ${product.model} trocada(s) em garantia"
+                    }
                 )
             } catch (e: Exception) {
                 message(errorMessage(e))
@@ -100,7 +116,13 @@ class WarrantiesViewModel(private val repo: StoreRepository) : MessageViewModel(
         viewModelScope.launch {
             try {
                 repo.deleteWarranties(g.items.map { it.id })
-                message(if (g.extra) "Extra excluída e retirada do estoque" else "Troca excluída")
+                message(
+                    when (g.tab) {
+                        WarrantyTab.EXTRAS -> "Extra excluída e retirada do estoque"
+                        WarrantyTab.VITOR -> "Bateria do Vitor excluída e retirada do estoque"
+                        WarrantyTab.EXCHANGES -> "Troca excluída"
+                    }
+                )
             } catch (e: Exception) {
                 message(errorMessage(e))
             }

@@ -56,13 +56,17 @@ data class ChargePeriodSummary(
 /** Quantidade de um modelo (ex.: 4× BEP60D). */
 data class ModelCount(val model: String, val count: Int)
 
-/** Garantias trocadas e extras ganhadas no período, por modelo. */
+/** Garantias trocadas, extras ganhadas e baterias do Vitor no período, por modelo. */
 data class WarrantyPeriodSummary(
     val exchanged: List<ModelCount> = emptyList(),
     val extras: List<ModelCount> = emptyList(),
+    val vitor: List<ModelCount> = emptyList(),
+    /** Total pago ao Vitor pelas baterias registradas no período. */
+    val vitorPaid: Long = 0,
 ) {
     val exchangedTotal: Int get() = exchanged.sumOf { it.count }
     val extrasTotal: Int get() = extras.sumOf { it.count }
+    val vitorTotal: Int get() = vitor.sumOf { it.count }
 
     companion object {
         fun byModel(list: List<WarrantyClaim>): List<ModelCount> =
@@ -71,11 +75,22 @@ data class WarrantyPeriodSummary(
                 .sortedWith(compareByDescending<ModelCount> { it.count }.thenBy { it.model })
 
         fun from(claims: List<WarrantyClaim>) = WarrantyPeriodSummary(
-            exchanged = byModel(claims.filter { !it.isExtra }),
+            exchanged = byModel(claims.filter { it.isExchange }),
             extras = byModel(claims.filter { it.isExtra }),
+            vitor = byModel(claims.filter { it.isVitor }),
+            vitorPaid = claims.filter { it.isVitor }.sumOf { it.replacementCost },
         )
     }
 }
+
+/** Baterias vendidas num dia, juntando os modelos iguais. */
+data class DaySales(
+    val date: java.time.LocalDate,
+    val units: Int,
+    val revenue: Long,
+    /** Quantidade por modelo, do mais vendido para o menos vendido. */
+    val models: List<ModelCount>,
+)
 
 /** Boleto pago no período, com a nota a que pertence. */
 data class PaidBill(val bill: InvoiceBill, val invoice: Invoice)
@@ -126,7 +141,17 @@ data class FullReport(
     // Caixa (dinheiro de verdade) e extras vendidas no período
     val cash: FinanceSummary = FinanceSummary(),
     val extrasSold: ExtrasSummary = ExtrasSummary(),
+    /** Baterias vendidas por dia (só os dias com venda), em ordem de data. */
+    val daily: List<DaySales> = emptyList(),
 ) {
+    /** Total de baterias por modelo no período. */
+    val modelsTotal: List<ModelCount>
+        get() = daily.flatMap { it.models }.groupBy { it.model }
+            .map { (m, l) -> ModelCount(m, l.sumOf { it.count }) }
+            .sortedWith(compareByDescending<ModelCount> { it.count }.thenBy { it.model })
+    /** Média de baterias por dia, contando só os dias que tiveram venda. */
+    val averagePerSalesDay: Double
+        get() = if (daily.isEmpty()) 0.0 else daily.sumOf { it.units }.toDouble() / daily.size
     val withdrawalsTotal: Long get() = withdrawals.sumOf { it.amount }
     val withdrawalsByPartner: List<Pair<String, Long>>
         get() = withdrawals.groupBy { it.category }.map { (n, l) -> n to l.sumOf { it.amount } }.sortedByDescending { it.second }
@@ -222,7 +247,19 @@ data class FullReport(
                     allInvoices.flatMap { it.bills }, withdrawals,
                 ),
                 extrasSold = FinanceReport.extrasSummary(allWarranties.filter { it.isExtra }, active, all),
+                daily = dailySales(active),
             )
         }
+
+        /** Agrupa as vendas por dia e, em cada dia, soma as baterias do mesmo modelo. */
+        fun dailySales(sales: List<SaleWithItems>, zone: java.time.ZoneId = java.time.ZoneId.systemDefault()): List<DaySales> =
+            sales.groupBy { br.com.lojabaterias.domain.Periods.toLocalDateTime(it.sale.dateTime, zone).toLocalDate() }
+                .toSortedMap()
+                .map { (day, list) ->
+                    val models = list.flatMap { it.items }.groupBy { it.modelSnapshot }
+                        .map { (m, items) -> ModelCount(m, items.sumOf { it.quantity }) }
+                        .sortedWith(compareByDescending<ModelCount> { it.count }.thenBy { it.model })
+                    DaySales(day, models.sumOf { it.count }, list.sumOf { it.sale.finalAmount }, models)
+                }
     }
 }
