@@ -4,6 +4,7 @@ import androidx.lifecycle.viewModelScope
 import br.com.lojabaterias.data.BillDraft
 import br.com.lojabaterias.data.Invoice
 import br.com.lojabaterias.data.InvoiceBill
+import br.com.lojabaterias.data.bonusFor
 import br.com.lojabaterias.data.InvoiceItem
 import br.com.lojabaterias.data.InvoiceWithBills
 import br.com.lojabaterias.data.Product
