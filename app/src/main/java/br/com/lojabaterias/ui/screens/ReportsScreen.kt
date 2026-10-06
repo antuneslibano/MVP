@@ -253,6 +253,7 @@ private fun SummaryCard(f: FullReport) {
 
             Group("Notas e boletos")
             InfoRow("Boletos pagos no período", "${f.invoices.paid.size} • ${Money.format(f.invoices.paidTotal)}")
+            InfoRow("Bonificações recebidas", "${f.invoices.bonusUnits} baterias • nota ${Money.format(f.invoices.bonusValue)}")
             InfoRow("Devemos aos fornecedores (hoje)", Money.format(f.invoices.debt.open))
 
             Group("Caixa")

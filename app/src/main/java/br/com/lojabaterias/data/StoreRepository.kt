@@ -956,10 +956,10 @@ class StoreRepository(
         if (list.isEmpty()) throw BusinessException("Adicione as baterias da nota")
         if (list.any { it.unitCost < 0 }) throw BusinessException("Valor de bateria inválido")
         if (total <= 0) throw BusinessException("Informe o valor da nota")
-        if (bills.isEmpty()) throw BusinessException("Adicione pelo menos um boleto")
+        // Nota sem boletos é bonificação: nada a pagar e as baterias entram com custo zero.
         if (bills.any { it.amount <= 0 }) throw BusinessException("Todo boleto precisa ter valor")
         val billsTotal = bills.sumOf { it.amount }
-        if (billsTotal != total) {
+        if (bills.isNotEmpty() && billsTotal != total) {
             throw BusinessException(
                 "A soma dos boletos (${Money.format(billsTotal)}) está diferente do total da nota (${Money.format(total)})"
             )
@@ -981,6 +981,14 @@ class StoreRepository(
                     )
                 }
                 list = list.zip(old).map { (n, o) -> n.copy(received = o.received, movementId = o.movementId) }
+                val wasBonus = invoices.billsFor(current.id).isEmpty()
+                if (wasBonus != bills.isEmpty()) {
+                    throw BusinessException(
+                        "Essas baterias já entraram no estoque com o custo " +
+                            (if (wasBonus) "zero da bonificação" else "da nota") +
+                            ". Para ${if (wasBonus) "colocar" else "tirar"} os boletos, toque antes em \"Ainda não chegaram\"."
+                    )
+                }
             }
         }
         val received = current?.isReceived ?: alreadyReceived
@@ -1018,6 +1026,7 @@ class StoreRepository(
      * As baterias da nota chegaram. [receivedQty] diz quantas chegaram de cada item (na ordem da nota;
      * vazio = todas). Com [addToStock], as que chegaram entram no estoque como um lote com o custo
      * da nota (valor unitário − desconto); as vendas usam primeiro os lotes mais antigos.
+     * Nota sem boletos é bonificação: as baterias entram com custo zero (todo o valor da venda é lucro).
      */
     suspend fun markInvoiceReceived(
         id: Long,
@@ -1028,13 +1037,15 @@ class StoreRepository(
     ): Unit = write {
         val i = invoices.getById(id) ?: throw BusinessException("Nota não encontrada")
         if (i.isReceived) throw BusinessException("Essa nota já foi marcada como recebida")
-        val label = "Nota ${i.number}" + if (i.supplier.isNotBlank()) " (${i.supplier})" else ""
+        val bonus = invoices.billsFor(i.id).isEmpty()
+        val label = (if (bonus) "Bonificação: nota ${i.number}" else "Nota ${i.number}") +
+            if (i.supplier.isNotBlank()) " (${i.supplier})" else ""
         val items = i.items.mapIndexed { k, item ->
             val qty = receivedQty.getOrNull(k)?.coerceAtLeast(0) ?: item.quantity
             val product = item.productId?.let { products.getById(it) }
             val moveId = if (addToStock && qty > 0 && product != null) {
-                // Entra como um lote novo, com o custo desta nota (já com o desconto)
-                moveStock(product.id, qty, MovementType.ENTRY, label, at, item.unitCost)
+                // Entra como um lote novo, com o custo desta nota (já com o desconto); bonificação custa zero
+                moveStock(product.id, qty, MovementType.ENTRY, label, at, if (bonus) 0L else item.unitCost)
             } else {
                 null
             }

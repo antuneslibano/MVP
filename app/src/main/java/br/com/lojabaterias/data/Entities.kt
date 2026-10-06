@@ -564,4 +564,6 @@ data class InvoiceWithBills(
     val paidCount: Int get() = bills.count { it.isPaid }
     val openAmount: Long get() = bills.filter { !it.isPaid }.sumOf { it.amount }
     val isFullyPaid: Boolean get() = bills.isNotEmpty() && bills.all { it.isPaid }
+    /** Nota sem boletos = bonificação do fornecedor: não há nada a pagar e as baterias entram com custo zero. */
+    val isBonus: Boolean get() = bills.isEmpty()
 }

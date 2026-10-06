@@ -51,6 +51,9 @@ data class InvoicesState(
     val paidNotesTotal: Long = 0,
     /** Notas com boletos em aberto. */
     val openNotesCount: Int = 0,
+    /** Bonificações: notas sem boletos (nada a pagar). */
+    val bonusCount: Int = 0,
+    val bonusTotal: Long = 0,
     val loading: Boolean = true,
 )
 
@@ -82,7 +85,9 @@ class InvoicesViewModel(private val repo: StoreRepository) : MessageViewModel() 
             },
             paidNotesCount = all.count { it.isFullyPaid },
             paidNotesTotal = all.filter { it.isFullyPaid }.sumOf { it.invoice.total },
-            openNotesCount = all.count { !it.isFullyPaid },
+            openNotesCount = all.count { !it.isBonus && !it.isFullyPaid },
+            bonusCount = all.count { it.isBonus },
+            bonusTotal = all.filter { it.isBonus }.sumOf { it.invoice.total },
             loading = false,
         )
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), InvoicesState())
@@ -250,7 +255,7 @@ class InvoiceFormViewModel(private val repo: StoreRepository, private val invoic
             data.issueDate?.let { "Data ${it.format(Periods.DATE)}" },
             items.takeIf { it.isNotEmpty() }?.let { "${it.sumOf { i -> i.quantity }} baterias em ${it.size} linha(s)" },
             data.total?.let { "Total ${Money.format(it)}" },
-            bills.takeIf { it.isNotEmpty() }?.let { "${it.size} boleto(s)" },
+            if (bills.isNotEmpty()) "${bills.size} boleto(s)" else if (data.source == "XML") "Sem boletos: 🎁 bonificação" else null,
         )
         val warnings = buildList {
             if (data.number.isBlank()) add("Não achei o número da nota: digite no passo 1.")
@@ -266,7 +271,9 @@ class InvoiceFormViewModel(private val repo: StoreRepository, private val invoic
             if (items.isNotEmpty() && data.extras > 0) {
                 add("${Money.format(data.extras)} da nota ficou como frete, impostos e outros: confira se não faltou alguma bateria.")
             }
-            if (bills.isEmpty()) add("Não achei boletos na nota: monte os boletos no passo 3.")
+            if (bills.isEmpty() && data.source != "XML") {
+                add("Não achei boletos: a nota vai como 🎁 bonificação (custo zero). Se ela tiver boletos, monte no passo 3.")
+            }
         }
         _state.update { it.copy(importResult = ImportResult(data.source, found, warnings)) }
         message(if (warnings.isEmpty()) "Nota lida! Confira e toque em Lançar nota." else "Nota lida. Confira os avisos em laranja.")

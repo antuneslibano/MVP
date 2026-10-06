@@ -211,4 +211,49 @@ class InvoiceTest {
         assertEquals(177_011L, f.cash.supplierPaid)
         assertEquals(-177_011L - 50_000L, f.cash.cashResult)
     }
+
+    @Test
+    fun invoiceWithoutBills_isBonus_withZeroCost() = runBlocking {
+        val pid = product()
+        val id = repo.saveInvoice(
+            id = null, number = "777", supplier = "Heliar do Rio", issueDate = 1_000,
+            items = listOf(InvoiceItem("BE50D", 2, 31_000, pid)),
+            total = 62_000, bills = emptyList(), note = null,
+        )
+        val inv = repo.observeInvoice(id).first()!!
+        assertTrue(inv.isBonus)
+        assertEquals(0L, inv.openAmount)
+        repo.markInvoiceReceived(id, null, at = 6_000)
+        assertEquals(7, repo.getProduct(pid)!!.stock)
+        // Entram com custo zero; as antigas continuam com o custo delas
+        assertEquals(
+            listOf(br.com.lojabaterias.domain.CostLayer(5, 30_000), br.com.lojabaterias.domain.CostLayer(2, 0)),
+            repo.costLayers(pid),
+        )
+        assertEquals(5 * 30_000L, repo.observeStockValues().first()[pid])
+        assertEquals(0L, repo.observeInvoiceBills().first().sumOf { it.amount })
+
+        // Depois de entrar no estoque não dá para virar nota com boletos sem desfazer a chegada
+        try {
+            repo.saveInvoice(
+                id = id, number = "777", supplier = "Heliar do Rio", issueDate = 1_000,
+                items = listOf(InvoiceItem("BE50D", 2, 31_000, pid)), total = 62_000,
+                bills = listOf(BillDraft(dueDate = 2_000, amount = 62_000)), note = null,
+            )
+            fail("Esperava BusinessException")
+        } catch (e: BusinessException) {
+            assertTrue(e.message!!.contains("Ainda não chegaram"))
+        }
+
+        val f = FullReport.build(
+            salesInPeriod = emptyList(), stockMovements = emptyList(), scrapMovements = emptyList(),
+            products = repo.observeProducts().first(), scrapStock = emptyList(), scrapPrices = emptyMap(),
+            range = br.com.lojabaterias.domain.DateRange(0, 10_000),
+            allExpenses = repo.observeExpenses().first(),
+            allInvoices = repo.observeInvoices().first(),
+        )
+        assertEquals(2, f.invoices.bonusUnits)
+        assertEquals(62_000L, f.invoices.bonusValue)
+        assertEquals(0L, f.invoices.debt.open)
+    }
 }

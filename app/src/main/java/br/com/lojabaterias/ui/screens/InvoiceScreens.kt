@@ -299,8 +299,10 @@ private fun NotesSummaryCard(s: InvoicesState) {
             val on = MaterialTheme.colorScheme.onSecondaryContainer
             Text("Notas pagas", style = MaterialTheme.typography.bodyMedium, color = on)
             FitText(Money.format(s.paidNotesTotal), style = MaterialTheme.typography.headlineMedium, color = on, fontWeight = FontWeight.Bold)
+            val paying = s.invoices.size - s.bonusCount
             Text(
-                "${s.paidNotesCount} de ${s.invoices.size} nota${if (s.invoices.size == 1) "" else "s"} com todos os boletos pagos",
+                "${s.paidNotesCount} de $paying nota${if (paying == 1) "" else "s"} com todos os boletos pagos" +
+                    if (s.bonusCount > 0) " • 🎁 ${s.bonusCount} bonificaç${if (s.bonusCount == 1) "ão" else "ões"} (${Money.format(s.bonusTotal)})" else "",
                 style = MaterialTheme.typography.bodyMedium,
                 color = on,
             )
@@ -373,7 +375,7 @@ private fun InvoiceCard(inv: InvoiceWithBills, onClick: () -> Unit) {
         Column(Modifier.padding(16.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Text(
-                    "Nota ${i.number}",
+                    (if (inv.isBonus) "🎁 " else "") + "Nota ${i.number}",
                     style = MaterialTheme.typography.titleMedium,
                     fontWeight = FontWeight.Bold,
                     modifier = Modifier.weight(1f),
@@ -381,7 +383,8 @@ private fun InvoiceCard(inv: InvoiceWithBills, onClick: () -> Unit) {
                 Text(Money.format(i.total), style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
             }
             Text(
-                (if (i.supplier.isNotBlank()) "${i.supplier} • " else "") + "${Periods.formatDate(i.issueDate)} • $units bateria${if (units == 1) "" else "s"}",
+                (if (inv.isBonus) "Bonificação • " else "") + (if (i.supplier.isNotBlank()) "${i.supplier} • " else "") +
+                    "${Periods.formatDate(i.issueDate)} • $units bateria${if (units == 1) "" else "s"}",
                 style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
@@ -404,6 +407,7 @@ fun HowItWorks(modifier: Modifier = Modifier) {
         HelpStep(1, "Lance a nota", "Toque em \"Nova nota\". Importe o PDF ou o XML que o fornecedor mandou (o app preenche tudo) ou digite à mão.")
         HelpStep(2, "Marque a chegada", "Quando as baterias chegarem, abra a nota e toque em \"As baterias chegaram\". Elas entram no estoque com o custo da nota.")
         HelpStep(3, "Pague os boletos", "Na aba Boletos aparecem os vencimentos. Ao pagar, toque em \"Paguei\". O boleto sai do caixa, mas não do lucro: o custo da bateria já sai na venda.")
+        HelpStep(0, "🎁 Nota sem boletos = bonificação", "O fornecedor deu as baterias: não há nada a pagar. Elas entram no estoque com custo R$ 0, então tudo o que a venda trouxer é lucro.")
     }
 }
 
@@ -413,7 +417,7 @@ private fun HelpStep(n: Int, title: String, text: String) {
         Box(
             Modifier.size(28.dp).clip(CircleShape).background(MaterialTheme.colorScheme.primary),
             contentAlignment = Alignment.Center,
-        ) { Text("$n", color = MaterialTheme.colorScheme.onPrimary, fontWeight = FontWeight.Bold) }
+        ) { Text(if (n > 0) "$n" else "★", color = MaterialTheme.colorScheme.onPrimary, fontWeight = FontWeight.Bold) }
         Column(Modifier.padding(start = 12.dp)) {
             Text(title, style = MaterialTheme.typography.titleSmall)
             Text(text, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
@@ -428,7 +432,11 @@ private fun NoteProgress(inv: InvoiceWithBills, modifier: Modifier = Modifier) {
     val steps = listOf(
         "Lançada" to true,
         (if (i.isReceived) "Chegou" else "Chegada") to i.isReceived,
-        (if (inv.isFullyPaid) "Paga" else "Pagos ${inv.paidCount}/${inv.bills.size}") to inv.isFullyPaid,
+        when {
+            inv.isBonus -> "Bonificação" to i.isReceived
+            inv.isFullyPaid -> "Paga" to true
+            else -> "Pagos ${inv.paidCount}/${inv.bills.size}" to false
+        },
     )
     val doneColor = profitColor()
     val todoColor = MaterialTheme.colorScheme.outlineVariant
@@ -461,6 +469,7 @@ private fun NoteProgress(inv: InvoiceWithBills, modifier: Modifier = Modifier) {
 /** O que falta fazer nesta nota (e se já está tudo certo). */
 private fun nextStep(inv: InvoiceWithBills, today: LocalDate): Pair<String, Boolean> {
     if (!inv.invoice.isReceived) return "Próximo passo: marcar a chegada das baterias" to false
+    if (inv.isBonus) return "✓ Tudo certo: bonificação no estoque com custo zero (nada a pagar)" to true
     val bills = inv.sortedBills
     val next = bills.firstOrNull { !it.isPaid } ?: return "✓ Tudo certo: baterias no estoque e nota paga" to true
     val due = Periods.toLocalDateTime(next.dueDate).toLocalDate()
@@ -531,10 +540,15 @@ fun InvoiceDetailScreen(invoiceId: Long, onEdit: () -> Unit, onBack: () -> Unit)
                 AppCard {
                     Column(Modifier.padding(16.dp)) {
                         Text("Nota ${i.number}", style = MaterialTheme.typography.headlineSmall)
+                        if (inv.isBonus) Text("🎁 Bonificação (sem boletos)", color = profitColor(), fontWeight = FontWeight.SemiBold)
                         if (i.supplier.isNotBlank()) Text(i.supplier, style = MaterialTheme.typography.bodyLarge)
                         InfoRow("Data da nota", Periods.formatDate(i.issueDate))
                         InfoRow("Valor total", Money.format(i.total), bold = true)
-                        InfoRow("Falta pagar", Money.format(inv.openAmount), valueColor = if (inv.openAmount > 0) warningColor() else profitColor())
+                        if (inv.isBonus) {
+                            InfoRow("Falta pagar", "Nada (bonificação)", valueColor = profitColor())
+                        } else {
+                            InfoRow("Falta pagar", Money.format(inv.openAmount), valueColor = if (inv.openAmount > 0) warningColor() else profitColor())
+                        }
                         i.note?.let { InfoRow("Observação", it) }
                         NoteProgress(inv, Modifier.padding(top = 12.dp))
                     }
@@ -575,7 +589,8 @@ fun InvoiceDetailScreen(invoiceId: Long, onEdit: () -> Unit, onBack: () -> Unit)
                                 if (i.items.any { it.movementId != null }) "As baterias que chegaram entraram no estoque (veja em Movimentações)."
                                 else "Esta nota não mexeu no estoque."
                             } else {
-                                "Quando chegarem, toque no botão acima: as baterias entram no estoque automaticamente."
+                                "Quando chegarem, toque no botão acima: as baterias entram no estoque automaticamente" +
+                                    if (inv.isBonus) " com custo R$ 0 (bonificação)." else "."
                             },
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
@@ -615,6 +630,17 @@ fun InvoiceDetailScreen(invoiceId: Long, onEdit: () -> Unit, onBack: () -> Unit)
                 }
 
                 SectionTitle("2. Boletos")
+                if (inv.isBonus) {
+                    AppCard(containerColor = MaterialTheme.colorScheme.secondaryContainer) {
+                        Text(
+                            "🎁 Sem boletos: é bonificação. Não há nada a pagar e as baterias entram no estoque com custo R$ 0 " +
+                                "(o valor da venda delas é todo lucro). Se a nota tiver boletos, toque em Editar e adicione.",
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.onSecondaryContainer,
+                            modifier = Modifier.padding(16.dp),
+                        )
+                    }
+                }
                 inv.sortedBills.forEachIndexed { k, b ->
                     AppCard {
                         Row(Modifier.padding(16.dp), verticalAlignment = Alignment.CenterVertically) {
@@ -878,13 +904,27 @@ fun InvoiceFormScreen(invoiceId: Long?, onDone: () -> Unit, onBack: () -> Unit, 
                 }
             }
             Text(
-                "Quando as baterias chegarem, o custo de cada uma no estoque passa a ser o valor com desconto desta nota.",
+                if (s.bills.isEmpty()) "Sem boletos (bonificação): quando as baterias chegarem, entram no estoque com custo R$ 0."
+                else "Quando as baterias chegarem, o custo de cada uma no estoque passa a ser o valor com desconto desta nota.",
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
 
             SectionTitle("3. Boletos")
             Hint("As parcelas que vocês vão pagar. Elas aparecem na aba Boletos, com aviso quando estiverem perto de vencer.")
+            if (s.bills.isEmpty()) {
+                AppCard(containerColor = MaterialTheme.colorScheme.secondaryContainer) {
+                    Column(Modifier.padding(16.dp)) {
+                        Text("🎁 Sem boletos = bonificação", style = MaterialTheme.typography.titleSmall, color = MaterialTheme.colorScheme.onSecondaryContainer)
+                        Text(
+                            "Se a nota não tem boletos, o fornecedor deu as baterias: nada a pagar, e elas entram no estoque com custo R$ 0. " +
+                                "Se a nota tem boletos, monte abaixo.",
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.onSecondaryContainer,
+                        )
+                    }
+                }
+            }
             BillGenerator(enabled = s.total > 0, default = s.issueDate.plusDays(30)) { count, first, interval ->
                 vm.generateBills(count, first, interval)
             }
@@ -1029,7 +1069,7 @@ private fun ReceiveDialog(inv: InvoiceWithBills, onConfirm: (String, List<Int>, 
                         .toggleable(value = toStock, role = Role.Switch, onValueChange = { toStock = it }),
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
-                    Text("Dar entrada no estoque (e atualizar o custo)", style = MaterialTheme.typography.bodyLarge, modifier = Modifier.weight(1f))
+                    Text(if (inv.bills.isEmpty()) "Dar entrada no estoque (bonificação: custo R$ 0)" else "Dar entrada no estoque com o custo da nota", style = MaterialTheme.typography.bodyLarge, modifier = Modifier.weight(1f))
                     Switch(checked = toStock, onCheckedChange = null)
                 }
                 OutlinedTextField(
