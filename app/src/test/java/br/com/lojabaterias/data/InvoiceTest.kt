@@ -255,13 +255,13 @@ class InvoiceTest {
         assertTrue(inv.isBonus)
         assertEquals(0L, inv.openAmount)
 
-        repo.markInvoiceReceived(purchase, null, at = 5_000)
+        repo.markInvoiceReceived(purchase, null)
         assertEquals(
             listOf(br.com.lojabaterias.domain.CostLayer(5, 30_000), br.com.lojabaterias.domain.CostLayer(10, 38_000)),
             repo.costLayers(pid),
         )
         // A bonificação chegou: as 11 dividem os R$ 3.800
-        repo.markInvoiceReceived(bonus, null, at = 6_000)
+        repo.markInvoiceReceived(bonus, null)
         assertEquals(16, repo.getProduct(pid)!!.stock)
         assertEquals(
             listOf(br.com.lojabaterias.domain.CostLayer(5, 30_000), br.com.lojabaterias.domain.CostLayer(11, 34_545)),
@@ -280,7 +280,7 @@ class InvoiceTest {
         val f = FullReport.build(
             salesInPeriod = emptyList(), stockMovements = emptyList(), scrapMovements = emptyList(),
             products = repo.observeProducts().first(), scrapStock = emptyList(), scrapPrices = emptyMap(),
-            range = br.com.lojabaterias.domain.DateRange(0, 10_000),
+            range = br.com.lojabaterias.domain.DateRange(0, Long.MAX_VALUE),
             allExpenses = repo.observeExpenses().first(),
             allInvoices = repo.observeInvoices().first(),
         )
