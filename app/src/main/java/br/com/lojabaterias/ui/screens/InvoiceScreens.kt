@@ -1109,7 +1109,8 @@ private fun BonusCostLines(
     purchase.invoice.items.zip(costs.purchase).forEach { (line, cost) ->
         InfoRow("${line.quantity}× ${line.model} (nota ${purchase.invoice.number})", "${Money.format(line.unitCost)} → ${Money.format(cost)}")
     }
-    val labels = bonuses.map { it.invoice.id to it.invoice.number } + listOfNotNull(draft?.let { null to "esta" })
+    val labels: List<Pair<Long?, String>> =
+        bonuses.map { Pair<Long?, String>(it.invoice.id, it.invoice.number) } + if (draft != null) listOf(Pair<Long?, String>(null, "esta")) else emptyList()
     bonusItems.zip(costs.bonuses).forEachIndexed { k, (lines, list) ->
         val (id, number) = labels[k]
         lines.zip(list).forEach { (line, cost) ->

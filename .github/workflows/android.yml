@@ -43,7 +43,10 @@ jobs:
         run: chmod +x gradlew
 
       - name: Testes unitários
-        run: ./gradlew --no-daemon testDebugUnitTest
+        shell: bash
+        run: |
+          set -o pipefail
+          ./gradlew --no-daemon testDebugUnitTest 2>&1 | tee gradle-test.log
         env:
           VERSION_CODE: ${{ github.run_number }}
 
@@ -59,6 +62,7 @@ jobs:
                       trace = " | ".join(l.strip() for l in (fail.text or "").splitlines()[:6])
                       print(f"::error title={case.get('classname')}.{case.get('name')}::{msg} || {trace[:600]}")
           PY
+          grep -E "^e: |error:|What went wrong" -A3 gradle-test.log | head -40 | while IFS= read -r line; do echo "::error::$line"; done || true
 
       - name: Preparar assinatura personalizada (opcional, via secrets)
         env:
