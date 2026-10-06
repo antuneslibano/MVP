@@ -43,6 +43,7 @@ import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.ExtendedFloatingActionButton
 import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.FilterChip
+import androidx.compose.foundation.clickable
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -72,7 +73,10 @@ import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardCapitalization
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import br.com.lojabaterias.data.BonusCost
+import br.com.lojabaterias.data.InvoiceItem
 import br.com.lojabaterias.data.InvoiceWithBills
+import br.com.lojabaterias.data.bonusFor
 import br.com.lojabaterias.data.items
 import br.com.lojabaterias.domain.Money
 import br.com.lojabaterias.domain.Periods
@@ -97,6 +101,8 @@ import br.com.lojabaterias.ui.viewmodel.InvoiceTab
 import br.com.lojabaterias.ui.viewmodel.InvoicesState
 import br.com.lojabaterias.ui.viewmodel.InvoicesViewModel
 import br.com.lojabaterias.ui.viewmodel.appViewModel
+import br.com.lojabaterias.ui.viewmodel.purchaseOptions
+import br.com.lojabaterias.ui.viewmodel.suggestedPurchase
 import java.time.LocalDate
 import java.time.temporal.ChronoUnit
 
@@ -407,7 +413,7 @@ fun HowItWorks(modifier: Modifier = Modifier) {
         HelpStep(1, "Lance a nota", "Toque em \"Nova nota\". Importe o PDF ou o XML que o fornecedor mandou (o app preenche tudo) ou digite à mão.")
         HelpStep(2, "Marque a chegada", "Quando as baterias chegarem, abra a nota e toque em \"As baterias chegaram\". Elas entram no estoque com o custo da nota.")
         HelpStep(3, "Pague os boletos", "Na aba Boletos aparecem os vencimentos. Ao pagar, toque em \"Paguei\". O boleto sai do caixa, mas não do lucro: o custo da bateria já sai na venda.")
-        HelpStep(0, "🎁 Nota sem boletos = bonificação", "O fornecedor deu as baterias: não há nada a pagar. Elas entram no estoque com custo R$ 0, então tudo o que a venda trouxer é lucro.")
+        HelpStep(0, "🎁 Nota sem boletos = bonificação", "Não há nada a pagar e ela baixa o custo de uma nota de compra: o valor pago é dividido por todas as baterias. Ex.: 10 a R$ 380 + 1 de bonificação = 11 a R$ 345,45.")
     }
 }
 
@@ -469,7 +475,7 @@ private fun NoteProgress(inv: InvoiceWithBills, modifier: Modifier = Modifier) {
 /** O que falta fazer nesta nota (e se já está tudo certo). */
 private fun nextStep(inv: InvoiceWithBills, today: LocalDate): Pair<String, Boolean> {
     if (!inv.invoice.isReceived) return "Próximo passo: marcar a chegada das baterias" to false
-    if (inv.isBonus) return "✓ Tudo certo: bonificação no estoque com custo zero (nada a pagar)" to true
+    if (inv.isBonus) return "✓ Tudo certo: bonificação no estoque, baixando o custo da nota de compra" to true
     val bills = inv.sortedBills
     val next = bills.firstOrNull { !it.isPaid } ?: return "✓ Tudo certo: baterias no estoque e nota paga" to true
     val due = Periods.toLocalDateTime(next.dueDate).toLocalDate()
@@ -590,7 +596,7 @@ fun InvoiceDetailScreen(invoiceId: Long, onEdit: () -> Unit, onBack: () -> Unit)
                                 else "Esta nota não mexeu no estoque."
                             } else {
                                 "Quando chegarem, toque no botão acima: as baterias entram no estoque automaticamente" +
-                                    if (inv.isBonus) " com custo R$ 0 (bonificação)." else "."
+                                    if (inv.isBonus) ", dividindo o custo com a nota de compra." else "."
                             },
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
@@ -630,15 +636,37 @@ fun InvoiceDetailScreen(invoiceId: Long, onEdit: () -> Unit, onBack: () -> Unit)
                 }
 
                 SectionTitle("2. Boletos")
+                val all by vm.allInvoices.collectAsStateWithLifecycle()
                 if (inv.isBonus) {
+                    val purchase = all.firstOrNull { it.invoice.id == i.bonusFor }
                     AppCard(containerColor = MaterialTheme.colorScheme.secondaryContainer) {
-                        Text(
-                            "🎁 Sem boletos: é bonificação. Não há nada a pagar e as baterias entram no estoque com custo R$ 0 " +
-                                "(o valor da venda delas é todo lucro). Se a nota tiver boletos, toque em Editar e adicione.",
-                            style = MaterialTheme.typography.bodyMedium,
-                            color = MaterialTheme.colorScheme.onSecondaryContainer,
-                            modifier = Modifier.padding(16.dp),
-                        )
+                        Column(Modifier.padding(16.dp)) {
+                            val on = MaterialTheme.colorScheme.onSecondaryContainer
+                            Text("🎁 Sem boletos: é bonificação (nada a pagar)", style = MaterialTheme.typography.titleSmall, color = on)
+                            if (purchase == null) {
+                                Text(
+                                    "Ela não está ligada a nenhuma nota de compra, então as baterias ficam com o valor desta nota. Toque em Editar para escolher a nota que ela abate.",
+                                    style = MaterialTheme.typography.bodyMedium,
+                                    color = warningColor(),
+                                )
+                            } else {
+                                BonusCostLines(purchase, bonusesOf(purchase, all), highlight = i.id)
+                            }
+                        }
+                    }
+                } else {
+                    val linked = bonusesOf(inv, all)
+                    if (linked.isNotEmpty()) {
+                        AppCard(containerColor = MaterialTheme.colorScheme.secondaryContainer) {
+                            Column(Modifier.padding(16.dp)) {
+                                Text(
+                                    "🎁 Bonificação: nota${if (linked.size == 1) "" else "s"} ${linked.joinToString { it.invoice.number }}",
+                                    style = MaterialTheme.typography.titleSmall,
+                                    color = MaterialTheme.colorScheme.onSecondaryContainer,
+                                )
+                                BonusCostLines(inv, linked, highlight = null)
+                            }
+                        }
                     }
                 }
                 inv.sortedBills.forEachIndexed { k, b ->
@@ -738,6 +766,7 @@ fun InvoiceFormScreen(invoiceId: Long?, onDone: () -> Unit, onBack: () -> Unit, 
     ToastEffect(vm.messages)
     LaunchedEffect(s.done) { if (s.done) onDone() }
     var picking by remember { mutableStateOf(false) }
+    var choosingPurchase by remember { mutableStateOf(false) }
     // Linha lida da nota que está sendo ligada a uma bateria do estoque
     var assigning by remember { mutableStateOf<Long?>(null) }
     val context = LocalContext.current
@@ -904,7 +933,7 @@ fun InvoiceFormScreen(invoiceId: Long?, onDone: () -> Unit, onBack: () -> Unit, 
                 }
             }
             Text(
-                if (s.bills.isEmpty()) "Sem boletos (bonificação): quando as baterias chegarem, entram no estoque com custo R$ 0."
+                if (s.bills.isEmpty()) "Sem boletos (bonificação): o custo destas baterias sai da nota de compra que ela abate (passo 3)."
                 else "Quando as baterias chegarem, o custo de cada uma no estoque passa a ser o valor com desconto desta nota.",
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
@@ -913,16 +942,52 @@ fun InvoiceFormScreen(invoiceId: Long?, onDone: () -> Unit, onBack: () -> Unit, 
             SectionTitle("3. Boletos")
             Hint("As parcelas que vocês vão pagar. Elas aparecem na aba Boletos, com aviso quando estiverem perto de vencer.")
             if (s.bills.isEmpty()) {
+                val all by vm.allInvoices.collectAsStateWithLifecycle()
+                val purchase = suggestedPurchase(s, all)
                 AppCard(containerColor = MaterialTheme.colorScheme.secondaryContainer) {
                     Column(Modifier.padding(16.dp)) {
-                        Text("🎁 Sem boletos = bonificação", style = MaterialTheme.typography.titleSmall, color = MaterialTheme.colorScheme.onSecondaryContainer)
+                        val on = MaterialTheme.colorScheme.onSecondaryContainer
+                        Text("🎁 Sem boletos = bonificação", style = MaterialTheme.typography.titleSmall, color = on)
                         Text(
-                            "Se a nota não tem boletos, o fornecedor deu as baterias: nada a pagar, e elas entram no estoque com custo R$ 0. " +
-                                "Se a nota tem boletos, monte abaixo.",
+                            "Não há nada a pagar. A bonificação baixa o custo da nota de compra: o valor pago é dividido por todas as baterias, " +
+                                "as compradas e as ganhas. Se esta nota tem boletos, monte abaixo.",
                             style = MaterialTheme.typography.bodyMedium,
-                            color = MaterialTheme.colorScheme.onSecondaryContainer,
+                            color = on,
                         )
+                        if (purchase == null) {
+                            Text(
+                                "Escolha a nota de compra que esta bonificação abate.",
+                                style = MaterialTheme.typography.bodyMedium,
+                                color = warningColor(),
+                                fontWeight = FontWeight.SemiBold,
+                                modifier = Modifier.padding(top = 8.dp),
+                            )
+                        } else {
+                            Text(
+                                "Abate a nota ${purchase.invoice.number}" +
+                                    (if (purchase.invoice.supplier.isNotBlank()) " (${purchase.invoice.supplier})" else "") +
+                                    " de ${Periods.formatDate(purchase.invoice.issueDate)}",
+                                style = MaterialTheme.typography.titleSmall,
+                                color = on,
+                                modifier = Modifier.padding(top = 8.dp),
+                            )
+                            val draft = s.items.map { InvoiceItem.fromTotals(it.model, it.quantity, it.grossTotal, it.discountTotal, it.productId) }
+                            BonusCostLines(purchase, bonusesOf(purchase, all).filter { it.invoice.id != s.id }, highlight = null, draft = draft)
+                        }
+                        OutlinedButton(onClick = { choosingPurchase = true }, modifier = Modifier.padding(top = 8.dp)) {
+                            Text(if (purchase == null) "Escolher nota de compra" else "Trocar nota de compra")
+                        }
                     }
+                }
+                if (choosingPurchase) {
+                    PurchasePickerDialog(
+                        options = purchaseOptions(s, all),
+                        onPick = { id ->
+                            vm.update { it.copy(bonusFor = id) }
+                            choosingPurchase = false
+                        },
+                        onDismiss = { choosingPurchase = false },
+                    )
                 }
             }
             BillGenerator(enabled = s.total > 0, default = s.issueDate.plusDays(30)) { count, first, interval ->
@@ -1015,6 +1080,91 @@ fun InvoiceFormScreen(invoiceId: Long?, onDone: () -> Unit, onBack: () -> Unit, 
     }
 }
 
+/** Bonificações ligadas a uma nota de compra. */
+private fun bonusesOf(purchase: InvoiceWithBills, all: List<InvoiceWithBills>): List<InvoiceWithBills> =
+    all.filter { it.isBonus && it.invoice.bonusFor == purchase.invoice.id && it.invoice.id != purchase.invoice.id }
+
+/**
+ * Custo de cada bateria com a bonificação: as da compra (antes → depois) e as ganhas.
+ * [draft] é a bonificação que está sendo lançada; [highlight] marca a bonificação aberta na tela.
+ */
+@Composable
+private fun BonusCostLines(
+    purchase: InvoiceWithBills,
+    bonuses: List<InvoiceWithBills>,
+    highlight: Long?,
+    draft: List<InvoiceItem>? = null,
+) {
+    val bonusItems = bonuses.map { b -> b.invoice.items.map { if (b.invoice.isReceived) it else it.copy(received = null) } } +
+        listOfNotNull(draft)
+    val costs = BonusCost.spread(purchase.invoice.items, bonusItems)
+    val on = MaterialTheme.colorScheme.onSecondaryContainer
+    val units = purchase.invoice.items.sumOf { it.quantity } + bonusItems.sumOf { l -> l.sumOf { it.received ?: it.quantity } }
+    Text(
+        "Custo de cada bateria ($units no total, pagando ${Money.format(purchase.invoice.items.sumOf { it.subtotal })}):",
+        style = MaterialTheme.typography.bodyMedium,
+        color = on,
+        modifier = Modifier.padding(top = 8.dp),
+    )
+    purchase.invoice.items.zip(costs.purchase).forEach { (line, cost) ->
+        InfoRow("${line.quantity}× ${line.model} (nota ${purchase.invoice.number})", "${Money.format(line.unitCost)} → ${Money.format(cost)}")
+    }
+    val labels = bonuses.map { it.invoice.id to it.invoice.number } + listOfNotNull(draft?.let { null to "esta" })
+    bonusItems.zip(costs.bonuses).forEachIndexed { k, (lines, list) ->
+        val (id, number) = labels[k]
+        lines.zip(list).forEach { (line, cost) ->
+            InfoRow(
+                "🎁 ${line.received ?: line.quantity}× ${line.model} (${if (number == "esta") "esta bonificação" else "bonificação $number"})",
+                Money.format(cost),
+                bold = id == highlight || id == null,
+            )
+        }
+    }
+    if (purchase.invoice.isReceived && bonuses.any { it.invoice.isReceived }) {
+        Text(
+            "Vendas feitas antes da bonificação chegar ficam com o custo antigo.",
+            style = MaterialTheme.typography.bodySmall,
+            color = on.copy(alpha = 0.8f),
+        )
+    }
+}
+
+/** Escolher a nota de compra que a bonificação abate. */
+@Composable
+private fun PurchasePickerDialog(options: List<InvoiceWithBills>, onPick: (Long) -> Unit, onDismiss: () -> Unit) {
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("Qual nota de compra ela abate?") },
+        text = {
+            if (options.isEmpty()) {
+                Text("Nenhuma nota de compra lançada ainda. Lance antes a nota com boletos.")
+            } else {
+                Column(Modifier.verticalScroll(rememberScrollState())) {
+                    options.forEach { o ->
+                        val i = o.invoice
+                        Column(
+                            Modifier
+                                .fillMaxWidth()
+                                .clickable { onPick(i.id) }
+                                .padding(vertical = 10.dp)
+                        ) {
+                            Text("Nota ${i.number} • ${Money.format(i.total)}", style = MaterialTheme.typography.titleSmall)
+                            Text(
+                                (if (i.supplier.isNotBlank()) "${i.supplier} • " else "") + Periods.formatDate(i.issueDate) + " • " +
+                                    i.items.joinToString { "${it.quantity}× ${it.model}" },
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            )
+                        }
+                        HorizontalDivider()
+                    }
+                }
+            }
+        },
+        confirmButton = { TextButton(onClick = onDismiss) { Text("Fechar") } },
+    )
+}
+
 /** Tipos de arquivo aceitos ao importar a nota (PDF ou XML; alguns apps mandam XML sem tipo). */
 private val NFE_TYPES = arrayOf("application/pdf", "text/xml", "application/xml", "application/octet-stream")
 
@@ -1069,7 +1219,7 @@ private fun ReceiveDialog(inv: InvoiceWithBills, onConfirm: (String, List<Int>, 
                         .toggleable(value = toStock, role = Role.Switch, onValueChange = { toStock = it }),
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
-                    Text(if (inv.bills.isEmpty()) "Dar entrada no estoque (bonificação: custo R$ 0)" else "Dar entrada no estoque com o custo da nota", style = MaterialTheme.typography.bodyLarge, modifier = Modifier.weight(1f))
+                    Text(if (inv.bills.isEmpty()) "Dar entrada no estoque (bonificação: divide o custo da compra)" else "Dar entrada no estoque com o custo da nota", style = MaterialTheme.typography.bodyLarge, modifier = Modifier.weight(1f))
                     Switch(checked = toStock, onCheckedChange = null)
                 }
                 OutlinedTextField(

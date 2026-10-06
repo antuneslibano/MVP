@@ -172,6 +172,9 @@ interface MovementDao {
     @Query("SELECT * FROM stock_movements WHERE id = :id")
     suspend fun getById(id: Long): StockMovement?
 
+    @Query("UPDATE stock_movements SET unit_cost = :cost, updated_at = :at, dirty = 1 WHERE id = :id")
+    suspend fun setUnitCost(id: Long, cost: Long, at: Long)
+
     @Query("DELETE FROM stock_movements WHERE id = :id")
     suspend fun deleteById(id: Long)
 

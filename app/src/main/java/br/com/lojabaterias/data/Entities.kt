@@ -492,6 +492,8 @@ data class InvoiceItem(
     val grossTotal: Long? = null,
     /** Desconto da linha inteira (não é por bateria). */
     val discountTotal: Long = 0,
+    /** Bonificação (nota sem boletos): a nota de compra cujo custo ela baixa. */
+    val bonusFor: Long? = null,
 ) {
     /** Subtotal com desconto: exatamente o valor da nota. [unitCost] é esse valor dividido pela quantidade. */
     val subtotal: Long get() = grossTotal?.let { it - discountTotal } ?: (unitCost * quantity)
@@ -564,6 +566,6 @@ data class InvoiceWithBills(
     val paidCount: Int get() = bills.count { it.isPaid }
     val openAmount: Long get() = bills.filter { !it.isPaid }.sumOf { it.amount }
     val isFullyPaid: Boolean get() = bills.isNotEmpty() && bills.all { it.isPaid }
-    /** Nota sem boletos = bonificação do fornecedor: não há nada a pagar e as baterias entram com custo zero. */
+    /** Nota sem boletos = bonificação do fornecedor: nada a pagar; baixa o custo da nota de compra ligada a ela. */
     val isBonus: Boolean get() = bills.isEmpty()
 }

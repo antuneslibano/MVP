@@ -949,6 +949,7 @@ class StoreRepository(
         bills: List<BillDraft>,
         note: String?,
         alreadyReceived: Boolean = false,
+        bonusFor: Long? = null,
     ): Long = write {
         val num = number.trim()
         if (num.isEmpty()) throw BusinessException("Informe o número da nota")
@@ -956,7 +957,20 @@ class StoreRepository(
         if (list.isEmpty()) throw BusinessException("Adicione as baterias da nota")
         if (list.any { it.unitCost < 0 }) throw BusinessException("Valor de bateria inválido")
         if (total <= 0) throw BusinessException("Informe o valor da nota")
-        // Nota sem boletos é bonificação: nada a pagar e as baterias entram com custo zero.
+        // Nota sem boletos é bonificação: nada a pagar, e ela baixa o custo de uma nota de compra.
+        val bonusTarget = if (bills.isEmpty()) {
+            val target = bonusFor?.let { invoices.getById(it) }
+                ?: throw BusinessException("Bonificação: escolha qual nota de compra ela abate")
+            if (target.id == id || invoices.billsFor(target.id).isEmpty()) {
+                throw BusinessException("A bonificação precisa abater uma nota de compra (com boletos)")
+            }
+            if (id != null && invoices.getAll().any { it.id != id && it.bonusFor == id }) {
+                throw BusinessException("Esta nota tem bonificação ligada a ela, por isso precisa ter boletos")
+            }
+            target.id
+        } else {
+            null
+        }
         if (bills.any { it.amount <= 0 }) throw BusinessException("Todo boleto precisa ter valor")
         val billsTotal = bills.sumOf { it.amount }
         if (bills.isNotEmpty() && billsTotal != total) {
@@ -981,16 +995,9 @@ class StoreRepository(
                     )
                 }
                 list = list.zip(old).map { (n, o) -> n.copy(received = o.received, movementId = o.movementId) }
-                val wasBonus = invoices.billsFor(current.id).isEmpty()
-                if (wasBonus != bills.isEmpty()) {
-                    throw BusinessException(
-                        "Essas baterias já entraram no estoque com o custo " +
-                            (if (wasBonus) "zero da bonificação" else "da nota") +
-                            ". Para ${if (wasBonus) "colocar" else "tirar"} os boletos, toque antes em \"Ainda não chegaram\"."
-                    )
-                }
             }
         }
+        list = list.map { it.copy(bonusFor = bonusTarget) }
         val received = current?.isReceived ?: alreadyReceived
         val invoice = Invoice(
             id = current?.id ?: IdGenerator.next(),
@@ -1019,14 +1026,34 @@ class StoreRepository(
                 )
             )
         }
+        // Custos com a bonificação: desta nota (se for de compra) e das notas de compra ligadas antes e agora
+        rebalanceBonus(invoice.id)
+        rebalanceBonus(current?.bonusFor)
+        rebalanceBonus(bonusTarget)
         invoice.id
+    }
+
+    /**
+     * Recalcula o custo dos lotes da nota de compra [purchaseId] e das bonificações que chegaram ligadas a ela:
+     * o valor pago é dividido por todas as baterias (veja [BonusCost]). Vendas já feitas mantêm o custo que tinham.
+     */
+    private suspend fun rebalanceBonus(purchaseId: Long?) {
+        val p = purchaseId?.let { invoices.getById(it) } ?: return
+        if (invoices.billsFor(p.id).isEmpty()) return
+        val bonuses = invoices.getAll().filter { it.id != p.id && it.isReceived && it.bonusFor == p.id && invoices.billsFor(it.id).isEmpty() }
+        val costs = BonusCost.spread(p.items, bonuses.map { it.items })
+        val at = now()
+        p.items.zip(costs.purchase).forEach { (item, cost) -> item.movementId?.let { movements.setUnitCost(it, cost, at) } }
+        bonuses.zip(costs.bonuses).forEach { (b, list) ->
+            b.items.zip(list).forEach { (item, cost) -> item.movementId?.let { movements.setUnitCost(it, cost, at) } }
+        }
     }
 
     /**
      * As baterias da nota chegaram. [receivedQty] diz quantas chegaram de cada item (na ordem da nota;
      * vazio = todas). Com [addToStock], as que chegaram entram no estoque como um lote com o custo
      * da nota (valor unitário − desconto); as vendas usam primeiro os lotes mais antigos.
-     * Nota sem boletos é bonificação: as baterias entram com custo zero (todo o valor da venda é lucro).
+     * Bonificação (nota sem boletos): as baterias ganhas e as da nota de compra dividem o valor pago.
      */
     suspend fun markInvoiceReceived(
         id: Long,
@@ -1038,14 +1065,15 @@ class StoreRepository(
         val i = invoices.getById(id) ?: throw BusinessException("Nota não encontrada")
         if (i.isReceived) throw BusinessException("Essa nota já foi marcada como recebida")
         val bonus = invoices.billsFor(i.id).isEmpty()
+        val purchaseId = if (bonus) i.bonusFor else i.id
         val label = (if (bonus) "Bonificação: nota ${i.number}" else "Nota ${i.number}") +
             if (i.supplier.isNotBlank()) " (${i.supplier})" else ""
         val items = i.items.mapIndexed { k, item ->
             val qty = receivedQty.getOrNull(k)?.coerceAtLeast(0) ?: item.quantity
             val product = item.productId?.let { products.getById(it) }
             val moveId = if (addToStock && qty > 0 && product != null) {
-                // Entra como um lote novo, com o custo desta nota (já com o desconto); bonificação custa zero
-                moveStock(product.id, qty, MovementType.ENTRY, label, at, if (bonus) 0L else item.unitCost)
+                // Entra como um lote novo, com o custo desta nota (já com o desconto); a bonificação ajusta logo abaixo
+                moveStock(product.id, qty, MovementType.ENTRY, label, at, item.unitCost)
             } else {
                 null
             }
@@ -1062,6 +1090,7 @@ class StoreRepository(
                 updatedAt = now(), dirty = true,
             )
         )
+        rebalanceBonus(purchaseId)
     }
 
     /** Desfaz a entrada no estoque feita na chegada da nota (se ainda der). */
@@ -1092,6 +1121,7 @@ class StoreRepository(
                 status = InvoiceStatus.WAITING, receivedAt = null, receivedNote = null, updatedAt = now(), dirty = true,
             )
         )
+        rebalanceBonus(i.bonusFor ?: i.id)
     }
 
     /** Marca o boleto como pago (ou desfaz, com [paid] = false). */
@@ -1102,12 +1132,17 @@ class StoreRepository(
 
     /** Exclui a nota e os boletos dela (e tira do estoque o que entrou pela nota). */
     suspend fun deleteInvoice(id: Long): Unit = write {
+        invoices.getAll().firstOrNull { it.id != id && it.bonusFor == id }?.let {
+            throw BusinessException("A bonificação da nota ${it.number} abate esta nota. Exclua a bonificação antes.")
+        }
+        val purchaseId = invoices.getById(id)?.bonusFor
         invoices.getById(id)?.let { undoInvoiceStock(it) }
         val bills = invoices.billsFor(id).map { it.id }
         tomb(SyncTables.INVOICE_BILLS, bills)
         bills.forEach { invoices.deleteBill(it) }
         tomb(SyncTables.INVOICES, listOf(id))
         invoices.delete(id)
+        rebalanceBonus(purchaseId)
     }
 
     // ----------------------------------------------------------------- Sucatas

@@ -47,6 +47,19 @@ jobs:
         env:
           VERSION_CODE: ${{ github.run_number }}
 
+      - name: Mostrar testes que falharam
+        if: failure()
+        run: |
+          python3 - <<'PY'
+          import glob, xml.etree.ElementTree as ET
+          for f in glob.glob("app/build/test-results/**/*.xml", recursive=True):
+              for case in ET.parse(f).getroot().iter("testcase"):
+                  for fail in list(case.findall("failure")) + list(case.findall("error")):
+                      msg = (fail.get("message") or "")[:300].replace("\n", " ")
+                      trace = " | ".join(l.strip() for l in (fail.text or "").splitlines()[:6])
+                      print(f"::error title={case.get('classname')}.{case.get('name')}::{msg} || {trace[:600]}")
+          PY
+
       - name: Preparar assinatura personalizada (opcional, via secrets)
         env:
           KEYSTORE_BASE64: ${{ secrets.SIGNING_KEYSTORE_BASE64 }}

@@ -149,7 +149,10 @@ data class InvoiceFormState(
     val importing: Boolean = false,
     /** Resultado da leitura do arquivo (o que foi preenchido e o que conferir). */
     val importResult: ImportResult? = null,
+    /** Bonificação (sem boletos): nota de compra que ela abate (null = a sugerida). */
+    val bonusFor: Long? = null,
 ) {
+    val isBonus: Boolean get() = bills.isEmpty()
     val isEdit: Boolean get() = id != null
     val itemsTotal: Long get() = items.sumOf { it.subtotal }
     val units: Int get() = items.sumOf { it.quantity }
@@ -169,6 +172,10 @@ class InvoiceFormViewModel(private val repo: StoreRepository, private val invoic
     private fun key() = nextKey++
 
     val products: StateFlow<List<Product>> = repo.observeProducts()
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
+
+    /** Todas as notas (para escolher a nota de compra que a bonificação abate). */
+    val allInvoices: StateFlow<List<InvoiceWithBills>> = repo.observeInvoices()
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
 
     init {
@@ -200,6 +207,7 @@ class InvoiceFormViewModel(private val repo: StoreRepository, private val invoic
                 },
                 received = i.isReceived,
                 note = i.note.orEmpty(),
+                bonusFor = i.bonusFor,
             )
         }
     }
@@ -272,7 +280,7 @@ class InvoiceFormViewModel(private val repo: StoreRepository, private val invoic
                 add("${Money.format(data.extras)} da nota ficou como frete, impostos e outros: confira se não faltou alguma bateria.")
             }
             if (bills.isEmpty() && data.source != "XML") {
-                add("Não achei boletos: a nota vai como 🎁 bonificação (custo zero). Se ela tiver boletos, monte no passo 3.")
+                add("Não achei boletos: a nota vai como 🎁 bonificação. Confira no passo 3 qual nota de compra ela abate (ou monte os boletos, se tiver).")
             }
         }
         _state.update { it.copy(importResult = ImportResult(data.source, found, warnings)) }
@@ -340,6 +348,7 @@ class InvoiceFormViewModel(private val repo: StoreRepository, private val invoic
                     bills = s.bills.sortedBy { it.dueDate }.map { BillDraft(it.id, Periods.toMillis(it.dueDate), it.amount, it.paidAt) },
                     alreadyReceived = s.received,
                     note = s.note,
+                    bonusFor = if (s.isBonus) s.bonusFor ?: suggestedPurchase(s, allInvoices.value)?.invoice?.id else null,
                 )
                 message(if (s.isEdit) "Nota atualizada" else "Nota lançada")
                 _state.update { it.copy(saving = false, done = true) }
@@ -351,10 +360,29 @@ class InvoiceFormViewModel(private val repo: StoreRepository, private val invoic
     }
 }
 
+/** Notas de compra (com boletos) que uma bonificação pode abater: do mesmo fornecedor primeiro, mais novas primeiro. */
+fun purchaseOptions(s: InvoiceFormState, all: List<InvoiceWithBills>): List<InvoiceWithBills> =
+    all.filter { !it.isBonus && it.invoice.id != s.id }
+        .sortedWith(
+            compareByDescending<InvoiceWithBills> { s.supplier.isNotBlank() && it.invoice.supplier.equals(s.supplier.trim(), true) }
+                .thenByDescending { it.invoice.issueDate }
+        )
+
+/** Nota de compra que a bonificação abate: a escolhida ou, sem escolha, a mais nova do mesmo fornecedor. */
+fun suggestedPurchase(s: InvoiceFormState, all: List<InvoiceWithBills>): InvoiceWithBills? {
+    val options = purchaseOptions(s, all)
+    return s.bonusFor?.let { id -> options.firstOrNull { it.invoice.id == id } }
+        ?: options.firstOrNull { s.supplier.isNotBlank() && it.invoice.supplier.equals(s.supplier.trim(), true) }
+}
+
 class InvoiceDetailViewModel(private val repo: StoreRepository, private val invoiceId: Long) : MessageViewModel() {
     val invoice: StateFlow<Loaded<InvoiceWithBills?>?> = repo.observeInvoice(invoiceId)
         .map { Loaded(it) }
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), null)
+
+    /** Todas as notas (para mostrar a ligação entre bonificação e nota de compra). */
+    val allInvoices: StateFlow<List<InvoiceWithBills>> = repo.observeInvoices()
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
 
     private fun act(success: String, after: () -> Unit = {}, block: suspend () -> Unit) {
         viewModelScope.launch {

@@ -213,36 +213,68 @@ class InvoiceTest {
     }
 
     @Test
-    fun invoiceWithoutBills_isBonus_withZeroCost() = runBlocking {
-        val pid = product()
-        val id = repo.saveInvoice(
-            id = null, number = "777", supplier = "Heliar do Rio", issueDate = 1_000,
-            items = listOf(InvoiceItem("BE50D", 2, 31_000, pid)),
-            total = 62_000, bills = emptyList(), note = null,
-        )
-        val inv = repo.observeInvoice(id).first()!!
-        assertTrue(inv.isBonus)
-        assertEquals(0L, inv.openAmount)
-        repo.markInvoiceReceived(id, null, at = 6_000)
-        assertEquals(7, repo.getProduct(pid)!!.stock)
-        // Entram com custo zero; as antigas continuam com o custo delas
-        assertEquals(
-            listOf(br.com.lojabaterias.domain.CostLayer(5, 30_000), br.com.lojabaterias.domain.CostLayer(2, 0)),
-            repo.costLayers(pid),
-        )
-        assertEquals(5 * 30_000L, repo.observeStockValues().first()[pid])
-        assertEquals(0L, repo.observeInvoiceBills().first().sumOf { it.amount })
+    fun bonusSpreadsPurchaseCost() {
+        // 10 × R$ 380 + 1 de bonificação: R$ 3.800 ÷ 11 = R$ 345,45 cada
+        val bought = listOf(InvoiceItem("M100", 10, 38_000, productId = 1, grossTotal = 380_000))
+        val r = BonusCost.spread(bought, listOf(listOf(InvoiceItem("M100", 1, 38_000, productId = 1, grossTotal = 38_000))))
+        assertEquals(listOf(34_545L), r.purchase)
+        assertEquals(listOf(listOf(34_545L)), r.bonuses)
+        // Bonificação sem valor na nota: usa o valor da mesma bateria na compra
+        val noValue = BonusCost.spread(bought, listOf(listOf(InvoiceItem("M100", 1, 0, productId = 1))))
+        assertEquals(listOf(34_545L), noValue.purchase)
+        assertEquals(listOf(listOf(34_545L)), noValue.bonuses)
+        // Sem bonificação nada muda
+        assertEquals(listOf(38_000L), BonusCost.spread(bought, emptyList()).purchase)
+    }
 
-        // Depois de entrar no estoque não dá para virar nota com boletos sem desfazer a chegada
+    @Test
+    fun invoiceWithoutBills_isBonus_andLowersPurchaseCost() = runBlocking {
+        val pid = product()
+        val purchase = repo.saveInvoice(
+            id = null, number = "100", supplier = "Oeste Rio Distribuidora Moura", issueDate = 1_000,
+            items = listOf(InvoiceItem.fromTotals("BE50D", 10, 380_000, 0, pid)),
+            total = 380_000, bills = listOf(BillDraft(dueDate = 2_000, amount = 380_000)), note = null,
+        )
+        // Bonificação precisa dizer qual nota abate
         try {
             repo.saveInvoice(
-                id = id, number = "777", supplier = "Heliar do Rio", issueDate = 1_000,
-                items = listOf(InvoiceItem("BE50D", 2, 31_000, pid)), total = 62_000,
-                bills = listOf(BillDraft(dueDate = 2_000, amount = 62_000)), note = null,
+                id = null, number = "101", supplier = "Oeste Rio Distribuidora Moura", issueDate = 1_000,
+                items = listOf(InvoiceItem.fromTotals("BE50D", 1, 38_000, 0, pid)), total = 38_000,
+                bills = emptyList(), note = null,
             )
             fail("Esperava BusinessException")
         } catch (e: BusinessException) {
-            assertTrue(e.message!!.contains("Ainda não chegaram"))
+            assertTrue(e.message!!.contains("nota de compra"))
+        }
+        val bonus = repo.saveInvoice(
+            id = null, number = "101", supplier = "Oeste Rio Distribuidora Moura", issueDate = 1_000,
+            items = listOf(InvoiceItem.fromTotals("BE50D", 1, 38_000, 0, pid)), total = 38_000,
+            bills = emptyList(), note = null, bonusFor = purchase,
+        )
+        val inv = repo.observeInvoice(bonus).first()!!
+        assertTrue(inv.isBonus)
+        assertEquals(0L, inv.openAmount)
+
+        repo.markInvoiceReceived(purchase, null, at = 5_000)
+        assertEquals(
+            listOf(br.com.lojabaterias.domain.CostLayer(5, 30_000), br.com.lojabaterias.domain.CostLayer(10, 38_000)),
+            repo.costLayers(pid),
+        )
+        // A bonificação chegou: as 11 dividem os R$ 3.800
+        repo.markInvoiceReceived(bonus, null, at = 6_000)
+        assertEquals(16, repo.getProduct(pid)!!.stock)
+        assertEquals(
+            listOf(br.com.lojabaterias.domain.CostLayer(5, 30_000), br.com.lojabaterias.domain.CostLayer(11, 34_545)),
+            repo.costLayers(pid),
+        )
+        assertEquals(5 * 30_000L + 11 * 34_545L, repo.observeStockValues().first()[pid])
+
+        // A nota de compra não pode ser excluída com a bonificação ligada
+        try {
+            repo.deleteInvoice(purchase)
+            fail("Esperava BusinessException")
+        } catch (e: BusinessException) {
+            assertTrue(e.message!!.contains("bonificação"))
         }
 
         val f = FullReport.build(
@@ -252,8 +284,18 @@ class InvoiceTest {
             allExpenses = repo.observeExpenses().first(),
             allInvoices = repo.observeInvoices().first(),
         )
-        assertEquals(2, f.invoices.bonusUnits)
-        assertEquals(62_000L, f.invoices.bonusValue)
-        assertEquals(0L, f.invoices.debt.open)
+        assertEquals(1, f.invoices.bonusUnits)
+        assertEquals(38_000L, f.invoices.bonusValue)
+        assertEquals(380_000L, f.invoices.debt.open)
+
+        // Desfazer a chegada da bonificação volta o custo da compra
+        repo.markInvoiceWaiting(bonus)
+        assertEquals(
+            listOf(br.com.lojabaterias.domain.CostLayer(5, 30_000), br.com.lojabaterias.domain.CostLayer(10, 38_000)),
+            repo.costLayers(pid),
+        )
+        repo.deleteInvoice(bonus)
+        repo.deleteInvoice(purchase)
+        assertEquals(5, repo.getProduct(pid)!!.stock)
     }
 }
