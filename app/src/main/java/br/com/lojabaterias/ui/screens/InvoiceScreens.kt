@@ -1,5 +1,14 @@
 package br.com.lojabaterias.ui.screens
 
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.platform.LocalContext
+import br.com.lojabaterias.ui.viewmodel.ImportResult
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.selection.selectable
 import androidx.compose.foundation.selection.toggleable
@@ -98,22 +107,25 @@ private val SUPPLIERS = listOf("Heliar do Rio", "Oeste Rio Distribuidora Moura",
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun InvoicesScreen(onNew: () -> Unit, onOpen: (Long) -> Unit) {
+fun InvoicesScreen(onNew: () -> Unit, onImport: () -> Unit, onOpen: (Long) -> Unit) {
     val vm = appViewModel { InvoicesViewModel(it.repository) }
     val s by vm.state.collectAsStateWithLifecycle()
     ToastEffect(vm.messages)
     var confirmPay by remember { mutableStateOf<BillRow?>(null) }
+    var choosing by remember { mutableStateOf(false) }
+    var showHelp by remember { mutableStateOf(false) }
 
     Scaffold(
         topBar = {
             TopAppBar(
                 title = { Text("Notas fiscais") },
+                actions = { TextButton(onClick = { showHelp = true }) { Text("? Como funciona") } },
                 colors = TopAppBarDefaults.topAppBarColors(containerColor = MaterialTheme.colorScheme.background),
             )
         },
         floatingActionButton = {
             ExtendedFloatingActionButton(
-                onClick = onNew,
+                onClick = { choosing = true },
                 icon = { Icon(Icons.Filled.Add, contentDescription = null) },
                 text = { Text("Nova nota") },
             )
@@ -172,7 +184,12 @@ fun InvoicesScreen(onNew: () -> Unit, onOpen: (Long) -> Unit) {
                 InvoiceTab.NOTES -> {
                     if (!s.loading && s.invoices.isEmpty()) {
                         item {
-                            EmptyState("Nenhuma nota lançada. Toque em \"Nova nota\" quando chegar uma nota do fornecedor.")
+                            AppCard {
+                                Column(Modifier.padding(16.dp)) {
+                                    Text("Nenhuma nota lançada ainda", style = MaterialTheme.typography.titleMedium)
+                                    HowItWorks(Modifier.padding(top = 8.dp))
+                                }
+                            }
                         }
                     }
                     items(s.invoices, key = { it.invoice.id }) { inv -> InvoiceCard(inv) { onOpen(inv.invoice.id) } }
@@ -181,6 +198,21 @@ fun InvoicesScreen(onNew: () -> Unit, onOpen: (Long) -> Unit) {
         }
     }
 
+    if (choosing) {
+        NewNoteDialog(
+            onImport = { choosing = false; onImport() },
+            onManual = { choosing = false; onNew() },
+            onDismiss = { choosing = false },
+        )
+    }
+    if (showHelp) {
+        AlertDialog(
+            onDismissRequest = { showHelp = false },
+            title = { Text("Como funcionam as notas") },
+            text = { Column(Modifier.verticalScroll(rememberScrollState())) { HowItWorks() } },
+            confirmButton = { TextButton(onClick = { showHelp = false }) { Text("Entendi") } },
+        )
+    }
     confirmPay?.let { row ->
         ConfirmDialog(
             title = "Boleto pago?",
@@ -353,23 +385,116 @@ private fun InvoiceCard(inv: InvoiceWithBills, onClick: () -> Unit) {
                 style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
-            Row(Modifier.padding(top = 6.dp), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                StatusText(
-                    if (i.isReceived) "✓ Baterias chegaram" else "⏳ Aguardando baterias",
-                    if (i.isReceived) profitColor() else warningColor(),
-                )
-                StatusText(
-                    if (inv.isFullyPaid) "✓ Paga" else "${inv.paidCount}/${inv.bills.size} boletos pagos",
-                    if (inv.isFullyPaid) profitColor() else MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-            }
+            NoteProgress(inv, Modifier.padding(top = 10.dp))
+            val (next, done) = nextStep(inv, LocalDate.now())
+            StatusText(next, if (done) profitColor() else MaterialTheme.colorScheme.primary)
         }
     }
 }
 
 @Composable
 private fun StatusText(text: String, color: Color) {
-    Text(text, style = MaterialTheme.typography.bodyMedium, color = color, fontWeight = FontWeight.SemiBold)
+    Text(text, style = MaterialTheme.typography.bodyMedium, color = color, fontWeight = FontWeight.SemiBold, modifier = Modifier.padding(top = 6.dp))
+}
+
+/** Os 3 passos de uma nota: lançar, receber as baterias e pagar os boletos. */
+@Composable
+fun HowItWorks(modifier: Modifier = Modifier) {
+    Column(modifier, verticalArrangement = Arrangement.spacedBy(12.dp)) {
+        HelpStep(1, "Lance a nota", "Toque em \"Nova nota\". Importe o PDF ou o XML que o fornecedor mandou (o app preenche tudo) ou digite à mão.")
+        HelpStep(2, "Marque a chegada", "Quando as baterias chegarem, abra a nota e toque em \"As baterias chegaram\". Elas entram no estoque com o custo da nota.")
+        HelpStep(3, "Pague os boletos", "Na aba Boletos aparecem os vencimentos. Ao pagar, toque em \"Paguei\". O boleto sai do caixa, mas não do lucro: o custo da bateria já sai na venda.")
+    }
+}
+
+@Composable
+private fun HelpStep(n: Int, title: String, text: String) {
+    Row {
+        Box(
+            Modifier.size(28.dp).clip(CircleShape).background(MaterialTheme.colorScheme.primary),
+            contentAlignment = Alignment.Center,
+        ) { Text("$n", color = MaterialTheme.colorScheme.onPrimary, fontWeight = FontWeight.Bold) }
+        Column(Modifier.padding(start = 12.dp)) {
+            Text(title, style = MaterialTheme.typography.titleSmall)
+            Text(text, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        }
+    }
+}
+
+/** Andamento da nota: Lançada → Chegou → Paga. */
+@Composable
+private fun NoteProgress(inv: InvoiceWithBills, modifier: Modifier = Modifier) {
+    val i = inv.invoice
+    val steps = listOf(
+        "Lançada" to true,
+        (if (i.isReceived) "Chegou" else "Chegada") to i.isReceived,
+        (if (inv.isFullyPaid) "Paga" else "Pagos ${inv.paidCount}/${inv.bills.size}") to inv.isFullyPaid,
+    )
+    val doneColor = profitColor()
+    val todoColor = MaterialTheme.colorScheme.outlineVariant
+    Row(modifier.fillMaxWidth(), verticalAlignment = Alignment.Top) {
+        steps.forEachIndexed { k, (label, done) ->
+            if (k > 0) {
+                Box(
+                    Modifier.weight(1f).padding(top = 11.dp).height(2.dp)
+                        .background(if (done) doneColor else todoColor)
+                )
+            }
+            Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                Box(
+                    Modifier.size(24.dp).clip(CircleShape).background(if (done) doneColor else todoColor),
+                    contentAlignment = Alignment.Center,
+                ) {
+                    Text(
+                        if (done) "✓" else "${k + 1}",
+                        style = MaterialTheme.typography.labelMedium,
+                        color = if (done) MaterialTheme.colorScheme.surface else MaterialTheme.colorScheme.onSurfaceVariant,
+                        fontWeight = FontWeight.Bold,
+                    )
+                }
+                Text(label, style = MaterialTheme.typography.labelSmall, modifier = Modifier.padding(top = 2.dp))
+            }
+        }
+    }
+}
+
+/** O que falta fazer nesta nota (e se já está tudo certo). */
+private fun nextStep(inv: InvoiceWithBills, today: LocalDate): Pair<String, Boolean> {
+    if (!inv.invoice.isReceived) return "Próximo passo: marcar a chegada das baterias" to false
+    val bills = inv.sortedBills
+    val next = bills.firstOrNull { !it.isPaid } ?: return "✓ Tudo certo: baterias no estoque e nota paga" to true
+    val due = Periods.toLocalDateTime(next.dueDate).toLocalDate()
+    return "Próximo passo: pagar a parcela ${bills.indexOf(next) + 1} de ${bills.size} " +
+        "(${Money.format(next.amount)}, ${dueLabel(due, today).lowercase()})" to false
+}
+
+/** Nova nota: importar o arquivo (preenche sozinho) ou digitar à mão. */
+@Composable
+private fun NewNoteDialog(onImport: () -> Unit, onManual: () -> Unit, onDismiss: () -> Unit) {
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("Nova nota fiscal") },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                AppCard(onClick = onImport, containerColor = MaterialTheme.colorScheme.primaryContainer) {
+                    Column(Modifier.padding(16.dp)) {
+                        Text("📄 Importar PDF ou XML", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+                        Text(
+                            "Escolha o arquivo que o fornecedor mandou. O app lê e preenche tudo; você só confere.",
+                            style = MaterialTheme.typography.bodyMedium,
+                        )
+                    }
+                }
+                AppCard(onClick = onManual) {
+                    Column(Modifier.padding(16.dp)) {
+                        Text("✍️ Digitar à mão", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+                        Text("Preencha os dados olhando a nota em papel.", style = MaterialTheme.typography.bodyMedium)
+                    }
+                }
+            }
+        },
+        confirmButton = { TextButton(onClick = onDismiss) { Text("Voltar") } },
+    )
 }
 
 // ---------------------------------------------------------------- Detalhe
@@ -411,6 +536,24 @@ fun InvoiceDetailScreen(invoiceId: Long, onEdit: () -> Unit, onBack: () -> Unit)
                         InfoRow("Valor total", Money.format(i.total), bold = true)
                         InfoRow("Falta pagar", Money.format(inv.openAmount), valueColor = if (inv.openAmount > 0) warningColor() else profitColor())
                         i.note?.let { InfoRow("Observação", it) }
+                        NoteProgress(inv, Modifier.padding(top = 12.dp))
+                    }
+                }
+
+                // O que fazer agora, com o botão certo
+                val (next, allDone) = nextStep(inv, LocalDate.now())
+                AppCard(containerColor = if (allDone) MaterialTheme.colorScheme.secondaryContainer else MaterialTheme.colorScheme.primaryContainer) {
+                    Column(Modifier.padding(16.dp)) {
+                        Text(next, style = MaterialTheme.typography.titleSmall)
+                        val nextBill = inv.sortedBills.firstOrNull { !it.isPaid }
+                        when {
+                            !i.isReceived -> FilledTonalButton(onClick = { askReceive = true }, modifier = Modifier.fillMaxWidth().padding(top = 8.dp)) {
+                                Text("As baterias chegaram")
+                            }
+                            nextBill != null -> FilledTonalButton(onClick = { askPay = nextBill.id }, modifier = Modifier.fillMaxWidth().padding(top = 8.dp)) {
+                                Text("Paguei esta parcela")
+                            }
+                        }
                     }
                 }
 
@@ -562,13 +705,26 @@ fun InvoiceDetailScreen(invoiceId: Long, onEdit: () -> Unit, onBack: () -> Unit)
 
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
-fun InvoiceFormScreen(invoiceId: Long?, onDone: () -> Unit, onBack: () -> Unit) {
+fun InvoiceFormScreen(invoiceId: Long?, onDone: () -> Unit, onBack: () -> Unit, autoImport: Boolean = false) {
     val vm = appViewModel(key = "invoiceform-$invoiceId") { InvoiceFormViewModel(it.repository, invoiceId) }
     val s by vm.state.collectAsStateWithLifecycle()
     val products by vm.products.collectAsStateWithLifecycle()
     ToastEffect(vm.messages)
     LaunchedEffect(s.done) { if (s.done) onDone() }
     var picking by remember { mutableStateOf(false) }
+    // Linha lida da nota que está sendo ligada a uma bateria do estoque
+    var assigning by remember { mutableStateOf<Long?>(null) }
+    val context = LocalContext.current
+    val importer = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
+        if (uri != null) vm.importFile(context, uri)
+    }
+    var autoLaunched by rememberSaveable { mutableStateOf(false) }
+    LaunchedEffect(autoImport) {
+        if (autoImport && !autoLaunched) {
+            autoLaunched = true
+            importer.launch(NFE_TYPES)
+        }
+    }
 
     SubScreen(
         title = if (invoiceId == null) "Nova nota fiscal" else "Editar nota",
@@ -606,7 +762,31 @@ fun InvoiceFormScreen(invoiceId: Long?, onDone: () -> Unit, onBack: () -> Unit) 
                 .padding(horizontal = 16.dp),
             verticalArrangement = Arrangement.spacedBy(8.dp),
         ) {
+            if (!s.isEdit) {
+                AppCard(containerColor = MaterialTheme.colorScheme.primaryContainer) {
+                    Column(Modifier.padding(16.dp)) {
+                        Text("📄 Tem o PDF ou o XML da nota?", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+                        Text(
+                            "O app lê o arquivo e preenche tudo: número, fornecedor, data, baterias, descontos e boletos. Depois é só conferir.",
+                            style = MaterialTheme.typography.bodyMedium,
+                        )
+                        FilledTonalButton(
+                            onClick = { importer.launch(NFE_TYPES) },
+                            enabled = !s.importing,
+                            modifier = Modifier.fillMaxWidth().padding(top = 8.dp),
+                        ) { Text(if (s.importing) "Lendo a nota..." else "Importar PDF ou XML") }
+                        Text(
+                            "Dica: o XML costuma vir junto com o PDF no e-mail do fornecedor, e é lido sem erro.",
+                            style = MaterialTheme.typography.bodySmall,
+                            modifier = Modifier.padding(top = 6.dp),
+                        )
+                    }
+                }
+            }
+            s.importResult?.let { ImportResultCard(it) }
+
             SectionTitle("1. Dados da nota")
+            Hint("Ficam no topo da nota: o número, quem vendeu (fornecedor) e a data de emissão.")
             OutlinedTextField(
                 value = s.number,
                 onValueChange = { v -> vm.update { it.copy(number = v.take(30)) } },
@@ -635,13 +815,25 @@ fun InvoiceFormScreen(invoiceId: Long?, onDone: () -> Unit, onBack: () -> Unit) 
             DateButton("Data da nota", s.issueDate) { d -> vm.update { it.copy(issueDate = d) } }
 
             SectionTitle("2. Baterias que vieram na nota")
+            Hint("Para cada modelo: a quantidade, o subtotal sem desconto e o desconto daquela linha. O app calcula o custo de cada bateria.")
             s.items.forEach { item ->
                 AppCard {
                     Column(Modifier.padding(12.dp)) {
                         Row(verticalAlignment = Alignment.CenterVertically) {
-                            Text(item.model, style = MaterialTheme.typography.titleMedium, modifier = Modifier.weight(1f))
+                            Text(
+                                if (item.unmatched != null) "⚠ Bateria não reconhecida" else item.model,
+                                style = MaterialTheme.typography.titleMedium,
+                                color = if (item.unmatched != null) warningColor() else Color.Unspecified,
+                                modifier = Modifier.weight(1f),
+                            )
                             IconButton(onClick = { vm.removeItem(item.key) }) {
                                 Icon(Icons.Filled.Delete, contentDescription = "Remover ${item.model}")
+                            }
+                        }
+                        if (item.unmatched != null) {
+                            Text("Na nota: ${item.unmatched}", style = MaterialTheme.typography.bodyMedium)
+                            FilledTonalButton(onClick = { assigning = item.key }, modifier = Modifier.fillMaxWidth().padding(top = 4.dp)) {
+                                Text("Escolher bateria do estoque")
                             }
                         }
                         Row(verticalAlignment = Alignment.CenterVertically) {
@@ -692,6 +884,7 @@ fun InvoiceFormScreen(invoiceId: Long?, onDone: () -> Unit, onBack: () -> Unit) 
             )
 
             SectionTitle("3. Boletos")
+            Hint("As parcelas que vocês vão pagar. Elas aparecem na aba Boletos, com aviso quando estiverem perto de vencer.")
             BillGenerator(enabled = s.total > 0, default = s.issueDate.plusDays(30)) { count, first, interval ->
                 vm.generateBills(count, first, interval)
             }
@@ -758,6 +951,17 @@ fun InvoiceFormScreen(invoiceId: Long?, onDone: () -> Unit, onBack: () -> Unit) 
         }
     }
 
+    assigning?.let { key ->
+        ProductPickerDialog(
+            title = "Qual bateria do estoque é esta?",
+            products = products,
+            onPick = {
+                vm.assignProduct(key, it)
+                assigning = null
+            },
+            onDismiss = { assigning = null },
+        )
+    }
     if (picking) {
         ProductPickerDialog(
             title = "Qual bateria veio na nota?",
@@ -768,6 +972,35 @@ fun InvoiceFormScreen(invoiceId: Long?, onDone: () -> Unit, onBack: () -> Unit) 
             },
             onDismiss = { picking = false },
         )
+    }
+}
+
+/** Tipos de arquivo aceitos ao importar a nota (PDF ou XML; alguns apps mandam XML sem tipo). */
+private val NFE_TYPES = arrayOf("application/pdf", "text/xml", "application/xml", "application/octet-stream")
+
+@Composable
+private fun Hint(text: String) {
+    Text(text, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+}
+
+/** O que foi lido do arquivo e o que conferir. */
+@Composable
+private fun ImportResultCard(r: ImportResult) {
+    AppCard {
+        Column(Modifier.padding(16.dp)) {
+            Text("✓ Lido do ${r.source}", style = MaterialTheme.typography.titleSmall, color = profitColor())
+            if (r.found.isNotEmpty()) Text(r.found.joinToString(" • "), style = MaterialTheme.typography.bodyMedium)
+            if (r.warnings.isEmpty()) {
+                Text(
+                    "Tudo encontrado. Confira os dados abaixo e toque em \"Lançar nota\".",
+                    style = MaterialTheme.typography.bodySmall,
+                    modifier = Modifier.padding(top = 6.dp),
+                )
+            } else {
+                Text("Confira:", style = MaterialTheme.typography.labelLarge, color = warningColor(), modifier = Modifier.padding(top = 8.dp))
+                r.warnings.forEach { Text("⚠ $it", style = MaterialTheme.typography.bodyMedium, color = warningColor()) }
+            }
+        }
     }
 }
 

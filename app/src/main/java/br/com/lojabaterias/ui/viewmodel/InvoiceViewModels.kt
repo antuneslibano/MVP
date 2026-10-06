@@ -10,6 +10,10 @@ import br.com.lojabaterias.data.Product
 import br.com.lojabaterias.data.StoreRepository
 import br.com.lojabaterias.data.SupplierDebt
 import br.com.lojabaterias.data.items
+import br.com.lojabaterias.data.nfe.NfeData
+import br.com.lojabaterias.data.nfe.NfeImporter
+import br.com.lojabaterias.data.nfe.NfeMatcher
+import br.com.lojabaterias.domain.Money
 import br.com.lojabaterias.domain.PeriodType
 import br.com.lojabaterias.domain.Periods
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -108,6 +112,8 @@ data class ItemDraft(
     val grossTotal: Long,
     /** Desconto da linha inteira. */
     val discountTotal: Long = 0,
+    /** Linha lida da nota que ainda não foi ligada a uma bateria do estoque (descrição da nota). */
+    val unmatched: String? = null,
 ) {
     /** Subtotal com desconto. */
     val subtotal: Long get() = (grossTotal - discountTotal).coerceAtLeast(0)
@@ -134,6 +140,10 @@ data class InvoiceFormState(
     val loading: Boolean = false,
     val saving: Boolean = false,
     val done: Boolean = false,
+    /** Lendo o PDF/XML da nota. */
+    val importing: Boolean = false,
+    /** Resultado da leitura do arquivo (o que foi preenchido e o que conferir). */
+    val importResult: ImportResult? = null,
 ) {
     val isEdit: Boolean get() = id != null
     val itemsTotal: Long get() = items.sumOf { it.subtotal }
@@ -143,6 +153,9 @@ data class InvoiceFormState(
     /** Quanto falta (positivo) ou sobra (negativo) nos boletos para bater com o total. */
     val billsDifference: Long get() = total - billsTotal
 }
+
+/** O que a leitura do PDF/XML encontrou e o que precisa ser conferido. */
+data class ImportResult(val source: String, val found: List<String>, val warnings: List<String>)
 
 class InvoiceFormViewModel(private val repo: StoreRepository, private val invoiceId: Long?) : MessageViewModel() {
     private val _state = MutableStateFlow(InvoiceFormState(id = invoiceId, loading = invoiceId != null))
@@ -188,6 +201,81 @@ class InvoiceFormViewModel(private val repo: StoreRepository, private val invoic
 
     fun update(transform: (InvoiceFormState) -> InvoiceFormState) = _state.update(transform)
 
+    /** Lê o PDF ou o XML da nota e preenche o formulário. */
+    fun importFile(context: android.content.Context, uri: android.net.Uri) {
+        if (_state.value.importing) return
+        _state.update { it.copy(importing = true) }
+        viewModelScope.launch {
+            try {
+                val data = NfeImporter.read(context.applicationContext, uri)
+                applyImport(data, repo.observeProducts().first())
+            } catch (e: Exception) {
+                message(errorMessage(e))
+            } finally {
+                _state.update { it.copy(importing = false) }
+            }
+        }
+    }
+
+    /** Preenche o formulário com o que foi lido e monta a lista do que conferir. */
+    fun applyImport(data: NfeData, products: List<Product>) {
+        val items = data.items.map { line ->
+            val p = NfeMatcher.match("${line.code} ${line.description}", products)
+            ItemDraft(
+                key = key(),
+                productId = p?.id,
+                model = p?.model ?: line.description,
+                quantity = line.quantity.coerceAtLeast(1),
+                grossTotal = line.grossTotal,
+                discountTotal = line.discount,
+                unmatched = if (p == null) line.description else null,
+            )
+        }
+        val bills = data.bills.sortedBy { it.dueDate }.map { BillDraftUi(key(), null, it.dueDate, it.amount, null) }
+        val supplier = data.supplier.takeIf { it.isNotBlank() }?.let { NfeMatcher.supplierName(it) }
+        _state.update { s ->
+            s.copy(
+                number = data.number.ifBlank { s.number },
+                supplier = supplier ?: s.supplier,
+                issueDate = data.issueDate ?: s.issueDate,
+                items = items.ifEmpty { s.items },
+                extras = if (items.isNotEmpty()) data.extras else s.extras,
+                bills = bills.ifEmpty { s.bills },
+            )
+        }
+        val s = _state.value
+        val found = listOfNotNull(
+            data.number.takeIf { it.isNotBlank() }?.let { "Nota nº $it" },
+            supplier,
+            data.issueDate?.let { "Data ${it.format(Periods.DATE)}" },
+            items.takeIf { it.isNotEmpty() }?.let { "${it.sumOf { i -> i.quantity }} baterias em ${it.size} linha(s)" },
+            data.total?.let { "Total ${Money.format(it)}" },
+            bills.takeIf { it.isNotEmpty() }?.let { "${it.size} boleto(s)" },
+        )
+        val warnings = buildList {
+            if (data.number.isBlank()) add("Não achei o número da nota: digite no passo 1.")
+            if (supplier == null) add("Não achei o fornecedor: escolha ou digite no passo 1.")
+            if (data.issueDate == null) add("Não achei a data da nota: confira no passo 1.")
+            if (items.isEmpty()) add("Não achei as baterias da nota: adicione no passo 2.")
+            items.filter { it.unmatched != null }.forEach {
+                add("\"${it.unmatched}\" não foi reconhecida: toque em \"Escolher bateria\" no passo 2.")
+            }
+            if (data.total != null && items.isNotEmpty() && s.total != data.total) {
+                add("O total da nota é ${Money.format(data.total)}, mas a soma deu ${Money.format(s.total)}: confira valores e descontos.")
+            }
+            if (items.isNotEmpty() && data.extras > 0) {
+                add("${Money.format(data.extras)} da nota ficou como frete, impostos e outros: confira se não faltou alguma bateria.")
+            }
+            if (bills.isEmpty()) add("Não achei boletos na nota: monte os boletos no passo 3.")
+        }
+        _state.update { it.copy(importResult = ImportResult(data.source, found, warnings)) }
+        message(if (warnings.isEmpty()) "Nota lida! Confira e toque em Lançar nota." else "Nota lida. Confira os avisos em laranja.")
+    }
+
+    /** Liga uma linha lida da nota a uma bateria do estoque. */
+    fun assignProduct(key: Long, p: Product) =
+        _state.update { s -> s.copy(items = s.items.map { if (it.key == key) it.copy(productId = p.id, model = p.model, unmatched = null) else it }) }
+
     fun addItem(p: Product) = _state.update { s ->
         val existing = s.items.firstOrNull { it.productId == p.id }
         if (existing != null) {
@@ -228,6 +316,10 @@ class InvoiceFormViewModel(private val repo: StoreRepository, private val invoic
     fun save() {
         val s = _state.value
         if (s.saving) return
+        s.items.firstOrNull { it.productId == null }?.let {
+            message("Escolha qual bateria do estoque é \"${it.model}\" (passo 2)")
+            return
+        }
         _state.update { it.copy(saving = true) }
         viewModelScope.launch {
             try {

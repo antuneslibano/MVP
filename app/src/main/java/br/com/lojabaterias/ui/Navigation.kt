@@ -109,10 +109,11 @@ object Routes {
     const val EXPENSES = "expenses"
     const val FINANCE = "finance"
     const val INVOICES = "invoices"
-    const val INVOICE_NEW = "invoicenew"
+    const val INVOICE_NEW = "invoicenew?import={import}"
     const val INVOICE_EDIT = "invoiceedit/{id}"
     const val INVOICE_DETAIL = "invoicedetail/{id}"
 
+    fun invoiceNew(withImport: Boolean = false) = if (withImport) "invoicenew?import=true" else "invoicenew"
     fun invoiceEdit(id: Long) = "invoiceedit/$id"
     fun invoiceDetail(id: Long) = "invoicedetail/$id"
 
@@ -165,7 +166,7 @@ private data class MenuEntry(val label: String, val icon: ImageVector, val route
 private val menuGroups = listOf(
     "Atalhos" to listOf(
         MenuEntry("Nova venda", Icons.Filled.Add, Routes.newSale(), false),
-        MenuEntry("Nova nota fiscal", Icons.Filled.Email, Routes.INVOICE_NEW, false),
+        MenuEntry("Nova nota fiscal", Icons.Filled.Email, Routes.invoiceNew(), false),
     ),
     "Vendas" to listOf(
         MenuEntry("Vendas", Icons.Filled.ShoppingCart, Routes.SALES, true),
@@ -367,10 +368,22 @@ fun LojaNavHost() {
             composable(Routes.EXPENSES) { ExpensesScreen() }
             composable(Routes.FINANCE) { FinanceScreen() }
             composable(Routes.INVOICES) {
-                InvoicesScreen(onNew = { nav.navigate(Routes.INVOICE_NEW) }, onOpen = { nav.navigate(Routes.invoiceDetail(it)) })
+                InvoicesScreen(
+                    onNew = { nav.navigate(Routes.invoiceNew()) },
+                    onImport = { nav.navigate(Routes.invoiceNew(withImport = true)) },
+                    onOpen = { nav.navigate(Routes.invoiceDetail(it)) },
+                )
             }
-            composable(Routes.INVOICE_NEW) {
-                InvoiceFormScreen(invoiceId = null, onDone = { nav.popBackStack() }, onBack = { nav.popBackStack() })
+            composable(
+                Routes.INVOICE_NEW,
+                arguments = listOf(navArgument("import") { type = NavType.BoolType; defaultValue = false }),
+            ) { entry ->
+                InvoiceFormScreen(
+                    invoiceId = null,
+                    onDone = { nav.popBackStack() },
+                    onBack = { nav.popBackStack() },
+                    autoImport = entry.arguments?.getBoolean("import") ?: false,
+                )
             }
             composable(Routes.INVOICE_EDIT, arguments = listOf(navArgument("id") { type = NavType.LongType })) { entry ->
                 val id = entry.arguments?.getLong("id") ?: 0L
