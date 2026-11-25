@@ -83,8 +83,14 @@ class AppUpdater(private val context: Context) {
         scope.launch {
             try {
                 val file = download(info)
+                lastFile = file
                 _state.value = UpdateState.Installing(info)
-                install(file)
+                try {
+                    install(file)
+                } catch (e: Exception) {
+                    // Instalação direta não disponível: usa o instalador do Android.
+                    if (!openSystemInstaller(file)) throw e
+                }
             } catch (e: Exception) {
                 _state.value = UpdateState.Error("Falha na atualização: ${e.message ?: e.javaClass.simpleName}", info)
             }
@@ -98,11 +104,31 @@ class AppUpdater(private val context: Context) {
         runCatching { context.startActivity(intent) }
     }
 
-    /** Chamado pelo [UpdateReceiver] quando a instalação falha. */
+    /** Último APK baixado (usado se a instalação direta for bloqueada pelo Android). */
+    @Volatile private var lastFile: File? = null
+
+    /**
+     * Chamado pelo [UpdateReceiver] quando a instalação falha. Alguns Android (ex.: app instalado
+     * pelo WhatsApp ou gerenciador de arquivos) bloqueiam o app de se atualizar sozinho; nesse caso
+     * abre o instalador do próprio Android com o arquivo já baixado.
+     */
     fun onInstallFailed(message: String) {
         val info = (_state.value as? UpdateState.Installing)?.info
+        val file = lastFile
+        val userCanceled = message.contains("cancel", ignoreCase = true) || message.contains("ABORTED: User", ignoreCase = true)
+        if (file != null && file.exists() && !userCanceled && openSystemInstaller(file)) return
         _state.value = UpdateState.Error("A instalação não foi concluída: $message", info)
     }
+
+    /** Abre a tela "Instalar atualização?" do Android para o APK baixado. */
+    private fun openSystemInstaller(file: File): Boolean = runCatching {
+        val uri = androidx.core.content.FileProvider.getUriForFile(context, "${context.packageName}.updates", file)
+        val intent = Intent(Intent.ACTION_VIEW)
+            .setDataAndType(uri, "application/vnd.android.package-archive")
+            .addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_ACTIVITY_NEW_TASK)
+        context.startActivity(intent)
+        true
+    }.getOrDefault(false)
 
     fun dismissError() {
         if (_state.value is UpdateState.Error) _state.value = UpdateState.Idle
