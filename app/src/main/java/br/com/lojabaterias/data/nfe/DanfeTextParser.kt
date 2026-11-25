@@ -167,6 +167,7 @@ object DanfeTextParser {
                 quantity = NfeText.quantity(m.groupValues[6]) ?: 0,
                 grossTotal = NfeText.money(m.groupValues[8]) ?: 0,
                 discount = discount,
+                bonus = m.groupValues[4] in BONUS_CFOPS,
             )
         }
         return result

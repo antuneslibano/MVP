@@ -13,7 +13,12 @@ data class NfeItem(
     val grossTotal: Long,
     /** Desconto da linha inteira. */
     val discount: Long = 0,
+    /** Linha de bonificação (CFOP 5910/6910: remessa em bonificação). */
+    val bonus: Boolean = false,
 )
+
+/** CFOPs de remessa em bonificação, doação ou brinde. */
+val BONUS_CFOPS = setOf("5910", "6910")
 
 /** Um boleto (duplicata) lido da nota. */
 data class NfeBill(val number: String, val dueDate: LocalDate, val amount: Long)
@@ -30,6 +35,8 @@ data class NfeData(
     val bills: List<NfeBill> = emptyList(),
 ) {
     val itemsNet: Long get() = items.sumOf { it.grossTotal - it.discount }
+    /** Só as linhas pagas (sem as de bonificação). */
+    val paidItemsNet: Long get() = items.filter { !it.bonus }.sumOf { it.grossTotal - it.discount }
     /** Frete, impostos e outros: o que o total tem além das baterias. */
     val extras: Long get() = ((total ?: itemsNet) - itemsNet).coerceAtLeast(0)
 }

@@ -120,9 +120,13 @@ data class ItemDraft(
     val discountTotal: Long = 0,
     /** Linha lida da nota que ainda não foi ligada a uma bateria do estoque (descrição da nota). */
     val unmatched: String? = null,
+    /** Veio de bonificação nesta nota (não é paga; divide o custo com as compradas). */
+    val bonus: Boolean = false,
 ) {
-    /** Subtotal com desconto. */
-    val subtotal: Long get() = (grossTotal - discountTotal).coerceAtLeast(0)
+    /** Subtotal com desconto (o que é pago por esta linha; zero na bonificação). */
+    val subtotal: Long get() = if (bonus) 0 else (grossTotal - discountTotal).coerceAtLeast(0)
+
+    fun toInvoiceItem(): InvoiceItem = InvoiceItem.fromTotals(model, quantity, grossTotal, discountTotal, productId, bonus)
     /** Custo de cada bateria: subtotal com desconto ÷ quantidade. */
     val unitCost: Long get() = if (quantity > 0) (subtotal + quantity / 2) / quantity else 0
 }
@@ -152,6 +156,8 @@ data class InvoiceFormState(
     val importResult: ImportResult? = null,
     /** Bonificação (sem boletos): nota de compra que ela abate (null = a sugerida). */
     val bonusFor: Long? = null,
+    /** Como a nota é paga: true = com boletos, false = bonificação (nada a pagar), null = ainda não escolhido. */
+    val billsMode: Boolean? = null,
 ) {
     val isBonus: Boolean get() = bills.isEmpty()
     val isEdit: Boolean get() = id != null
@@ -195,7 +201,17 @@ class InvoiceFormViewModel(private val repo: StoreRepository, private val invoic
                 return@launch
             }
             val i = inv.invoice
-            val items = i.items.map { ItemDraft(key(), it.productId, it.model, it.quantity, it.grossTotal ?: it.subtotal, it.discountTotal) }
+            val items = i.items.map {
+                ItemDraft(
+                    key = key(),
+                    productId = it.productId,
+                    model = it.model,
+                    quantity = it.quantity,
+                    grossTotal = it.grossTotal ?: it.subtotal,
+                    discountTotal = it.discountTotal,
+                    bonus = it.bonus,
+                )
+            }
             _state.value = InvoiceFormState(
                 id = i.id,
                 number = i.number,
@@ -209,6 +225,7 @@ class InvoiceFormViewModel(private val repo: StoreRepository, private val invoic
                 received = i.isReceived,
                 note = i.note.orEmpty(),
                 bonusFor = i.bonusFor,
+                billsMode = inv.bills.isNotEmpty(),
             )
         }
     }
@@ -243,18 +260,26 @@ class InvoiceFormViewModel(private val repo: StoreRepository, private val invoic
                 grossTotal = line.grossTotal,
                 discountTotal = line.discount,
                 unmatched = if (p == null) line.description else null,
+                bonus = line.bonus,
             )
         }
         val bills = data.bills.sortedBy { it.dueDate }.map { BillDraftUi(key(), null, it.dueDate, it.amount, null) }
+        val wholeBonus = bills.isEmpty() && data.source == "XML"
+        val lines = if (wholeBonus) items.map { it.copy(bonus = false) } else items
         val supplier = data.supplier.takeIf { it.isNotBlank() }?.let { NfeMatcher.supplierName(it) }
         _state.update { s ->
             s.copy(
                 number = data.number.ifBlank { s.number },
                 supplier = supplier ?: s.supplier,
                 issueDate = data.issueDate ?: s.issueDate,
-                items = items.ifEmpty { s.items },
+                items = lines.ifEmpty { s.items },
                 extras = if (items.isNotEmpty()) data.extras else s.extras,
                 bills = bills.ifEmpty { s.bills },
+                billsMode = when {
+                    bills.isNotEmpty() -> true
+                    data.source == "XML" -> false
+                    else -> s.billsMode
+                },
             )
         }
         val s = _state.value
@@ -267,25 +292,32 @@ class InvoiceFormViewModel(private val repo: StoreRepository, private val invoic
             if (bills.isNotEmpty()) "${bills.size} boleto(s)" else if (data.source == "XML") "Sem boletos: 🎁 bonificação" else null,
         )
         val warnings = buildList {
-            if (data.number.isBlank()) add("Não achei o número da nota: digite no passo 1.")
-            if (supplier == null) add("Não achei o fornecedor: escolha ou digite no passo 1.")
-            if (data.issueDate == null) add("Não achei a data da nota: confira no passo 1.")
-            if (items.isEmpty()) add("Não achei as baterias da nota: adicione no passo 2.")
+            if (data.number.isBlank()) add("Não achei o número da nota (em Dados).")
+            if (supplier == null) add("Não achei o fornecedor (em Dados).")
+            if (data.issueDate == null) add("Não achei a data da nota (em Dados).")
+            if (items.isEmpty()) add("Não achei as baterias (em Baterias).")
             items.filter { it.unmatched != null }.forEach {
-                add("\"${it.unmatched}\" não foi reconhecida: toque em \"Escolher bateria\" no passo 2.")
+                add("\"${it.unmatched}\" não foi reconhecida: escolha a bateria do estoque (em Baterias).")
             }
-            if (data.total != null && items.isNotEmpty() && s.total != data.total) {
-                add("O total da nota é ${Money.format(data.total)}, mas a soma deu ${Money.format(s.total)}: confira valores e descontos.")
+            val expected = if (bills.isNotEmpty()) bills.sumOf { it.amount } else data.total
+            if (expected != null && lines.isNotEmpty() && lines.none { it.bonus } && s.total != expected) {
+                add("O total a pagar é ${Money.format(expected)}, mas a soma deu ${Money.format(s.total)}: confira valores e descontos.")
+            }
+            if (bills.isNotEmpty() && lines.any { it.bonus } && s.total != expected) {
+                add("A soma das baterias compradas (${Money.format(s.total)}) não bate com os boletos (${Money.format(expected ?: 0)}).")
+            }
+            lines.filter { it.bonus }.takeIf { it.isNotEmpty() }?.let { free ->
+                add("${free.sumOf { it.quantity }} bateria(s) vieram de bonificação nesta nota: o valor pago é dividido por todas.")
             }
             if (items.isNotEmpty() && data.extras > 0) {
                 add("${Money.format(data.extras)} da nota ficou como frete, impostos e outros: confira se não faltou alguma bateria.")
             }
             if (bills.isEmpty() && data.source != "XML") {
-                add("Não achei boletos: a nota vai como 🎁 bonificação. Confira no passo 3 qual nota de compra ela abate (ou monte os boletos, se tiver).")
+                add("Não achei boletos: diga em Pagamento se é bonificação ou monte os boletos.")
             }
         }
         _state.update { it.copy(importResult = ImportResult(data.source, found, warnings)) }
-        message(if (warnings.isEmpty()) "Nota lida! Confira e toque em Lançar nota." else "Nota lida. Confira os avisos em laranja.")
+        message(if (warnings.isEmpty()) "Nota lida! Confira e lance." else "Nota lida. Confira os avisos.")
     }
 
     /** Liga uma linha lida da nota a uma bateria do estoque. */
@@ -329,11 +361,28 @@ class InvoiceFormViewModel(private val repo: StoreRepository, private val invoic
 
     fun removeBill(key: Long) = _state.update { s -> s.copy(bills = s.bills.filter { it.key != key }) }
 
+    /** Escolhe como a nota é paga. Bonificação apaga os boletos ainda não pagos. */
+    fun setBillsMode(withBills: Boolean) {
+        val s = _state.value
+        if (!withBills && s.bills.any { it.isPaid }) {
+            message("Esta nota tem boletos pagos: não pode ser bonificação")
+            return
+        }
+        _state.update {
+            it.copy(
+                billsMode = withBills,
+                bills = if (withBills) it.bills else emptyList(),
+                // Nota inteira de bonificação: as linhas não são marcadas uma a uma
+                items = if (withBills) it.items else it.items.map { i -> i.copy(bonus = false) },
+            )
+        }
+    }
+
     fun save() {
         val s = _state.value
         if (s.saving) return
         s.items.firstOrNull { it.productId == null }?.let {
-            message("Escolha qual bateria do estoque é \"${it.model}\" (passo 2)")
+            message("Escolha qual bateria do estoque é \"${it.model}\"")
             return
         }
         _state.update { it.copy(saving = true) }
@@ -344,7 +393,7 @@ class InvoiceFormViewModel(private val repo: StoreRepository, private val invoic
                     number = s.number,
                     supplier = s.supplier,
                     issueDate = Periods.toMillis(s.issueDate),
-                    items = s.items.map { InvoiceItem.fromTotals(it.model, it.quantity, it.grossTotal, it.discountTotal, it.productId) },
+                    items = s.items.map { (if (s.isBonus) it.copy(bonus = false) else it).toInvoiceItem() },
                     total = s.total,
                     bills = s.bills.sortedBy { it.dueDate }.map { BillDraft(it.id, Periods.toMillis(it.dueDate), it.amount, it.paidAt) },
                     alreadyReceived = s.received,

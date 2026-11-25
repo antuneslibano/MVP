@@ -18,6 +18,7 @@ object InvoiceItems {
                     .put("gross_total", i.grossTotal ?: JSONObject.NULL)
                     .put("discount_total", i.discountTotal)
                     .put("bonus_for", i.bonusFor ?: JSONObject.NULL)
+                    .put("bonus", i.bonus)
             )
         }
     }.toString()
@@ -42,6 +43,7 @@ object InvoiceItems {
                 discountTotal = if (o.has("discount_total")) o.optLong("discount_total", 0)
                 else o.optLong("unit_discount", 0) * o.optInt("quantity"),
                 bonusFor = if (o.isNull("bonus_for") || !o.has("bonus_for")) null else o.optLong("bonus_for"),
+                bonus = o.optBoolean("bonus", false),
             )
         }
     }.getOrDefault(emptyList())
@@ -70,6 +72,7 @@ object BonusCost {
         val average = if (boughtUnits > 0) paid / boughtUnits else 0.0
         // Valor de cada bateria ganha: o da própria nota; se veio sem valor, o da mesma bateria na compra
         fun value(line: InvoiceItem): Double = when {
+            line.bonus && line.quantity > 0 && (line.grossTotal ?: 0) > 0 -> (line.grossTotal ?: 0).toDouble() / line.quantity
             line.quantity > 0 && line.subtotal > 0 -> line.subtotal.toDouble() / line.quantity
             else -> purchase.filter { it.productId != null && it.productId == line.productId && it.quantity > 0 }
                 .takeIf { it.isNotEmpty() }?.let { same -> same.sumOf { it.subtotal }.toDouble() / same.sumOf { it.quantity } }
@@ -80,6 +83,22 @@ object BonusCost {
         return Result(
             purchase = purchase.map { if (it.quantity > 0) Math.round(it.subtotal.toDouble() / it.quantity * factor) else it.unitCost },
             bonuses = bonuses.map { lines -> lines.map { Math.round(value(it) * factor) } },
+        )
+    }
+
+    /**
+     * Como [spread], mas a nota de compra pode ter linhas de bonificação dentro dela ([InvoiceItem.bonus]):
+     * elas entram na divisão junto com as bonificações de outras notas. [Result.purchase] segue a ordem de [items].
+     */
+    fun spreadNote(items: List<InvoiceItem>, external: List<List<InvoiceItem>>): Result {
+        val paidLines = items.filter { !it.bonus }
+        val freeLines = items.filter { it.bonus }
+        val r = spread(paidLines, listOf(freeLines) + external)
+        val paidCosts = r.purchase.iterator()
+        val freeCosts = r.bonuses.first().iterator()
+        return Result(
+            purchase = items.map { if (it.bonus) freeCosts.next() else paidCosts.next() },
+            bonuses = r.bonuses.drop(1),
         )
     }
 }

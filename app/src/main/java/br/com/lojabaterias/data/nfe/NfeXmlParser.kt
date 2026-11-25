@@ -43,6 +43,7 @@ object NfeXmlParser {
                 quantity = NfeText.quantity(prod.text("qCom")) ?: 0,
                 grossTotal = NfeText.money(prod.text("vProd")) ?: 0,
                 discount = NfeText.money(prod.text("vDesc")) ?: 0,
+                bonus = prod.text("CFOP").trim() in BONUS_CFOPS,
             )
         }
 

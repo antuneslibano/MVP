@@ -955,6 +955,8 @@ class StoreRepository(
         if (num.isEmpty()) throw BusinessException("Informe o número da nota")
         var list = items.filter { it.quantity > 0 }
         if (list.isEmpty()) throw BusinessException("Adicione as baterias da nota")
+        if (bills.isEmpty()) list = list.map { it.copy(bonus = false) } // nota inteira de bonificação
+        if (bills.isNotEmpty() && list.all { it.bonus }) throw BusinessException("Marque pelo menos uma bateria como comprada")
         if (list.any { it.unitCost < 0 }) throw BusinessException("Valor de bateria inválido")
         if (total <= 0) throw BusinessException("Informe o valor da nota")
         // Nota sem boletos é bonificação: nada a pagar, e ela baixa o custo de uma nota de compra.
@@ -1041,7 +1043,7 @@ class StoreRepository(
         val p = purchaseId?.let { invoices.getById(it) } ?: return
         if (invoices.billsFor(p.id).isEmpty()) return
         val bonuses = invoices.getAll().filter { it.id != p.id && it.isReceived && it.bonusFor == p.id && invoices.billsFor(it.id).isEmpty() }
-        val costs = BonusCost.spread(p.items, bonuses.map { it.items })
+        val costs = BonusCost.spreadNote(p.items, bonuses.map { it.items })
         val at = now()
         p.items.zip(costs.purchase).forEach { (item, cost) -> item.movementId?.let { movements.setUnitCost(it, cost, at) } }
         bonuses.zip(costs.bonuses).forEach { (b, list) ->

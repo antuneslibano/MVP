@@ -107,7 +107,7 @@ import java.time.LocalDate
 import java.time.temporal.ChronoUnit
 
 /** Distribuidoras mais usadas (atalhos no formulário da nota). */
-private val SUPPLIERS = listOf("Heliar do Rio", "Oeste Rio Distribuidora Moura", "PCR Baterias Baterax", "Barra Nota 10")
+internal val SUPPLIERS = listOf("Heliar do Rio", "Oeste Rio Distribuidora Moura", "PCR Baterias Baterax", "Barra Nota 10")
 
 // ------------------------------------------------------------------ Lista
 
@@ -458,7 +458,10 @@ fun InvoiceDetailScreen(invoiceId: Long, onEdit: () -> Unit, onBack: () -> Unit)
                 PanelCard {
                     val items = i.items
                     items.forEach { line ->
-                        InfoRow("${line.quantity}× ${line.model}", "${Money.format(line.unitCost)} cada")
+                        InfoRow(
+                            (if (line.bonus) "🎁 " else "") + "${line.quantity}× ${line.model}",
+                            if (line.bonus) "bonificação" else "${Money.format(line.unitCost)} cada",
+                        )
                         val got = line.received
                         if (i.isReceived && got != null && got != line.quantity) {
                             Hint("Chegaram $got de ${line.quantity}", color = warningColor())
@@ -494,7 +497,7 @@ fun InvoiceDetailScreen(invoiceId: Long, onEdit: () -> Unit, onBack: () -> Unit)
                     }
                 } else {
                     val linked = bonusesOf(inv, all)
-                    if (linked.isNotEmpty()) {
+                    if (linked.isNotEmpty() || i.items.any { it.bonus }) {
                         SectionHeader("Custo com a bonificação")
                         PanelCard(containerColor = MaterialTheme.colorScheme.secondaryContainer) {
                             BonusCostLines(inv, linked, highlight = null)
@@ -583,286 +586,8 @@ fun InvoiceDetailScreen(invoiceId: Long, onEdit: () -> Unit, onBack: () -> Unit)
     }
 }
 
-// ------------------------------------------------------------- Formulário
-
-@OptIn(ExperimentalLayoutApi::class)
-@Composable
-fun InvoiceFormScreen(invoiceId: Long?, onDone: () -> Unit, onBack: () -> Unit, autoImport: Boolean = false) {
-    val vm = appViewModel(key = "invoiceform-$invoiceId") { InvoiceFormViewModel(it.repository, invoiceId) }
-    val s by vm.state.collectAsStateWithLifecycle()
-    val products by vm.products.collectAsStateWithLifecycle()
-    val all by vm.allInvoices.collectAsStateWithLifecycle()
-    ToastEffect(vm.messages)
-    LaunchedEffect(s.done) { if (s.done) onDone() }
-    var picking by remember { mutableStateOf(false) }
-    var choosingPurchase by remember { mutableStateOf(false) }
-    // Linha lida da nota que está sendo ligada a uma bateria do estoque
-    var assigning by remember { mutableStateOf<Long?>(null) }
-    val context = LocalContext.current
-    val importer = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
-        if (uri != null) vm.importFile(context, uri)
-    }
-    var autoLaunched by rememberSaveable { mutableStateOf(false) }
-    LaunchedEffect(autoImport) {
-        if (autoImport && !autoLaunched) {
-            autoLaunched = true
-            importer.launch(NFE_TYPES)
-        }
-    }
-
-    SubScreen(
-        title = if (invoiceId == null) "Nova nota" else "Editar nota",
-        onBack = onBack,
-        bottomBar = {
-            if (!s.loading) {
-                BottomActionBar {
-                    if (s.bills.isNotEmpty() && s.billsDifference != 0L) {
-                        Text(
-                            if (s.billsDifference > 0) "Faltam ${Money.format(s.billsDifference)} nos boletos"
-                            else "Boletos passam ${Money.format(-s.billsDifference)} do total",
-                            color = dangerColor(),
-                            style = MaterialTheme.typography.bodyMedium,
-                            modifier = Modifier.padding(bottom = 8.dp),
-                        )
-                    }
-                    PrimaryActionButton(
-                        text = if (s.saving) "Salvando..." else if (invoiceId == null) "Lançar nota" else "Salvar",
-                        onClick = vm::save,
-                        enabled = !s.saving,
-                    )
-                }
-            }
-        },
-    ) { inner ->
-        if (s.loading) {
-            Box(Modifier.fillMaxSize().padding(inner), contentAlignment = Alignment.Center) { CircularProgressIndicator() }
-            return@SubScreen
-        }
-        Column(
-            Modifier
-                .fillMaxSize()
-                .padding(inner)
-                .verticalScroll(rememberScrollState())
-                .padding(horizontal = Gaps.screen),
-            verticalArrangement = Arrangement.spacedBy(8.dp),
-        ) {
-            if (!s.isEdit) {
-                FilledTonalButton(
-                    onClick = { importer.launch(NFE_TYPES) },
-                    enabled = !s.importing,
-                    shape = MaterialTheme.shapes.medium,
-                    modifier = Modifier.fillMaxWidth().heightIn(min = 52.dp),
-                ) { Text(if (s.importing) "Lendo a nota..." else "Importar PDF ou XML") }
-            }
-            s.importResult?.let { ImportResultCard(it) }
-
-            SectionHeader("Dados")
-            OutlinedTextField(
-                value = s.number,
-                onValueChange = { v -> vm.update { it.copy(number = v.take(30)) } },
-                label = { Text("Número") },
-                singleLine = true,
-                shape = MaterialTheme.shapes.medium,
-                keyboardOptions = KeyboardOptions(imeAction = ImeAction.Next),
-                modifier = Modifier.fillMaxWidth(),
-            )
-            TextInput(
-                value = s.supplier,
-                onValueChange = { v -> vm.update { it.copy(supplier = v) } },
-                label = "Fornecedor",
-                maxLength = 60,
-                capitalization = KeyboardCapitalization.Words,
-            )
-            FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                SUPPLIERS.forEach { name ->
-                    FilterChip(
-                        selected = s.supplier.equals(name, ignoreCase = true),
-                        onClick = { vm.update { it.copy(supplier = name) } },
-                        label = { Text(name) },
-                    )
-                }
-            }
-            DateButton("Data", s.issueDate) { d -> vm.update { it.copy(issueDate = d) } }
-
-            SectionHeader("Baterias")
-            s.items.forEach { item ->
-                PanelCard {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Text(
-                            if (item.unmatched != null) "Não reconhecida" else item.model,
-                            style = MaterialTheme.typography.titleMedium,
-                            color = if (item.unmatched != null) warningColor() else Color.Unspecified,
-                            modifier = Modifier.weight(1f),
-                        )
-                        IconButton(onClick = { vm.removeItem(item.key) }) {
-                            Icon(Icons.Filled.Delete, contentDescription = "Remover ${item.model}")
-                        }
-                    }
-                    if (item.unmatched != null) {
-                        Hint("Na nota: ${item.unmatched}")
-                        FilledTonalButton(onClick = { assigning = item.key }, modifier = Modifier.fillMaxWidth().padding(top = 4.dp)) {
-                            Text("Escolher do estoque")
-                        }
-                    }
-                    Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(top = 4.dp)) {
-                        Text("Quantidade", style = MaterialTheme.typography.bodyLarge, modifier = Modifier.weight(1f))
-                        QuantityStepper(item.quantity, { q -> vm.updateItem(item.key) { it.copy(quantity = q) } }, max = 999)
-                    }
-                    EqualRow(Modifier.padding(top = 8.dp)) {
-                        MoneyField(
-                            value = item.grossTotal,
-                            onValueChange = { v -> vm.updateItem(item.key) { it.copy(grossTotal = v) } },
-                            label = "Subtotal",
-                            modifier = Modifier.weight(1f),
-                        )
-                        MoneyField(
-                            value = item.discountTotal,
-                            onValueChange = { v -> vm.updateItem(item.key) { it.copy(discountTotal = v) } },
-                            label = "Desconto",
-                            modifier = Modifier.weight(1f),
-                        )
-                    }
-                    Text(
-                        "${Money.format(item.unitCost)} cada",
-                        style = MaterialTheme.typography.titleSmall,
-                        color = MaterialTheme.colorScheme.primary,
-                        modifier = Modifier.padding(top = 4.dp),
-                    )
-                }
-            }
-            OutlinedButton(onClick = { picking = true }, shape = MaterialTheme.shapes.medium, modifier = Modifier.fillMaxWidth()) {
-                Icon(Icons.Filled.Add, contentDescription = null)
-                Text("Adicionar bateria", modifier = Modifier.padding(start = 8.dp))
-            }
-            MoneyField(
-                value = s.extras,
-                onValueChange = { v -> vm.update { it.copy(extras = v) } },
-                label = "Frete e outros (opcional)",
-            )
-            PanelCard(containerColor = MaterialTheme.colorScheme.surfaceContainerHigh) {
-                InfoRow("Baterias", "${s.units} · ${Money.format(s.itemsTotal)}")
-                if (s.extras > 0) InfoRow("Outros", Money.format(s.extras))
-                InfoRow("Total da nota", Money.format(s.total), bold = true)
-            }
-
-            SectionHeader("Boletos")
-            if (s.bills.isEmpty()) {
-                val purchase = suggestedPurchase(s, all)
-                PanelCard(containerColor = MaterialTheme.colorScheme.secondaryContainer) {
-                    Text("Sem boletos = bonificação", style = MaterialTheme.typography.titleSmall)
-                    if (purchase == null) {
-                        Hint("Escolha a nota de compra que ela abate.", color = warningColor())
-                    } else {
-                        Text(
-                            "Abate a nota ${purchase.invoice.number}" +
-                                (if (purchase.invoice.supplier.isNotBlank()) " (${purchase.invoice.supplier})" else ""),
-                            style = MaterialTheme.typography.bodyMedium,
-                            modifier = Modifier.padding(top = 4.dp),
-                        )
-                        val draft = s.items.map { InvoiceItem.fromTotals(it.model, it.quantity, it.grossTotal, it.discountTotal, it.productId) }
-                        BonusCostLines(purchase, bonusesOf(purchase, all).filter { it.invoice.id != s.id }, highlight = null, draft = draft)
-                    }
-                    TextButton(onClick = { choosingPurchase = true }) {
-                        Text(if (purchase == null) "Escolher nota de compra" else "Trocar nota de compra")
-                    }
-                }
-            }
-            BillGenerator(enabled = s.total > 0, default = s.issueDate.plusDays(30)) { count, first, interval ->
-                vm.generateBills(count, first, interval)
-            }
-            s.bills.sortedBy { it.dueDate }.forEachIndexed { k, b ->
-                PanelCard {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Text(
-                            "Parcela ${k + 1}" + if (b.isPaid) " · paga" else "",
-                            style = MaterialTheme.typography.titleSmall,
-                            color = if (b.isPaid) profitColor() else Color.Unspecified,
-                            modifier = Modifier.weight(1f),
-                        )
-                        IconButton(onClick = { vm.removeBill(b.key) }) {
-                            Icon(Icons.Filled.Delete, contentDescription = "Remover parcela ${k + 1}")
-                        }
-                    }
-                    EqualRow {
-                        DateButton("Vence", b.dueDate, Modifier.weight(1f)) { d -> vm.updateBill(b.key) { it.copy(dueDate = d) } }
-                    }
-                    MoneyField(
-                        value = b.amount,
-                        onValueChange = { v -> vm.updateBill(b.key) { it.copy(amount = v) } },
-                        label = "Valor",
-                        modifier = Modifier.padding(top = 8.dp),
-                    )
-                }
-            }
-            if (s.bills.isNotEmpty()) {
-                TextButton(onClick = vm::addBill) { Text("+ Outro boleto") }
-            }
-
-            if (!s.isEdit) {
-                SectionHeader("As baterias já chegaram?")
-                listOf(
-                    false to "Ainda não",
-                    true to "Já estão no estoque (nota antiga)",
-                ).forEach { (v, label) ->
-                    Row(
-                        Modifier
-                            .fillMaxWidth()
-                            .selectable(selected = s.received == v, role = Role.RadioButton, onClick = { vm.update { it.copy(received = v) } })
-                            .padding(vertical = 4.dp),
-                        verticalAlignment = Alignment.CenterVertically,
-                    ) {
-                        RadioButton(selected = s.received == v, onClick = null)
-                        Text(label, style = MaterialTheme.typography.bodyLarge, modifier = Modifier.padding(start = 8.dp))
-                    }
-                }
-            }
-            OutlinedTextField(
-                value = s.note,
-                onValueChange = { v -> vm.update { it.copy(note = v.take(300)) } },
-                label = { Text("Observação (opcional)") },
-                shape = MaterialTheme.shapes.medium,
-                modifier = Modifier.fillMaxWidth(),
-            )
-            Spacer(Modifier.height(24.dp))
-        }
-    }
-
-    if (choosingPurchase) {
-        PurchasePickerDialog(
-            options = purchaseOptions(s, all),
-            onPick = { id ->
-                vm.update { it.copy(bonusFor = id) }
-                choosingPurchase = false
-            },
-            onDismiss = { choosingPurchase = false },
-        )
-    }
-    assigning?.let { key ->
-        ProductPickerDialog(
-            title = "Qual bateria do estoque é esta?",
-            products = products,
-            onPick = {
-                vm.assignProduct(key, it)
-                assigning = null
-            },
-            onDismiss = { assigning = null },
-        )
-    }
-    if (picking) {
-        ProductPickerDialog(
-            title = "Qual bateria veio na nota?",
-            products = products,
-            onPick = {
-                vm.addItem(it)
-                picking = false
-            },
-            onDismiss = { picking = false },
-        )
-    }
-}
-
 /** Bonificações ligadas a uma nota de compra. */
-private fun bonusesOf(purchase: InvoiceWithBills, all: List<InvoiceWithBills>): List<InvoiceWithBills> =
+internal fun bonusesOf(purchase: InvoiceWithBills, all: List<InvoiceWithBills>): List<InvoiceWithBills> =
     all.filter { it.isBonus && it.invoice.bonusFor == purchase.invoice.id && it.invoice.id != purchase.invoice.id }
 
 /**
@@ -870,7 +595,7 @@ private fun bonusesOf(purchase: InvoiceWithBills, all: List<InvoiceWithBills>): 
  * [draft] é a bonificação que está sendo lançada; [highlight] marca a bonificação aberta na tela.
  */
 @Composable
-private fun BonusCostLines(
+internal fun BonusCostLines(
     purchase: InvoiceWithBills,
     bonuses: List<InvoiceWithBills>,
     highlight: Long?,
@@ -878,9 +603,13 @@ private fun BonusCostLines(
 ) {
     val bonusItems = bonuses.map { b -> b.invoice.items.map { if (b.invoice.isReceived) it else it.copy(received = null) } } +
         listOfNotNull(draft)
-    val costs = BonusCost.spread(purchase.invoice.items, bonusItems)
+    val costs = BonusCost.spreadNote(purchase.invoice.items, bonusItems)
     purchase.invoice.items.zip(costs.purchase).forEach { (line, cost) ->
-        InfoRow("${line.quantity}× ${line.model}", "${Money.format(line.unitCost)} → ${Money.format(cost)}")
+        if (line.bonus) {
+            InfoRow("🎁 ${line.quantity}× ${line.model}", Money.format(cost))
+        } else {
+            InfoRow("${line.quantity}× ${line.model}", "${Money.format(line.unitCost)} → ${Money.format(cost)}")
+        }
     }
     val labels: List<Pair<Long?, String>> =
         bonuses.map { Pair<Long?, String>(it.invoice.id, it.invoice.number) } + if (draft != null) listOf(Pair<Long?, String>(null, "esta")) else emptyList()
@@ -888,7 +617,7 @@ private fun BonusCostLines(
         val (id, number) = labels[k]
         lines.zip(list).forEach { (line, cost) ->
             InfoRow(
-                "${line.received ?: line.quantity}× ${line.model} (${if (number == "esta") "esta" else "nota $number"})",
+                "🎁 ${line.received ?: line.quantity}× ${line.model} (${if (number == "esta") "esta" else "nota $number"})",
                 Money.format(cost),
                 bold = id == highlight || id == null,
             )
@@ -896,9 +625,18 @@ private fun BonusCostLines(
     }
 }
 
+/** Custo final de cada bateria de uma nota com linhas de bonificação (o pago dividido por todas). */
+@Composable
+internal fun InNoteBonusLines(items: List<InvoiceItem>) {
+    val costs = BonusCost.spreadNote(items, emptyList()).purchase
+    items.zip(costs).forEach { (line, cost) ->
+        InfoRow((if (line.bonus) "🎁 " else "") + "${line.quantity}× ${line.model}", "${Money.format(cost)} cada")
+    }
+}
+
 /** Escolher a nota de compra que a bonificação abate. */
 @Composable
-private fun PurchasePickerDialog(options: List<InvoiceWithBills>, onPick: (Long) -> Unit, onDismiss: () -> Unit) {
+internal fun PurchasePickerDialog(options: List<InvoiceWithBills>, onPick: (Long) -> Unit, onDismiss: () -> Unit) {
     AlertDialog(
         onDismissRequest = onDismiss,
         title = { Text("Qual nota ela abate?") },
@@ -931,11 +669,11 @@ private fun PurchasePickerDialog(options: List<InvoiceWithBills>, onPick: (Long)
 }
 
 /** Tipos de arquivo aceitos ao importar a nota (PDF ou XML; alguns apps mandam XML sem tipo). */
-private val NFE_TYPES = arrayOf("application/pdf", "text/xml", "application/xml", "application/octet-stream")
+internal val NFE_TYPES = arrayOf("application/pdf", "text/xml", "application/xml", "application/octet-stream")
 
 /** O que foi lido do arquivo e o que conferir. */
 @Composable
-private fun ImportResultCard(r: ImportResult) {
+internal fun ImportResultCard(r: ImportResult) {
     PanelCard {
         Text("Lido do ${r.source}", style = MaterialTheme.typography.titleSmall, color = profitColor())
         if (r.found.isNotEmpty()) Hint(r.found.joinToString(" · "))
@@ -981,7 +719,7 @@ private fun ReceiveDialog(inv: InvoiceWithBills, onConfirm: (String, List<Int>, 
 /** Monta os boletos de uma vez: quantidade, primeiro vencimento e intervalo. */
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
-private fun BillGenerator(enabled: Boolean, default: LocalDate, onGenerate: (Int, LocalDate, Int) -> Unit) {
+internal fun BillGenerator(enabled: Boolean, default: LocalDate, onGenerate: (Int, LocalDate, Int) -> Unit) {
     var count by remember { mutableIntStateOf(1) }
     var first by remember(default) { mutableStateOf(default) }
     var interval by remember { mutableIntStateOf(30) }

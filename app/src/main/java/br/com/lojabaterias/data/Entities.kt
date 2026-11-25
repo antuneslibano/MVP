@@ -494,21 +494,35 @@ data class InvoiceItem(
     val discountTotal: Long = 0,
     /** Bonificação (nota sem boletos): a nota de compra cujo custo ela baixa. */
     val bonusFor: Long? = null,
+    /**
+     * Linha que veio de bonificação dentro de uma nota de compra (ex.: 10 compradas + 1 de bonificação).
+     * Não é paga: o valor pago pelas outras linhas é dividido também por estas baterias. [grossTotal] guarda
+     * o valor de referência da linha (o que ela valeria), usado só para a divisão.
+     */
+    val bonus: Boolean = false,
 ) {
-    /** Subtotal com desconto: exatamente o valor da nota. [unitCost] é esse valor dividido pela quantidade. */
-    val subtotal: Long get() = grossTotal?.let { it - discountTotal } ?: (unitCost * quantity)
+    /** Subtotal com desconto: exatamente o valor pago na nota (zero nas linhas de bonificação). */
+    val subtotal: Long get() = if (bonus) 0 else grossTotal?.let { it - discountTotal } ?: (unitCost * quantity)
 
     companion object {
         /** Linha da nota: (subtotal − desconto) ÷ quantidade = custo de cada bateria (arredondado). */
-        fun fromTotals(model: String, quantity: Int, grossTotal: Long, discountTotal: Long, productId: Long? = null): InvoiceItem {
-            val net = (grossTotal - discountTotal).coerceAtLeast(0)
+        fun fromTotals(
+            model: String,
+            quantity: Int,
+            grossTotal: Long,
+            discountTotal: Long,
+            productId: Long? = null,
+            bonus: Boolean = false,
+        ): InvoiceItem {
+            val net = if (bonus) 0 else (grossTotal - discountTotal).coerceAtLeast(0)
             return InvoiceItem(
                 model = model,
                 quantity = quantity,
                 unitCost = if (quantity > 0) (net + quantity / 2) / quantity else 0,
                 productId = productId,
                 grossTotal = grossTotal,
-                discountTotal = discountTotal.coerceAtMost(grossTotal),
+                discountTotal = if (bonus) 0 else discountTotal.coerceAtMost(grossTotal),
+                bonus = bonus,
             )
         }
     }

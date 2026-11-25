@@ -112,7 +112,8 @@ data class InvoicePeriodSummary(
     val paidTotal: Long get() = paid.sumOf { it.bill.amount }
     /** Bonificações (notas sem boletos) cujas baterias chegaram no período. */
     val bonus: List<InvoiceWithBills> get() = received.filter { it.isBonus }
-    val bonusUnits: Int get() = bonus.sumOf { inv -> inv.invoice.items.sumOf { it.received ?: it.quantity } }
+    val bonusUnits: Int get() = bonus.sumOf { inv -> inv.invoice.items.sumOf { it.received ?: it.quantity } } +
+        received.filter { !it.isBonus }.sumOf { inv -> inv.invoice.items.filter { it.bonus }.sumOf { it.received ?: it.quantity } }
     val bonusValue: Long get() = bonus.sumOf { it.invoice.total }
 }
 
