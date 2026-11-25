@@ -21,33 +21,31 @@ pois todos os APKs são assinados com a mesma chave (`app/signing/loja-baterias.
 
 ## Funcionalidades
 
-O app é dividido em **áreas**. Cada área tem um botão na barra de baixo e **abas no topo** que ligam as telas
-relacionadas. O **Menu ☰** mostra tudo agrupado pelas mesmas áreas, com atalhos (Nova venda, Nova nota fiscal).
+O app é dividido em **áreas**. Cada área tem um botão na barra de baixo; as que têm mais de uma tela mostram
+**abas no topo**. O **Menu ☰** mostra tudo, com atalhos (Nova venda, Nova nota fiscal) e os Ajustes.
 
 | Barra de baixo | Abas no topo |
 |---|---|
-| **Início** | resumo de hoje, da semana e do mês, avisos (boletos vencendo, baterias na carga), vendas recentes e **+ Nova Venda** |
-| **Vendas** | Vendas · Na carga · Vales de casco |
-| **Estoque** | Baterias · Sucatas · Garantias e extras |
-| **Dinheiro** | Resumo · Notas e boletos · Despesas · Relatórios e PDF |
+| **Início** | vendido hoje, semana e mês, avisos de boletos, vendas recentes e **+ Nova venda** |
+| **Vendas** | histórico com filtros |
+| **Estoque** | Baterias · Sucatas · Garantias |
+| **Dinheiro** | Resumo · Notas · Despesas · Relatórios |
 
 ### Vendas
 - **Nova venda**: modelo → bateria → forma de pagamento (preço automático: PIX/dinheiro → preço PIX, débito, crédito)
   → quantidade, preço e desconto → confirmar. Dá baixa no estoque.
-  - **Sucata**: "Deixou sucata" (entra no estoque de sucatas) ou "Sem sucata" (cobra o casco pela tabela; entra no
-    faturamento e também no custo, então não vira lucro). **"Levou vale?"** cria um vale de casco.
+  - **Sucata**: "Deixou sucata" (entra no estoque de sucatas) ou "Não deixou" (cobra o casco pelo valor digitado;
+    entra no faturamento e também no custo, então não vira lucro).
   - **Pagamento dividido**: várias formas na mesma venda; o app sugere quanto falta. A taxa da maquininha incide só no cartão.
 - **Vendas**: histórico com filtros; detalhes, edição, cancelamento (devolve o estoque) e exclusão.
-- **Na carga**: bateria do cliente para carregar (cliente, telefone com Ligar/WhatsApp, valor, pago ou não, empréstimo).
-- **Vales de casco**: vales em aberto; "Pagar vale" quando o cliente traz o casco (o casco entra no estoque de sucatas).
 
 ### Estoque
-- **Baterias**: busca, estoque baixo/zerado, cadastro, entrada, ajuste e histórico (Movimentações no menu).
+- **Baterias**: busca, estoque baixo/zerado, cadastro, entrada e ajuste.
   - **Custo por lotes** (primeiro que entra, primeiro que sai): cada entrada com custo (estoque inicial, entrada
     manual, chegada de nota fiscal) vira um lote. A venda usa primeiro as baterias mais antigas, com o custo delas.
     Ex.: 5 M100QD a R$ 672 + 5 a R$ 650 → as 5 primeiras vendas custam R$ 672. A tela da bateria mostra os lotes,
     e o valor do estoque (Financeiro, Relatórios e PDF) é a soma dos lotes.
-- **Sucatas**: estoque por amperagem, entrada, compra, venda (ao reciclador), ajuste e a **Tabela de sucatas**.
+- **Sucatas**: estoque por amperagem, entrada, compra, venda (ao reciclador) e ajuste.
 - **Garantias e extras**: *Garantias* conta as trocas por modelo (não mexe no estoque); *Extras* são baterias
   ganhadas: entram com custo zero e saem com lucro de 100% (a venda usa primeiro as extras do modelo).
   *Vitor*: baterias Heliar (modelos que começam com H) do Vitor; entram no estoque como um lote com o custo pago a
@@ -59,9 +57,9 @@ relacionadas. O **Menu ☰** mostra tudo agrupado pelas mesmas áreas, com atalh
     a conta completa até o lucro líquido, formas de pagamento, despesas por categoria e modelos que mais dão lucro.
   - **Caixa**: o dinheiro de verdade. **Caixa agora** (saldo informado + o que entrou − o que saiu), quanto **pode
     retirar com segurança** (descontando os boletos vencidos e dos próximos 30 dias), entradas e saídas do
-    período, **retiradas dos sócios** e o que a loja tem (estoque, sucatas, a receber, dívidas com fornecedores).
+    período, **retiradas dos sócios** e o que a loja tem (estoque e dívidas com fornecedores).
   - **Extras**: quanto as baterias extras renderam (valor de venda e lucro), no período e desde o começo.
-  - Botão **"? Entenda"**: glossário dos termos.
+  - Ícone **ⓘ**: glossário dos termos.
 - **Notas e boletos**: nota do fornecedor (distribuidora; cada modelo com quantidade, subtotal sem desconto e desconto da linha — o custo de cada bateria é (subtotal − desconto) ÷ quantidade; frete/impostos) e seus
   boletos (parcelas iguais a cada 7–30 dias, editáveis; a soma tem que bater com o total). "As baterias chegaram"
   conferindo quantas chegaram de cada modelo: as que chegaram **entram no estoque automaticamente** (com o custo da
@@ -71,14 +69,18 @@ relacionadas. O **Menu ☰** mostra tudo agrupado pelas mesmas áreas, com atalh
 - **Despesas**: despesas pagas no mês, por categoria.
 - **Relatórios e PDF** (diário, semanal e mensal): faturamento, lucro, baterias vendidas, **média por dia**
   (contando só os dias com venda), **baterias vendidas por dia** (cada dia com uma tabela de modelos, iguais somados),
-  total por modelo e um **resumo curto** do resto (estoque, sucatas, carga, garantias/extras/Vitor, notas e caixa).
+  total por modelo e um **resumo curto** do resto (estoque, sucatas, garantias/extras/Vitor, notas e caixa).
   Sem listas de cada venda ou movimentação.
 
 ### Geral
 - **Senha** ao abrir e após 2 minutos fora; bloqueio após tentativas erradas; "Esqueci a senha" com pergunta secreta.
   Opção **"Entrar sem apertar OK"** (fica salva no celular).
 - **Puxar a tela para baixo** sincroniza com a nuvem.
-- **Atualização automática** (Menu ☰ > Backup, sincronização e atualizações) e **backup** em arquivo JSON.
+- **Atualização automática** (Menu ☰ > Ajustes) e **backup** em arquivo JSON.
+
+> Baterias na carga, vales de casco, tabela de sucatas e a tela de movimentações de estoque foram retiradas.
+> Os dados antigos dessas funções continuam guardados (no celular, na nuvem e no backup); o dinheiro já
+> recebido da carga continua no histórico do caixa.
 
 ### Regras de cálculo
 
