@@ -4,7 +4,6 @@ import androidx.lifecycle.viewModelScope
 import br.com.lojabaterias.data.ScrapMovement
 import br.com.lojabaterias.data.ScrapPeriodSummary
 import br.com.lojabaterias.data.ScrapStockRow
-import br.com.lojabaterias.data.ScrapPrice
 import br.com.lojabaterias.data.StoreRepository
 import br.com.lojabaterias.domain.PeriodType
 import br.com.lojabaterias.domain.Periods
@@ -13,15 +12,12 @@ import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.flatMapLatest
-import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 
 data class ScrapsState(
     val stock: List<ScrapStockRow> = emptyList(),
     val totalQuantity: Int = 0,
-    val totalValue: Long = 0,
-    val prices: Map<Int, Long> = emptyMap(),
     val month: ScrapPeriodSummary = ScrapPeriodSummary(),
     val monthLabel: String = "",
     val movements: List<ScrapMovement> = emptyList(),
@@ -40,16 +36,13 @@ class ScrapsViewModel(private val repo: StoreRepository) : MessageViewModel() {
 
     val state: StateFlow<ScrapsState> = combine(
         repo.observeScrapStock(),
-        repo.observeScrapPrices().map { list -> list.associate { it.amperage to it.value } },
         monthSummary,
         repo.observeScrapMovements(100),
-    ) { stock, prices, (month, monthLabel), movements ->
-        val rows = stock.filter { it.quantity != 0 }.map { ScrapStockRow(it.amperage, it.quantity, prices[it.amperage]) }
+    ) { stock, (month, monthLabel), movements ->
+        val rows = stock.filter { it.quantity != 0 }.map { ScrapStockRow(it.amperage, it.quantity, null) }
         ScrapsState(
             stock = rows,
             totalQuantity = rows.sumOf { it.quantity },
-            totalValue = rows.sumOf { it.totalValue },
-            prices = prices,
             month = month,
             monthLabel = monthLabel,
             movements = movements.filter { it.type != br.com.lojabaterias.data.ScrapMovementType.VOUCHER_ISSUED },
@@ -87,34 +80,4 @@ class ScrapsViewModel(private val repo: StoreRepository) : MessageViewModel() {
         execute("Estoque de sucatas ${amperage}Ah ajustado para $newQuantity", onSuccess) {
             repo.adjustScrap(amperage, newQuantity, note)
         }
-}
-
-class ScrapPricesViewModel(private val repo: StoreRepository) : MessageViewModel() {
-
-    val prices: StateFlow<List<ScrapPrice>?> = repo.observeScrapPrices()
-        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), null)
-
-    fun save(id: Long, amperage: Int, value: Long, onSuccess: () -> Unit) {
-        viewModelScope.launch {
-            try {
-                repo.saveScrapPrice(id, amperage, value)
-                message("Valor da sucata ${amperage}Ah salvo")
-                onSuccess()
-            } catch (e: Exception) {
-                message(errorMessage(e))
-            }
-        }
-    }
-
-    fun delete(id: Long, onSuccess: () -> Unit) {
-        viewModelScope.launch {
-            try {
-                repo.deleteScrapPrice(id)
-                message("Amperagem removida da tabela")
-                onSuccess()
-            } catch (e: Exception) {
-                message(errorMessage(e))
-            }
-        }
-    }
 }

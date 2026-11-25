@@ -52,12 +52,7 @@ fun UpdateSection() {
     val state by updater.state.collectAsStateWithLifecycle()
     AppCard {
         Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-            Text("Atualizações do aplicativo", style = MaterialTheme.typography.titleMedium)
-            Text(
-                "Versão instalada: ${updater.currentVersionName}",
-                style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
+            Text("Versão ${updater.currentVersionName}", style = MaterialTheme.typography.titleSmall)
             UpdateContent(updater, state, compact = false)
         }
     }
@@ -67,11 +62,7 @@ fun UpdateSection() {
 private fun UpdateContent(updater: AppUpdater, s: UpdateState, compact: Boolean) {
     when (s) {
         is UpdateState.Available -> {
-            Text("Nova versão disponível: ${s.info.versionName}", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold)
-            Text(
-                "Os dados continuam no celular. Toque em atualizar e confirme a instalação.",
-                style = MaterialTheme.typography.bodySmall,
-            )
+            Text("Nova versão ${s.info.versionName}", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold)
             Button(
                 onClick = { updater.downloadAndInstall(s.info) },
                 modifier = Modifier.padding(top = 4.dp).fillMaxWidth().heightIn(min = 48.dp),
@@ -83,18 +74,14 @@ private fun UpdateContent(updater: AppUpdater, s: UpdateState, compact: Boolean)
         }
         is UpdateState.Installing -> {
             Text(
-                "Instalando ${s.info.versionName}... Se aparecer a pergunta do Android, toque em \"Atualizar\".",
+                "Instalando ${s.info.versionName}... Confirme no Android.",
                 style = MaterialTheme.typography.bodyMedium,
             )
         }
         is UpdateState.NeedsPermission -> {
             Text(
-                "Primeira atualização: o Android precisa que você permita que o Art das Baterias instale atualizações.",
+                "Permita que o app instale atualizações e depois toque em \"Atualizar agora\".",
                 style = MaterialTheme.typography.bodyMedium,
-            )
-            Text(
-                "Toque em \"Permitir\", ative a opção e volte para o app. Depois toque em \"Atualizar agora\".",
-                style = MaterialTheme.typography.bodySmall,
             )
             Button(onClick = { updater.openInstallPermissionSettings() }, modifier = Modifier.fillMaxWidth()) {
                 Text("Permitir")
@@ -119,7 +106,7 @@ private fun UpdateContent(updater: AppUpdater, s: UpdateState, compact: Boolean)
         UpdateState.Checking -> Text("Verificando...", style = MaterialTheme.typography.bodyMedium)
         UpdateState.UpToDate, UpdateState.Idle -> if (!compact) {
             if (s == UpdateState.UpToDate) {
-                Text("Você está na versão mais recente.", style = MaterialTheme.typography.bodyMedium)
+                Text("Atualizado.", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
             }
             OutlinedButton(onClick = { updater.check(force = true) }, modifier = Modifier.fillMaxWidth()) {
                 Text("Verificar atualização")

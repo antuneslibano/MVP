@@ -53,9 +53,9 @@ data class SaleFormState(
     val scrapCharge: Long = 0,
     /** Se o usuário alterou o valor cobrado manualmente. */
     val scrapChargeEdited: Boolean = false,
-    /** O cliente levou vale do casco (o valor do vale é o valor cobrado pela sucata). */
+    /** Vale de casco de vendas antigas (a função saiu do app; mantido só para não apagar o vale ao editar). */
     val scrapVoucher: Boolean = false,
-    /** Amperagem da bateria vendida (usada para sugerir sucata e valor). */
+    /** Amperagem da bateria vendida (sugere a amperagem da sucata deixada). */
     val batteryAmperage: Int = 0,
     /** Taxas das maquininhas em vigor. */
     val fees: CardFees = CardFees.DEFAULT,
@@ -125,11 +125,6 @@ class SaleFormViewModel(
     )
     val form: StateFlow<SaleFormState> = _form.asStateFlow()
 
-    /** Tabela de valores de sucata (amperagem → valor). */
-    val scrapPrices: StateFlow<Map<Int, Long>> = repo.observeScrapPrices()
-        .map { list -> list.associate { it.amperage to it.value } }
-        .stateIn(viewModelScope, SharingStarted.Eagerly, emptyMap())
-
     private val query = MutableStateFlow("")
     val searchQuery: StateFlow<String> = query.asStateFlow()
 
@@ -141,8 +136,6 @@ class SaleFormViewModel(
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
 
     init {
-        // Quando a tabela de sucatas carregar/mudar, atualiza o valor sugerido.
-        viewModelScope.launch { scrapPrices.collect { _form.update { it.withScrapDefaults() } } }
         if (saleId != null) {
             viewModelScope.launch { loadSale(saleId) }
         } else if (initialProductId != null) {
@@ -190,16 +183,6 @@ class SaleFormViewModel(
     private fun batteryAmperage(product: Product?, model: String): Int =
         product?.amperage?.takeIf { it > 0 } ?: Scrap.guessAmperage(model) ?: 0
 
-    /** Recalcula o valor sugerido da sucata faltante (se o usuário não alterou manualmente). */
-    private fun SaleFormState.withScrapDefaults(): SaleFormState {
-        if (scrapLegacy || scrapChargeEdited) return this
-        val suggested = Scrap.priceFor(batteryAmperage, scrapPrices.value) * scrapMissing
-        return copy(scrapCharge = suggested)
-    }
-
-    /** Valor de tabela sugerido para a sucata faltante. */
-    fun suggestedScrapCharge(s: SaleFormState): Long = Scrap.priceFor(s.batteryAmperage, scrapPrices.value) * s.scrapMissing
-
     fun setQuery(q: String) {
         query.value = q
     }
@@ -224,7 +207,7 @@ class SaleFormViewModel(
                 scrapVoucher = false,
                 batteryAmperage = batteryAmperage(product, product.model),
                 freeAvailable = 0,
-            ).withScrapDefaults()
+            )
         }
         viewModelScope.launch {
             runCatching { repo.repairExtras() }
@@ -250,20 +233,18 @@ class SaleFormViewModel(
     fun setQuantity(q: Int) = _form.update { s ->
         // Se todas as sucatas tinham sido deixadas, acompanha a nova quantidade.
         val returned = if (s.scrapReturned >= s.quantity) q else s.scrapReturned.coerceAtMost(q)
-        s.copy(quantity = q, scrapReturned = returned).withScrapDefaults()
+        s.copy(quantity = q, scrapReturned = returned)
     }
 
     /** "Deixou sucata" (todas) ou "Sem sucata". */
     fun setScrapLeft(left: Boolean) = _form.update { s ->
         val amperage = if (left && s.scrapAmperage.isBlank() && s.batteryAmperage > 0) s.batteryAmperage.toString() else s.scrapAmperage
-        s.copy(scrapReturned = if (left) s.quantity else 0, scrapAmperage = amperage).withScrapDefaults()
+        s.copy(scrapReturned = if (left) s.quantity else 0, scrapAmperage = amperage)
     }
 
-    fun setScrapReturned(n: Int) = _form.update { it.copy(scrapReturned = n.coerceIn(0, it.quantity)).withScrapDefaults() }
+    fun setScrapReturned(n: Int) = _form.update { it.copy(scrapReturned = n.coerceIn(0, it.quantity)) }
     fun setScrapAmperage(text: String) = _form.update { it.copy(scrapAmperage = text.filter { c -> c.isDigit() }.take(3)) }
     fun setScrapCharge(v: Long) = _form.update { it.copy(scrapCharge = v, scrapChargeEdited = true) }
-    fun resetScrapCharge() = _form.update { it.copy(scrapChargeEdited = false).withScrapDefaults() }
-    fun setScrapVoucher(v: Boolean) = _form.update { it.copy(scrapVoucher = v) }
     fun setUnitPrice(v: Long) = _form.update { it.copy(unitPrice = v) }
 
     // ------------------------------------------------------------ Pagamento dividido

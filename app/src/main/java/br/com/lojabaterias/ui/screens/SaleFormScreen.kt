@@ -1,14 +1,12 @@
 package br.com.lojabaterias.ui.screens
 
-import androidx.compose.foundation.layout.ExperimentalLayoutApi
-import androidx.compose.foundation.layout.FlowRow
-import androidx.compose.material3.AssistChip
-import androidx.compose.material3.Switch
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -19,22 +17,18 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.material3.AssistChip
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
-import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilterChip
-import androidx.compose.material3.SegmentedButton
-import androidx.compose.material3.SegmentedButtonDefaults
-import androidx.compose.material3.SingleChoiceSegmentedButtonRow
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -46,6 +40,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import br.com.lojabaterias.data.Product
@@ -53,16 +48,21 @@ import br.com.lojabaterias.domain.CardFees
 import br.com.lojabaterias.domain.Money
 import br.com.lojabaterias.domain.PaymentMethod
 import br.com.lojabaterias.domain.Scrap
-import br.com.lojabaterias.ui.components.FitText
 import br.com.lojabaterias.ui.components.AppCard
 import br.com.lojabaterias.ui.components.DateTimeSelector
 import br.com.lojabaterias.ui.components.EmptyState
+import br.com.lojabaterias.ui.components.EqualRow
+import br.com.lojabaterias.ui.components.FitText
+import br.com.lojabaterias.ui.components.Gaps
+import br.com.lojabaterias.ui.components.Hint
 import br.com.lojabaterias.ui.components.InfoRow
 import br.com.lojabaterias.ui.components.IntField
 import br.com.lojabaterias.ui.components.MoneyField
+import br.com.lojabaterias.ui.components.PanelCard
 import br.com.lojabaterias.ui.components.QuantityStepper
 import br.com.lojabaterias.ui.components.SearchField
-import br.com.lojabaterias.ui.components.SectionTitle
+import br.com.lojabaterias.ui.components.SectionHeader
+import br.com.lojabaterias.ui.components.Segmented
 import br.com.lojabaterias.ui.components.StockBadge
 import br.com.lojabaterias.ui.components.ToastEffect
 import br.com.lojabaterias.ui.theme.dangerColor
@@ -114,21 +114,16 @@ private fun ProductPicker(vm: SaleFormViewModel, onBack: () -> Unit) {
             SearchField(
                 value = query,
                 onValueChange = vm::setQuery,
-                placeholder = "Buscar modelo...",
+                placeholder = "Qual bateria?",
                 focusRequester = focus,
-                modifier = Modifier.padding(horizontal = 16.dp),
+                modifier = Modifier.padding(horizontal = Gaps.screen),
             )
             LazyColumn(
-                contentPadding = PaddingValues(16.dp),
+                contentPadding = PaddingValues(Gaps.screen),
                 verticalArrangement = Arrangement.spacedBy(8.dp),
             ) {
                 if (results.isEmpty()) {
-                    item {
-                        EmptyState(
-                            if (query.isBlank()) "Nenhuma bateria cadastrada.\nCadastre na aba Estoque."
-                            else "Nenhum modelo encontrado para \"$query\"."
-                        )
-                    }
+                    item { EmptyState(if (query.isBlank()) "Nenhuma bateria cadastrada." else "Nenhum modelo encontrado.") }
                 }
                 items(results, key = { it.id }) { product ->
                     ProductPickRow(product) { vm.selectProduct(product) }
@@ -150,11 +145,10 @@ private fun ProductPickRow(product: Product, onClick: () -> Unit) {
             verticalAlignment = Alignment.CenterVertically,
         ) {
             Column(Modifier.weight(1f)) {
-                Text(product.model, style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
+                Text(product.model, style = MaterialTheme.typography.titleMedium, maxLines = 1, overflow = TextOverflow.Ellipsis)
                 Text(
-                    (if (product.amperage > 0) "${product.amperage}Ah • " else "") +
-                        "PIX ${Money.format(product.pricePix)} • Créd. ${Money.format(product.priceCredit)}",
-                    style = MaterialTheme.typography.bodyMedium,
+                    "PIX ${Money.format(product.pricePix)} · Créd. ${Money.format(product.priceCredit)}",
+                    style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
             }
@@ -190,7 +184,7 @@ private fun SaleDetailsForm(
                     text = when {
                         form.saving -> "Salvando..."
                         form.isEdit -> "Salvar alterações"
-                        else -> "Confirmar venda • ${Money.format(totals?.finalAmount ?: 0)}"
+                        else -> "Confirmar · ${Money.format(totals?.finalAmount ?: 0)}"
                     },
                     onClick = vm::confirm,
                     enabled = error == null && !form.saving,
@@ -203,22 +197,17 @@ private fun SaleDetailsForm(
                 .fillMaxSize()
                 .padding(inner)
                 .verticalScroll(rememberScrollState())
-                .padding(horizontal = 16.dp),
+                .padding(horizontal = Gaps.screen),
         ) {
-            // Produto
+            // Bateria
             AppCard(containerColor = MaterialTheme.colorScheme.primaryContainer) {
-                Row(Modifier.padding(16.dp), verticalAlignment = Alignment.CenterVertically) {
+                Row(Modifier.padding(start = 16.dp, end = 8.dp, top = 12.dp, bottom = 12.dp), verticalAlignment = Alignment.CenterVertically) {
                     Column(Modifier.weight(1f)) {
+                        Text(form.model, style = MaterialTheme.typography.titleLarge, color = MaterialTheme.colorScheme.onPrimaryContainer)
                         Text(
-                            form.model,
-                            style = MaterialTheme.typography.headlineSmall,
-                            color = MaterialTheme.colorScheme.onPrimaryContainer,
-                        )
-                        Text(
-                            if (form.product == null) "Produto excluído do estoque"
-                            else "Disponível: ${form.available}",
+                            if (form.product == null) "Excluída do estoque" else "${form.available} em estoque",
                             style = MaterialTheme.typography.bodyMedium,
-                            color = MaterialTheme.colorScheme.onPrimaryContainer,
+                            color = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.8f),
                         )
                     }
                     if (canChangeProduct) {
@@ -227,11 +216,10 @@ private fun SaleDetailsForm(
                 }
             }
 
-            SectionTitle("Forma de pagamento")
+            SectionHeader("Pagamento")
             if (!form.split) {
-                val methods = PaymentMethod.entries
-                methods.chunked(2).forEach { row ->
-                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.padding(bottom = 8.dp)) {
+                PaymentMethod.entries.chunked(2).forEach { row ->
+                    EqualRow(Modifier.padding(bottom = 8.dp)) {
                         row.forEach { method ->
                             PaymentOption(
                                 method = method,
@@ -245,18 +233,11 @@ private fun SaleDetailsForm(
                 }
             }
             Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
-                Column(Modifier.weight(1f)) {
-                    Text("Dividir o pagamento", style = MaterialTheme.typography.titleSmall)
-                    Text(
-                        "Ex.: parte no dinheiro e parte no cartão",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
-                }
+                Text("Dividir em mais de uma forma", style = MaterialTheme.typography.bodyLarge, modifier = Modifier.weight(1f))
                 Switch(checked = form.split, onCheckedChange = vm::setSplit)
             }
 
-            SectionTitle("Quantidade")
+            SectionHeader("Quantidade")
             QuantityStepper(
                 value = form.quantity,
                 onValueChange = vm::setQuantity,
@@ -269,54 +250,32 @@ private fun SaleDetailsForm(
             if (form.split) {
                 SplitSection(vm, form)
             } else {
-            SectionTitle("Valores")
-            val tablePrice = form.product?.prices?.priceFor(form.method)
-            MoneyField(
-                value = form.unitPrice,
-                onValueChange = vm::setUnitPrice,
-                label = "Preço unitário",
-                supportingText = if (tablePrice != null && tablePrice != form.unitPrice) {
-                    "Preço de tabela (${form.method.label}): ${Money.format(tablePrice)}"
-                } else {
-                    null
-                },
-            )
-            Spacer(Modifier.height(8.dp))
-            MoneyField(value = form.discount, onValueChange = vm::setDiscount, label = "Desconto (opcional)")
+                SectionHeader("Valores")
+                EqualRow {
+                    MoneyField(value = form.unitPrice, onValueChange = vm::setUnitPrice, label = "Preço", modifier = Modifier.weight(1f))
+                    MoneyField(value = form.discount, onValueChange = vm::setDiscount, label = "Desconto", modifier = Modifier.weight(1f))
+                }
             }
 
-            SectionTitle("Data e hora")
+            SectionHeader("Data e hora")
             DateTimeSelector(millis = form.dateTime, onChange = vm::setDateTime)
-            if (!form.dateTimeEdited) {
-                Text(
-                    "Será registrada com o horário do momento da confirmação.",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    modifier = Modifier.padding(top = 4.dp),
-                )
-            }
 
-            SectionTitle("Resumo")
-            AppCard {
-                Column(Modifier.padding(16.dp)) {
-                    if (totals != null) {
-                        InfoRow("Valor bruto", Money.format(totals.grossAmount))
-                        if (totals.discount > 0) InfoRow("Desconto", "-" + Money.format(totals.discount))
-                        if (totals.scrapCharge > 0) InfoRow("Sucata faltante", "+" + Money.format(totals.scrapCharge))
-                        HorizontalDivider(Modifier.padding(vertical = 6.dp))
-                        InfoRow("Total", Money.format(totals.finalAmount), bold = true)
-                        InfoRow(if (totals.scrapCharge > 0) "Custo (inclui o casco)" else "Custo", Money.format(totals.totalCost))
-                        if (form.freeUnits > 0) InfoRow("Extras (custo zero)", "${form.freeUnits} un.")
-                        if (totals.cardFee > 0) {
-                            InfoRow(
-                                "Taxa da maquininha (${CardFees.formatPercent(form.fees.rateFor(form.method))})",
-                                "-" + Money.format(totals.cardFee),
-                            )
-                        }
-                        InfoRow("Lucro bruto", Money.format(totals.grossProfit), valueColor = moneyResultColor(totals.grossProfit))
-                    } else {
-                        Text("Confira quantidade, preço e desconto.")
+            SectionHeader("Resumo")
+            PanelCard {
+                if (totals != null) {
+                    InfoRow("Valor", Money.format(totals.grossAmount))
+                    if (totals.discount > 0) InfoRow("Desconto", "-" + Money.format(totals.discount))
+                    if (totals.scrapCharge > 0) InfoRow("Casco", "+" + Money.format(totals.scrapCharge))
+                    if (totals.cardFee > 0) {
+                        InfoRow("Taxa ${CardFees.formatPercent(form.fees.rateFor(form.method))}", "-" + Money.format(totals.cardFee))
                     }
+                    InfoRow("Custo", Money.format(totals.totalCost))
+                    if (form.freeUnits > 0) InfoRow("Extras (custo zero)", "${form.freeUnits} un.")
+                    HorizontalDivider(Modifier.padding(vertical = 6.dp), color = MaterialTheme.colorScheme.outlineVariant)
+                    InfoRow("Total", Money.format(totals.finalAmount), bold = true)
+                    InfoRow("Lucro", Money.format(totals.grossProfit), valueColor = moneyResultColor(totals.grossProfit))
+                } else {
+                    Hint("Confira quantidade, preço e desconto.")
                 }
             }
             Spacer(Modifier.height(24.dp))
@@ -335,143 +294,58 @@ private fun PaymentOption(
     val scheme = MaterialTheme.colorScheme
     Card(
         onClick = onClick,
-        modifier = modifier.heightIn(min = 68.dp),
-        shape = RoundedCornerShape(14.dp),
+        modifier = modifier.heightIn(min = 64.dp),
+        shape = MaterialTheme.shapes.medium,
         colors = CardDefaults.cardColors(
             containerColor = if (selected) scheme.primary else scheme.surface,
             contentColor = if (selected) scheme.onPrimary else scheme.onSurface,
         ),
-        border = if (selected) null else BorderStroke(1.dp, scheme.outline),
+        border = if (selected) null else BorderStroke(1.dp, scheme.outlineVariant),
     ) {
         Column(
             Modifier
                 .fillMaxWidth()
-                .padding(horizontal = 12.dp, vertical = 10.dp),
+                .padding(horizontal = 14.dp, vertical = 10.dp),
         ) {
-            Text(method.label, style = MaterialTheme.typography.titleMedium)
-            if (price != null) {
-                Text(Money.format(price), style = MaterialTheme.typography.bodyMedium)
-            }
+            Text(method.label, style = MaterialTheme.typography.titleSmall)
+            if (price != null) FitText(Money.format(price), style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
         }
     }
 }
 
-@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun ScrapSection(vm: SaleFormViewModel, form: SaleFormState) {
-    val prices by vm.scrapPrices.collectAsStateWithLifecycle()
-    SectionTitle("Sucata")
+    SectionHeader("Sucata")
     if (form.scrapLegacy) {
-        Text(
-            "Venda registrada antes do controle de sucatas.",
-            style = MaterialTheme.typography.bodyMedium,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-        )
+        Hint("Não informada nesta venda.")
         return
     }
     val left = form.scrapReturned > 0
-    SingleChoiceSegmentedButtonRow(Modifier.fillMaxWidth()) {
-        SegmentedButton(
-            selected = left,
-            onClick = { vm.setScrapLeft(true) },
-            shape = SegmentedButtonDefaults.itemShape(0, 2),
-            icon = {},
-        ) { FitText("Deixou sucata", style = MaterialTheme.typography.labelLarge) }
-        SegmentedButton(
-            selected = !left,
-            onClick = { vm.setScrapLeft(false) },
-            shape = SegmentedButtonDefaults.itemShape(1, 2),
-            icon = {},
-        ) { FitText("Sem sucata", style = MaterialTheme.typography.labelLarge) }
-    }
-    Spacer(Modifier.height(8.dp))
+    Segmented(
+        options = listOf("Deixou sucata", "Não deixou"),
+        selected = if (left) 0 else 1,
+        onSelect = { vm.setScrapLeft(it == 0) },
+    )
+    Spacer(Modifier.height(10.dp))
 
     if (left) {
         if (form.quantity > 1) {
             Row(verticalAlignment = Alignment.CenterVertically) {
-                Text("Quantas deixou?", style = MaterialTheme.typography.bodyLarge, modifier = Modifier.weight(1f))
-                QuantityStepper(
-                    value = form.scrapReturned,
-                    onValueChange = vm::setScrapReturned,
-                    min = 1,
-                    max = form.quantity,
-                )
+                Text("Quantas?", style = MaterialTheme.typography.bodyLarge, modifier = Modifier.weight(1f))
+                QuantityStepper(value = form.scrapReturned, onValueChange = vm::setScrapReturned, min = 1, max = form.quantity)
             }
             Spacer(Modifier.height(8.dp))
         }
-        IntField(
-            value = form.scrapAmperage,
-            onValueChange = vm::setScrapAmperage,
-            label = "Amperagem da sucata deixada (Ah)",
-            supportingText = form.scrapAmperage.toIntOrNull()?.let { a ->
-                prices[a]?.let { "Valor de tabela da sucata ${a}Ah: ${Money.format(it)}" }
-            } ?: "Confira a amperagem escrita na sucata",
-        )
-        val options = (prices.keys + listOfNotNull(form.batteryAmperage.takeIf { it > 0 })).toSortedSet()
-        if (options.isNotEmpty()) {
-            Row(
-                modifier = Modifier.horizontalScroll(rememberScrollState()),
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
-            ) {
-                options.forEach { a ->
-                    FilterChip(
-                        selected = form.scrapAmperage == a.toString(),
-                        onClick = { vm.setScrapAmperage(a.toString()) },
-                        label = { Text("${a}Ah") },
-                    )
-                }
-            }
-        }
+        IntField(value = form.scrapAmperage, onValueChange = vm::setScrapAmperage, label = "Amperagem da sucata (Ah)")
     }
 
     if (form.scrapMissing > 0) {
-        Spacer(Modifier.height(8.dp))
-        val suggested = vm.suggestedScrapCharge(form)
+        if (left) Spacer(Modifier.height(8.dp))
         MoneyField(
             value = form.scrapCharge,
             onValueChange = vm::setScrapCharge,
-            label = "Cobrar pela sucata (${Scrap.units(form.scrapMissing)} faltando)",
-            supportingText = when {
-                form.batteryAmperage <= 0 -> "Informe a amperagem no cadastro da bateria para sugerir o valor"
-                prices[form.batteryAmperage] == null ->
-                    "Sem valor para ${form.batteryAmperage}Ah na tabela de sucatas (menu > Tabela de sucatas)"
-                else -> "Tabela ${form.batteryAmperage}Ah: ${Money.format(prices[form.batteryAmperage] ?: 0)} por sucata"
-            },
+            label = "Cobrar casco (${Scrap.units(form.scrapMissing)})",
         )
-        if (form.scrapChargeEdited && form.scrapCharge != suggested && suggested > 0) {
-            TextButton(onClick = vm::resetScrapCharge) { Text("Usar valor da tabela (${Money.format(suggested)})") }
-        }
-        if (form.scrapCharge > 0) {
-            Text(
-                "Levou vale?",
-                style = MaterialTheme.typography.titleSmall,
-                modifier = Modifier.padding(top = 8.dp, bottom = 4.dp),
-            )
-            SingleChoiceSegmentedButtonRow(Modifier.fillMaxWidth()) {
-                SegmentedButton(
-                    selected = form.scrapVoucher,
-                    onClick = { vm.setScrapVoucher(true) },
-                    shape = SegmentedButtonDefaults.itemShape(0, 2),
-                    icon = {},
-                ) { FitText("Sim", style = MaterialTheme.typography.labelLarge) }
-                SegmentedButton(
-                    selected = !form.scrapVoucher,
-                    onClick = { vm.setScrapVoucher(false) },
-                    shape = SegmentedButtonDefaults.itemShape(1, 2),
-                    icon = {},
-                ) { FitText("Não", style = MaterialTheme.typography.labelLarge) }
-            }
-            Text(
-                if (form.scrapVoucher) {
-                    "Vale de ${Money.format(form.scrapCharge)}: aparece em \"Vales de casco\" até o cliente trazer o casco."
-                } else {
-                    "Sem vale: o casco fica pago e não há nada a devolver."
-                },
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                modifier = Modifier.padding(top = 4.dp),
-            )
-        }
     }
 }
 
@@ -479,56 +353,39 @@ private fun ScrapSection(vm: SaleFormViewModel, form: SaleFormState) {
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
 private fun SplitSection(vm: SaleFormViewModel, form: SaleFormState) {
-    SectionTitle("Pagamento dividido")
-    val prices = form.product?.prices
-    if (prices != null) {
-        val q = form.quantity
-        val scrap = form.scrapInput.charge
-        Text(
-            "Referência: à vista ${Money.format(prices.pix * q + scrap)} • débito ${Money.format(prices.debit * q + scrap)} • " +
-                "crédito ${Money.format(prices.credit * q + scrap)}",
-            style = MaterialTheme.typography.bodySmall,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-            modifier = Modifier.padding(bottom = 8.dp),
-        )
-    }
+    SectionHeader("Formas de pagamento")
     form.parts.forEachIndexed { index, part ->
-        AppCard(modifier = Modifier.padding(bottom = 8.dp)) {
-            Column(Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Text("${index + 1}ª forma", style = MaterialTheme.typography.labelLarge, modifier = Modifier.weight(1f))
-                    if (form.parts.size > 2) {
-                        TextButton(onClick = { vm.removePart(index) }) { Text("Remover") }
-                    }
+        PanelCard(modifier = Modifier.padding(bottom = 8.dp)) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text("${index + 1}ª forma", style = MaterialTheme.typography.titleSmall, modifier = Modifier.weight(1f))
+                if (form.parts.size > 2) {
+                    TextButton(onClick = { vm.removePart(index) }) { Text("Remover") }
                 }
-                FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                    PaymentMethod.entries.forEach { m ->
-                        FilterChip(selected = part.method == m, onClick = { vm.setPartMethod(index, m) }, label = { Text(m.label) })
-                    }
+            }
+            FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                PaymentMethod.entries.forEach { m ->
+                    FilterChip(selected = part.method == m, onClick = { vm.setPartMethod(index, m) }, label = { Text(m.label) })
                 }
-                MoneyField(value = part.amount, onValueChange = { vm.setPartAmount(index, it) }, label = "Valor no ${part.method.label}")
-                val suggestions = vm.suggestions(form, index).filter { it.amount != part.amount }
-                if (suggestions.isNotEmpty()) {
-                    Text("Usar o que falta:", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                    FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                        suggestions.forEach { sg ->
-                            AssistChip(
-                                onClick = { vm.setPartAmount(index, sg.amount) },
-                                label = { Text("${sg.label}: ${Money.format(sg.amount)}") },
-                            )
-                        }
+            }
+            MoneyField(value = part.amount, onValueChange = { vm.setPartAmount(index, it) }, label = "Valor")
+            val suggestions = vm.suggestions(form, index).filter { it.amount != part.amount }
+            if (suggestions.isNotEmpty()) {
+                FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp), modifier = Modifier.padding(top = 4.dp)) {
+                    suggestions.forEach { sg ->
+                        AssistChip(
+                            onClick = { vm.setPartAmount(index, sg.amount) },
+                            label = { Text("${sg.label}: ${Money.format(sg.amount)}") },
+                        )
                     }
                 }
             }
         }
     }
     if (form.parts.size < PaymentMethod.entries.size) {
-        TextButton(onClick = vm::addPart) { Text("+ Adicionar outra forma de pagamento") }
+        TextButton(onClick = vm::addPart) { Text("+ Outra forma") }
     }
-    AppCard(containerColor = MaterialTheme.colorScheme.surfaceContainerHigh) {
-        Column(Modifier.padding(12.dp)) {
-            form.parts.filter { it.amount > 0 }.forEach { InfoRow(it.method.label, Money.format(it.amount)) }
-            InfoRow("Total cobrado", Money.format(form.partsTotal), bold = true)
-        }
+    PanelCard(containerColor = MaterialTheme.colorScheme.surfaceContainerHigh) {
+        form.parts.filter { it.amount > 0 }.forEach { InfoRow(it.method.label, Money.format(it.amount)) }
+        InfoRow("Total cobrado", Money.format(form.partsTotal), bold = true)
     }
 }

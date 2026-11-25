@@ -1,57 +1,54 @@
 package br.com.lojabaterias.ui
 
+import android.widget.Toast
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.statusBars
 import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.material3.PrimaryScrollableTabRow
-import androidx.compose.material3.Tab
-import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.mutableStateMapOf
-import androidx.compose.foundation.layout.WindowInsets
-import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.padding
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.List
 import androidx.compose.material.icons.filled.Add
-import androidx.compose.material.icons.filled.Build
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.DateRange
-import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.Email
 import androidx.compose.material.icons.filled.Home
 import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.Menu
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Settings
-import androidx.compose.material.icons.filled.Star
 import androidx.compose.material.icons.filled.ShoppingCart
+import androidx.compose.material3.Button
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
-import androidx.compose.material3.NavigationDrawerItem
 import androidx.compose.material3.NavigationBar
 import androidx.compose.material3.NavigationBarItem
+import androidx.compose.material3.NavigationDrawerItem
+import androidx.compose.material3.PrimaryTabRow
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.Tab
 import androidx.compose.material3.Text
+import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateMapOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
-import androidx.compose.material3.pulltorefresh.PullToRefreshBox
-import androidx.compose.ui.platform.LocalContext
-import android.widget.Toast
-import br.com.lojabaterias.LojaApp
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.launch
-import kotlinx.coroutines.withContext
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import androidx.navigation.NavGraph.Companion.findStartDestination
 import androidx.navigation.NavHostController
@@ -61,29 +58,29 @@ import androidx.navigation.compose.composable
 import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
 import androidx.navigation.navArgument
+import br.com.lojabaterias.LojaApp
 import br.com.lojabaterias.ui.components.AppIcons
+import br.com.lojabaterias.ui.components.FitText
+import br.com.lojabaterias.ui.components.SyncIndicator
 import br.com.lojabaterias.ui.screens.BackupScreen
-import br.com.lojabaterias.ui.screens.ChargeDetailScreen
-import br.com.lojabaterias.ui.screens.ChargeFormScreen
-import br.com.lojabaterias.ui.screens.ChargesScreen
 import br.com.lojabaterias.ui.screens.ExpensesScreen
 import br.com.lojabaterias.ui.screens.FinanceScreen
+import br.com.lojabaterias.ui.screens.HomeScreen
 import br.com.lojabaterias.ui.screens.InvoiceDetailScreen
 import br.com.lojabaterias.ui.screens.InvoiceFormScreen
 import br.com.lojabaterias.ui.screens.InvoicesScreen
-import br.com.lojabaterias.ui.screens.VouchersScreen
-import br.com.lojabaterias.ui.screens.WarrantiesScreen
-import br.com.lojabaterias.ui.screens.HomeScreen
-import br.com.lojabaterias.ui.screens.MovementsScreen
 import br.com.lojabaterias.ui.screens.ProductDetailScreen
 import br.com.lojabaterias.ui.screens.ProductFormScreen
 import br.com.lojabaterias.ui.screens.ReportsScreen
 import br.com.lojabaterias.ui.screens.SaleDetailScreen
-import br.com.lojabaterias.ui.screens.ScrapPricesScreen
-import br.com.lojabaterias.ui.screens.ScrapsScreen
 import br.com.lojabaterias.ui.screens.SaleFormScreen
 import br.com.lojabaterias.ui.screens.SalesScreen
+import br.com.lojabaterias.ui.screens.ScrapsScreen
 import br.com.lojabaterias.ui.screens.StockScreen
+import br.com.lojabaterias.ui.screens.WarrantiesScreen
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 
 object Routes {
     const val HOME = "home"
@@ -96,16 +93,9 @@ object Routes {
     const val PRODUCT_NEW = "productnew"
     const val PRODUCT_DETAIL = "productdetail/{id}"
     const val PRODUCT_EDIT = "productedit/{id}"
-    const val MOVEMENTS = "movements"
     const val BACKUP = "backup"
     const val SCRAPS = "scraps"
-    const val SCRAP_PRICES = "scrapprices"
-    const val CHARGES = "charges"
-    const val CHARGE_NEW = "chargenew"
-    const val CHARGE_EDIT = "chargeedit/{id}"
-    const val CHARGE_DETAIL = "chargedetail/{id}"
     const val WARRANTIES = "warranties"
-    const val VOUCHERS = "vouchers"
     const val EXPENSES = "expenses"
     const val FINANCE = "finance"
     const val INVOICES = "invoices"
@@ -117,9 +107,6 @@ object Routes {
     fun invoiceEdit(id: Long) = "invoiceedit/$id"
     fun invoiceDetail(id: Long) = "invoicedetail/$id"
 
-    fun chargeEdit(id: Long) = "chargeedit/$id"
-    fun chargeDetail(id: Long) = "chargedetail/$id"
-
     fun newSale(productId: Long? = null) = if (productId == null) "newsale" else "newsale?productId=$productId"
     fun saleDetail(id: Long) = "saledetail/$id"
     fun saleEdit(id: Long) = "saleedit/$id"
@@ -130,27 +117,21 @@ object Routes {
 /** Uma aba de uma área do app. */
 private data class AreaTab(val route: String, val label: String)
 
-/**
- * O app é dividido em áreas. Cada área tem um botão na barra de baixo e abas no topo
- * que ligam as telas da mesma área (ex.: Estoque → Baterias | Sucatas | Garantias e extras).
- */
+/** Áreas da barra de baixo. As que têm mais de uma tela mostram abas no topo. */
 private enum class Area(val label: String, val icon: ImageVector, val tabs: List<AreaTab>) {
     HOME("Início", Icons.Filled.Home, listOf(AreaTab(Routes.HOME, "Início"))),
-    SALES(
-        "Vendas", Icons.Filled.ShoppingCart,
-        listOf(AreaTab(Routes.SALES, "Vendas"), AreaTab(Routes.CHARGES, "Na carga"), AreaTab(Routes.VOUCHERS, "Vales de casco")),
-    ),
+    SALES("Vendas", Icons.Filled.ShoppingCart, listOf(AreaTab(Routes.SALES, "Vendas"))),
     STOCK(
         "Estoque", AppIcons.Battery,
-        listOf(AreaTab(Routes.STOCK, "Baterias"), AreaTab(Routes.SCRAPS, "Sucatas"), AreaTab(Routes.WARRANTIES, "Garantias e extras")),
+        listOf(AreaTab(Routes.STOCK, "Baterias"), AreaTab(Routes.SCRAPS, "Sucatas"), AreaTab(Routes.WARRANTIES, "Garantias")),
     ),
     MONEY(
         "Dinheiro", AppIcons.BarChart,
         listOf(
             AreaTab(Routes.FINANCE, "Resumo"),
-            AreaTab(Routes.INVOICES, "Notas e boletos"),
+            AreaTab(Routes.INVOICES, "Notas"),
             AreaTab(Routes.EXPENSES, "Despesas"),
-            AreaTab(Routes.REPORTS, "Relatórios e PDF"),
+            AreaTab(Routes.REPORTS, "Relatórios"),
         ),
     ),
     ;
@@ -160,34 +141,20 @@ private enum class Area(val label: String, val icon: ImageVector, val tabs: List
     }
 }
 
-private data class MenuEntry(val label: String, val icon: ImageVector, val route: String, val topLevel: Boolean)
+private data class MenuEntry(val label: String, val icon: ImageVector, val route: String)
 
-/** Menu ☰: atalhos e todas as telas, agrupadas por área. */
+/** Menu ☰: todas as telas, agrupadas pelas mesmas áreas da barra de baixo. */
 private val menuGroups = listOf(
-    "Atalhos" to listOf(
-        MenuEntry("Nova venda", Icons.Filled.Add, Routes.newSale(), false),
-        MenuEntry("Nova nota fiscal", Icons.Filled.Email, Routes.invoiceNew(), false),
-    ),
-    "Vendas" to listOf(
-        MenuEntry("Vendas", Icons.Filled.ShoppingCart, Routes.SALES, true),
-        MenuEntry("Baterias na carga", Icons.Filled.Build, Routes.CHARGES, true),
-        MenuEntry("Vales de casco", Icons.Filled.Star, Routes.VOUCHERS, true),
-    ),
     "Estoque" to listOf(
-        MenuEntry("Baterias", AppIcons.Battery, Routes.STOCK, true),
-        MenuEntry("Sucatas", Icons.Filled.Refresh, Routes.SCRAPS, true),
-        MenuEntry("Tabela de sucatas", Icons.Filled.Edit, Routes.SCRAP_PRICES, false),
-        MenuEntry("Garantias e extras", Icons.Filled.CheckCircle, Routes.WARRANTIES, true),
-        MenuEntry("Movimentações de estoque", Icons.AutoMirrored.Filled.List, Routes.MOVEMENTS, false),
+        MenuEntry("Baterias", AppIcons.Battery, Routes.STOCK),
+        MenuEntry("Sucatas", Icons.Filled.Refresh, Routes.SCRAPS),
+        MenuEntry("Garantias, extras e Vitor", Icons.Filled.CheckCircle, Routes.WARRANTIES),
     ),
     "Dinheiro" to listOf(
-        MenuEntry("Resumo financeiro", Icons.Filled.Info, Routes.FINANCE, true),
-        MenuEntry("Notas fiscais e boletos", Icons.Filled.Email, Routes.INVOICES, true),
-        MenuEntry("Despesas", Icons.Filled.DateRange, Routes.EXPENSES, true),
-        MenuEntry("Relatórios e PDF", AppIcons.BarChart, Routes.REPORTS, true),
-    ),
-    "Sistema" to listOf(
-        MenuEntry("Backup, sincronização e atualizações", Icons.Filled.Settings, Routes.BACKUP, false),
+        MenuEntry("Resumo financeiro", Icons.Filled.Info, Routes.FINANCE),
+        MenuEntry("Notas fiscais e boletos", Icons.Filled.Email, Routes.INVOICES),
+        MenuEntry("Despesas", Icons.Filled.DateRange, Routes.EXPENSES),
+        MenuEntry("Relatórios e PDF", AppIcons.BarChart, Routes.REPORTS),
     ),
 )
 
@@ -198,7 +165,6 @@ fun LojaNavHost() {
     val backStack by nav.currentBackStackEntryAsState()
     val currentRoute = backStack?.destination?.route
     val currentArea = Area.of(currentRoute)
-    val showBottomBar = currentArea != null
     val lastTab = remember { mutableStateMapOf<Area, String>() }
     LaunchedEffect(currentRoute) {
         if (currentArea != null && currentRoute != null) lastTab[currentArea] = currentRoute
@@ -211,9 +177,10 @@ fun LojaNavHost() {
 
     Scaffold(
         contentWindowInsets = WindowInsets(0, 0, 0, 0),
+        containerColor = MaterialTheme.colorScheme.background,
         bottomBar = {
-            if (showBottomBar) {
-                NavigationBar {
+            if (currentArea != null) {
+                NavigationBar(containerColor = MaterialTheme.colorScheme.surface, tonalElevation = 0.dp) {
                     Area.entries.forEach { area ->
                         NavigationBarItem(
                             selected = currentArea == area,
@@ -233,209 +200,225 @@ fun LojaNavHost() {
             }
         },
     ) { inner ->
-      // Puxar a tela para baixo sincroniza com a nuvem (em qualquer tela).
-      PullToRefreshBox(
-        isRefreshing = refreshing,
-        onRefresh = {
-            scope.launch {
-                refreshing = true
-                val ok = withContext(Dispatchers.IO) { container.syncManager.syncNow() }
-                refreshing = false
-                val msg = if (ok) "Sincronizado" else container.syncManager.status.value.message ?: "Não foi possível sincronizar agora"
-                Toast.makeText(context, msg, Toast.LENGTH_SHORT).show()
-            }
-        },
-        modifier = Modifier
-            .fillMaxSize()
-            .padding(bottom = inner.calculateBottomPadding()),
-      ) {
-      Column(
-          Modifier
-              .fillMaxSize()
-              .let { if (currentArea != null && currentArea.tabs.size > 1) it.windowInsetsPadding(WindowInsets.statusBars) else it },
-      ) {
-        // Abas da área (ligam as telas relacionadas)
-        if (currentArea != null && currentArea.tabs.size > 1) {
-            PrimaryScrollableTabRow(
-                selectedTabIndex = currentArea.tabs.indexOfFirst { it.route == currentRoute }.coerceAtLeast(0),
-                edgePadding = 8.dp,
-                containerColor = MaterialTheme.colorScheme.background,
+        // Puxar a tela para baixo sincroniza com a nuvem (em qualquer tela).
+        PullToRefreshBox(
+            isRefreshing = refreshing,
+            onRefresh = {
+                scope.launch {
+                    refreshing = true
+                    val ok = withContext(Dispatchers.IO) { container.syncManager.syncNow() }
+                    refreshing = false
+                    val msg = if (ok) "Sincronizado" else container.syncManager.status.value.message ?: "Não foi possível sincronizar agora"
+                    Toast.makeText(context, msg, Toast.LENGTH_SHORT).show()
+                }
+            },
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(bottom = inner.calculateBottomPadding()),
+        ) {
+            Column(
+                Modifier
+                    .fillMaxSize()
+                    .let { if (currentArea != null) it.windowInsetsPadding(WindowInsets.statusBars) else it },
             ) {
-                currentArea.tabs.forEach { tab ->
-                    Tab(
-                        selected = tab.route == currentRoute,
-                        onClick = { if (tab.route != currentRoute) nav.navigateTopLevel(tab.route) },
-                        text = { Text(tab.label, maxLines = 1, style = MaterialTheme.typography.titleSmall) },
-                    )
+                if (currentArea != null && currentArea.tabs.size > 1) {
+                    AreaHeader(currentArea, currentRoute) { route -> if (route != currentRoute) nav.navigateTopLevel(route) }
+                }
+                NavHost(
+                    navController = nav,
+                    startDestination = Routes.HOME,
+                    modifier = Modifier.fillMaxWidth().weight(1f),
+                    enterTransition = { androidx.compose.animation.EnterTransition.None },
+                    exitTransition = { androidx.compose.animation.ExitTransition.None },
+                ) {
+                    composable(Routes.HOME) {
+                        HomeScreen(
+                            onNewSale = { nav.navigate(Routes.newSale()) },
+                            onOpenSale = { nav.navigate(Routes.saleDetail(it)) },
+                            onSeeAllSales = { nav.navigateTopLevel(Routes.SALES) },
+                            onSettings = { nav.navigate(Routes.BACKUP) },
+                            onInvoices = { nav.navigateTopLevel(Routes.INVOICES) },
+                            onStock = { nav.navigateTopLevel(Routes.STOCK) },
+                        )
+                    }
+                    composable(Routes.SALES) {
+                        SalesScreen(
+                            onNewSale = { nav.navigate(Routes.newSale()) },
+                            onOpenSale = { nav.navigate(Routes.saleDetail(it)) },
+                        )
+                    }
+                    composable(Routes.STOCK) {
+                        StockScreen(
+                            onOpenProduct = { nav.navigate(Routes.productDetail(it)) },
+                            onNewProduct = { nav.navigate(Routes.PRODUCT_NEW) },
+                        )
+                    }
+                    composable(Routes.REPORTS) { ReportsScreen() }
+                    composable(
+                        Routes.NEW_SALE,
+                        arguments = listOf(navArgument("productId") { type = NavType.LongType; defaultValue = -1L }),
+                    ) { entry ->
+                        val productId = entry.arguments?.getLong("productId")?.takeIf { it > 0 }
+                        SaleFormScreen(saleId = null, productId = productId, onDone = { nav.popBackStack() }, onBack = { nav.popBackStack() })
+                    }
+                    composable(Routes.SALE_EDIT, arguments = listOf(navArgument("id") { type = NavType.LongType })) { entry ->
+                        val id = entry.arguments?.getLong("id") ?: 0L
+                        SaleFormScreen(saleId = id, productId = null, onDone = { nav.popBackStack() }, onBack = { nav.popBackStack() })
+                    }
+                    composable(Routes.SALE_DETAIL, arguments = listOf(navArgument("id") { type = NavType.LongType })) { entry ->
+                        val id = entry.arguments?.getLong("id") ?: 0L
+                        SaleDetailScreen(
+                            saleId = id,
+                            onEdit = { nav.navigate(Routes.saleEdit(id)) },
+                            onBack = { nav.popBackStack() },
+                        )
+                    }
+                    composable(Routes.PRODUCT_NEW) {
+                        ProductFormScreen(productId = null, onDone = { nav.popBackStack() }, onDeleted = {}, onBack = { nav.popBackStack() })
+                    }
+                    composable(Routes.PRODUCT_EDIT, arguments = listOf(navArgument("id") { type = NavType.LongType })) { entry ->
+                        val id = entry.arguments?.getLong("id") ?: 0L
+                        ProductFormScreen(
+                            productId = id,
+                            onDone = { nav.popBackStack() },
+                            onDeleted = { nav.popBackStack(Routes.STOCK, inclusive = false) },
+                            onBack = { nav.popBackStack() },
+                        )
+                    }
+                    composable(Routes.PRODUCT_DETAIL, arguments = listOf(navArgument("id") { type = NavType.LongType })) { entry ->
+                        val id = entry.arguments?.getLong("id") ?: 0L
+                        ProductDetailScreen(
+                            productId = id,
+                            onEdit = { nav.navigate(Routes.productEdit(id)) },
+                            onSell = { nav.navigate(Routes.newSale(id)) },
+                            onBack = { nav.popBackStack() },
+                        )
+                    }
+                    composable(Routes.BACKUP) { BackupScreen(onBack = { nav.popBackStack() }) }
+                    composable(Routes.WARRANTIES) { WarrantiesScreen() }
+                    composable(Routes.EXPENSES) { ExpensesScreen() }
+                    composable(Routes.FINANCE) { FinanceScreen() }
+                    composable(Routes.SCRAPS) { ScrapsScreen() }
+                    composable(Routes.INVOICES) {
+                        InvoicesScreen(
+                            onNew = { nav.navigate(Routes.invoiceNew()) },
+                            onImport = { nav.navigate(Routes.invoiceNew(withImport = true)) },
+                            onOpen = { nav.navigate(Routes.invoiceDetail(it)) },
+                        )
+                    }
+                    composable(
+                        Routes.INVOICE_NEW,
+                        arguments = listOf(navArgument("import") { type = NavType.BoolType; defaultValue = false }),
+                    ) { entry ->
+                        InvoiceFormScreen(
+                            invoiceId = null,
+                            onDone = { nav.popBackStack() },
+                            onBack = { nav.popBackStack() },
+                            autoImport = entry.arguments?.getBoolean("import") ?: false,
+                        )
+                    }
+                    composable(Routes.INVOICE_EDIT, arguments = listOf(navArgument("id") { type = NavType.LongType })) { entry ->
+                        val id = entry.arguments?.getLong("id") ?: 0L
+                        InvoiceFormScreen(invoiceId = id, onDone = { nav.popBackStack() }, onBack = { nav.popBackStack() })
+                    }
+                    composable(Routes.INVOICE_DETAIL, arguments = listOf(navArgument("id") { type = NavType.LongType })) { entry ->
+                        val id = entry.arguments?.getLong("id") ?: 0L
+                        InvoiceDetailScreen(invoiceId = id, onEdit = { nav.navigate(Routes.invoiceEdit(id)) }, onBack = { nav.popBackStack() })
+                    }
                 }
             }
         }
-        NavHost(
-            navController = nav,
-            startDestination = Routes.HOME,
-            modifier = Modifier.fillMaxWidth().weight(1f),
-            enterTransition = { androidx.compose.animation.EnterTransition.None },
-            exitTransition = { androidx.compose.animation.ExitTransition.None },
-        ) {
-            composable(Routes.HOME) {
-                HomeScreen(
-                    onNewSale = { nav.navigate(Routes.newSale()) },
-                    onOpenSale = { nav.navigate(Routes.saleDetail(it)) },
-                    onSeeAllSales = { nav.navigateTopLevel(Routes.SALES) },
-                    onBackup = { nav.navigate(Routes.BACKUP) },
-                    onCharges = { nav.navigateTopLevel(Routes.CHARGES) },
-                    onInvoices = { nav.navigateTopLevel(Routes.INVOICES) },
-                )
-            }
-            composable(Routes.SALES) {
-                SalesScreen(
-                    onNewSale = { nav.navigate(Routes.newSale()) },
-                    onOpenSale = { nav.navigate(Routes.saleDetail(it)) },
-                )
-            }
-            composable(Routes.STOCK) {
-                StockScreen(
-                    onOpenProduct = { nav.navigate(Routes.productDetail(it)) },
-                    onNewProduct = { nav.navigate(Routes.PRODUCT_NEW) },
-                    onMovements = { nav.navigate(Routes.MOVEMENTS) },
-                )
-            }
-            composable(Routes.REPORTS) {
-                ReportsScreen()
-            }
-            composable(
-                Routes.NEW_SALE,
-                arguments = listOf(navArgument("productId") { type = NavType.LongType; defaultValue = -1L }),
-            ) { entry ->
-                val productId = entry.arguments?.getLong("productId")?.takeIf { it > 0 }
-                SaleFormScreen(saleId = null, productId = productId, onDone = { nav.popBackStack() }, onBack = { nav.popBackStack() })
-            }
-            composable(Routes.SALE_EDIT, arguments = listOf(navArgument("id") { type = NavType.LongType })) { entry ->
-                val id = entry.arguments?.getLong("id") ?: 0L
-                SaleFormScreen(saleId = id, productId = null, onDone = { nav.popBackStack() }, onBack = { nav.popBackStack() })
-            }
-            composable(Routes.SALE_DETAIL, arguments = listOf(navArgument("id") { type = NavType.LongType })) { entry ->
-                val id = entry.arguments?.getLong("id") ?: 0L
-                SaleDetailScreen(
-                    saleId = id,
-                    onEdit = { nav.navigate(Routes.saleEdit(id)) },
-                    onBack = { nav.popBackStack() },
-                )
-            }
-            composable(Routes.PRODUCT_NEW) {
-                ProductFormScreen(productId = null, onDone = { nav.popBackStack() }, onDeleted = {}, onBack = { nav.popBackStack() })
-            }
-            composable(Routes.PRODUCT_EDIT, arguments = listOf(navArgument("id") { type = NavType.LongType })) { entry ->
-                val id = entry.arguments?.getLong("id") ?: 0L
-                ProductFormScreen(
-                    productId = id,
-                    onDone = { nav.popBackStack() },
-                    onDeleted = { nav.popBackStack(Routes.STOCK, inclusive = false) },
-                    onBack = { nav.popBackStack() },
-                )
-            }
-            composable(Routes.PRODUCT_DETAIL, arguments = listOf(navArgument("id") { type = NavType.LongType })) { entry ->
-                val id = entry.arguments?.getLong("id") ?: 0L
-                ProductDetailScreen(
-                    productId = id,
-                    onEdit = { nav.navigate(Routes.productEdit(id)) },
-                    onSell = { nav.navigate(Routes.newSale(id)) },
-                    onBack = { nav.popBackStack() },
-                )
-            }
-            composable(Routes.MOVEMENTS) {
-                MovementsScreen(onBack = { nav.popBackStack() })
-            }
-            composable(Routes.BACKUP) {
-                BackupScreen(onBack = { nav.popBackStack() })
-            }
-            composable(Routes.CHARGES) {
-                ChargesScreen(onNew = { nav.navigate(Routes.CHARGE_NEW) }, onOpen = { nav.navigate(Routes.chargeDetail(it)) })
-            }
-            composable(Routes.CHARGE_NEW) {
-                ChargeFormScreen(chargeId = null, onDone = { nav.popBackStack() }, onBack = { nav.popBackStack() })
-            }
-            composable(Routes.CHARGE_EDIT, arguments = listOf(navArgument("id") { type = NavType.LongType })) { entry ->
-                val id = entry.arguments?.getLong("id") ?: 0L
-                ChargeFormScreen(chargeId = id, onDone = { nav.popBackStack() }, onBack = { nav.popBackStack() })
-            }
-            composable(Routes.CHARGE_DETAIL, arguments = listOf(navArgument("id") { type = NavType.LongType })) { entry ->
-                val id = entry.arguments?.getLong("id") ?: 0L
-                ChargeDetailScreen(chargeId = id, onEdit = { nav.navigate(Routes.chargeEdit(id)) }, onBack = { nav.popBackStack() })
-            }
-            composable(Routes.WARRANTIES) { WarrantiesScreen() }
-            composable(Routes.VOUCHERS) { VouchersScreen() }
-            composable(Routes.EXPENSES) { ExpensesScreen() }
-            composable(Routes.FINANCE) { FinanceScreen() }
-            composable(Routes.INVOICES) {
-                InvoicesScreen(
-                    onNew = { nav.navigate(Routes.invoiceNew()) },
-                    onImport = { nav.navigate(Routes.invoiceNew(withImport = true)) },
-                    onOpen = { nav.navigate(Routes.invoiceDetail(it)) },
-                )
-            }
-            composable(
-                Routes.INVOICE_NEW,
-                arguments = listOf(navArgument("import") { type = NavType.BoolType; defaultValue = false }),
-            ) { entry ->
-                InvoiceFormScreen(
-                    invoiceId = null,
-                    onDone = { nav.popBackStack() },
-                    onBack = { nav.popBackStack() },
-                    autoImport = entry.arguments?.getBoolean("import") ?: false,
-                )
-            }
-            composable(Routes.INVOICE_EDIT, arguments = listOf(navArgument("id") { type = NavType.LongType })) { entry ->
-                val id = entry.arguments?.getLong("id") ?: 0L
-                InvoiceFormScreen(invoiceId = id, onDone = { nav.popBackStack() }, onBack = { nav.popBackStack() })
-            }
-            composable(Routes.INVOICE_DETAIL, arguments = listOf(navArgument("id") { type = NavType.LongType })) { entry ->
-                val id = entry.arguments?.getLong("id") ?: 0L
-                InvoiceDetailScreen(invoiceId = id, onEdit = { nav.navigate(Routes.invoiceEdit(id)) }, onBack = { nav.popBackStack() })
-            }
-            composable(Routes.SCRAPS) {
-                ScrapsScreen(onPriceTable = { nav.navigate(Routes.SCRAP_PRICES) })
-            }
-            composable(Routes.SCRAP_PRICES) {
-                ScrapPricesScreen(onBack = { nav.popBackStack() })
-            }
-        }
-      }
-      }
     }
 
     if (menuOpen) {
-        ModalBottomSheet(onDismissRequest = { menuOpen = false }) {
+        ModalBottomSheet(onDismissRequest = { menuOpen = false }, containerColor = MaterialTheme.colorScheme.surface) {
             Column(
                 Modifier
                     .verticalScroll(rememberScrollState())
-                    .padding(bottom = 24.dp)
+                    .padding(bottom = 24.dp),
             ) {
-                Text(
-                    "Art das Baterias",
-                    style = MaterialTheme.typography.titleLarge,
-                    modifier = Modifier.padding(horizontal = 24.dp, vertical = 8.dp),
-                )
+                Column(Modifier.padding(horizontal = 24.dp)) {
+                    Text("Art das Baterias", style = MaterialTheme.typography.titleLarge)
+                    SyncIndicator(Modifier.padding(top = 2.dp))
+                }
+                Row(
+                    Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 20.dp, vertical = 16.dp),
+                    horizontalArrangement = Arrangement.spacedBy(10.dp),
+                ) {
+                    Button(
+                        onClick = { menuOpen = false; nav.navigate(Routes.newSale()) },
+                        modifier = Modifier.weight(1f).heightIn(min = 52.dp),
+                        shape = MaterialTheme.shapes.medium,
+                    ) {
+                        Icon(Icons.Filled.Add, contentDescription = null)
+                        Text("Venda", modifier = Modifier.padding(start = 6.dp))
+                    }
+                    FilledTonalButton(
+                        onClick = { menuOpen = false; nav.navigate(Routes.invoiceNew()) },
+                        modifier = Modifier.weight(1f).heightIn(min = 52.dp),
+                        shape = MaterialTheme.shapes.medium,
+                    ) {
+                        Icon(Icons.Filled.Add, contentDescription = null)
+                        Text("Nota fiscal", modifier = Modifier.padding(start = 6.dp))
+                    }
+                }
                 menuGroups.forEach { (title, entries) ->
                     Text(
                         title,
                         style = MaterialTheme.typography.labelLarge,
-                        color = MaterialTheme.colorScheme.primary,
-                        modifier = Modifier.padding(start = 28.dp, top = 12.dp, bottom = 4.dp),
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.padding(start = 28.dp, top = 8.dp, bottom = 4.dp),
                     )
                     entries.forEach { entry ->
                         NavigationDrawerItem(
-                            label = { Text(entry.label, style = MaterialTheme.typography.titleMedium) },
+                            label = { Text(entry.label, style = MaterialTheme.typography.bodyLarge) },
                             icon = { Icon(entry.icon, contentDescription = null) },
                             selected = currentRoute == entry.route,
                             onClick = {
                                 menuOpen = false
-                                if (entry.topLevel) nav.navigateTopLevel(entry.route) else nav.navigate(entry.route)
+                                nav.navigateTopLevel(entry.route)
                             },
                             modifier = Modifier.padding(horizontal = 12.dp),
                         )
                     }
                 }
+                NavigationDrawerItem(
+                    label = { Text("Ajustes, backup e atualizações", style = MaterialTheme.typography.bodyLarge) },
+                    icon = { Icon(Icons.Filled.Settings, contentDescription = null) },
+                    selected = false,
+                    onClick = {
+                        menuOpen = false
+                        nav.navigate(Routes.BACKUP)
+                    },
+                    modifier = Modifier.padding(start = 12.dp, end = 12.dp, top = 12.dp),
+                )
+            }
+        }
+    }
+}
+
+/** Título da área + abas que ligam as telas dela. */
+@Composable
+private fun AreaHeader(area: Area, currentRoute: String?, onSelect: (String) -> Unit) {
+    Column(Modifier.fillMaxWidth()) {
+        Text(
+            area.label,
+            style = MaterialTheme.typography.headlineSmall,
+            modifier = Modifier.padding(start = 16.dp, end = 16.dp, top = 12.dp, bottom = 4.dp),
+        )
+        PrimaryTabRow(
+            selectedTabIndex = area.tabs.indexOfFirst { it.route == currentRoute }.coerceAtLeast(0),
+            containerColor = MaterialTheme.colorScheme.background,
+        ) {
+            area.tabs.forEach { tab ->
+                Tab(
+                    selected = tab.route == currentRoute,
+                    onClick = { onSelect(tab.route) },
+                    text = { FitText(tab.label, style = MaterialTheme.typography.titleSmall) },
+                    unselectedContentColor = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
             }
         }
     }

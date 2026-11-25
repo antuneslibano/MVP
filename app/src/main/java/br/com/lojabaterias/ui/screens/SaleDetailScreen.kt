@@ -3,7 +3,6 @@ package br.com.lojabaterias.ui.screens
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -31,11 +30,14 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import br.com.lojabaterias.domain.Money
 import br.com.lojabaterias.domain.Periods
 import br.com.lojabaterias.domain.Scrap
-import br.com.lojabaterias.ui.components.AppCard
 import br.com.lojabaterias.ui.components.ConfirmDialog
 import br.com.lojabaterias.ui.components.EmptyState
+import br.com.lojabaterias.ui.components.Gaps
+import br.com.lojabaterias.ui.components.HeroCard
 import br.com.lojabaterias.ui.components.InfoRow
-import br.com.lojabaterias.ui.components.SectionTitle
+import br.com.lojabaterias.ui.components.PanelCard
+import br.com.lojabaterias.ui.components.SectionHeader
+import br.com.lojabaterias.ui.components.StatusPill
 import br.com.lojabaterias.ui.components.ToastEffect
 import br.com.lojabaterias.ui.theme.dangerColor
 import br.com.lojabaterias.ui.theme.moneyResultColor
@@ -54,8 +56,15 @@ fun SaleDetailScreen(
     ToastEffect(vm.messages)
     var confirmCancel by remember { mutableStateOf(false) }
     var confirmDelete by remember { mutableStateOf(false) }
+    val canceled = loaded?.value?.sale?.isCanceled == true
 
-    SubScreen(title = "Venda #$saleId", onBack = onBack) { inner ->
+    SubScreen(
+        title = "Venda #$saleId",
+        onBack = onBack,
+        actions = {
+            if (loaded?.value != null && !canceled) TextButton(onClick = onEdit) { Text("Editar") }
+        },
+    ) { inner ->
         val data = loaded
         when {
             data == null -> Box(Modifier.fillMaxSize().padding(inner), contentAlignment = Alignment.Center) {
@@ -70,100 +79,73 @@ fun SaleDetailScreen(
                         .fillMaxSize()
                         .padding(inner)
                         .verticalScroll(rememberScrollState())
-                        .padding(horizontal = 16.dp),
+                        .padding(horizontal = Gaps.screen),
+                    verticalArrangement = Arrangement.spacedBy(Gaps.item),
                 ) {
                     if (s.isCanceled) {
-                        AppCard(containerColor = dangerColor().copy(alpha = 0.12f)) {
-                            Text(
-                                "Venda cancelada" + (s.canceledAt?.let { " em ${Periods.formatDateTime(it)}" } ?: "") +
-                                    ". Não entra nos relatórios e o estoque foi devolvido.",
-                                color = dangerColor(),
-                                modifier = Modifier.padding(16.dp),
-                            )
-                        }
-                        Spacer(Modifier.height(8.dp))
+                        StatusPill(
+                            "Cancelada" + (s.canceledAt?.let { " em ${Periods.formatDateTime(it)}" } ?: ""),
+                            dangerColor(),
+                        )
                     }
-                    AppCard {
-                        Column(Modifier.padding(16.dp)) {
-                            InfoRow("Data/hora", Periods.formatDateTime(s.dateTime))
-                            if (sw.isSplit) {
-                                InfoRow("Pagamento", "Dividido")
-                                sw.paymentParts.forEach { (m, amount) -> InfoRow("  ${m.label}", Money.format(amount)) }
-                            } else {
-                                InfoRow("Pagamento", s.payment.label)
-                            }
-                        }
+                    HeroCard(label = Periods.formatDateTime(s.dateTime), value = Money.format(s.finalAmount)) {
+                        val on = MaterialTheme.colorScheme.onPrimary
+                        Text(
+                            if (sw.isSplit) sw.paymentParts.joinToString(" + ") { (m, amount) -> "${m.label} ${Money.format(amount)}" }
+                            else s.payment.label,
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = on.copy(alpha = 0.85f),
+                        )
                     }
 
-                    SectionTitle("Itens")
+                    SectionHeader("Baterias")
                     sw.items.forEach { item ->
-                        AppCard {
-                            Column(Modifier.padding(16.dp)) {
-                                Text(item.modelSnapshot, style = MaterialTheme.typography.titleLarge)
-                                InfoRow("Quantidade", item.quantity.toString())
-                                InfoRow("Preço unitário", Money.format(item.unitPrice))
-                                InfoRow("Custo unitário (na venda)", Money.format(item.unitCost))
-                                InfoRow("Subtotal", Money.format(item.subtotal))
-                            }
-                        }
-                        Spacer(Modifier.height(8.dp))
-                    }
-
-                    SectionTitle("Valores")
-                    AppCard {
-                        Column(Modifier.padding(16.dp)) {
-                            InfoRow("Valor bruto", Money.format(s.grossAmount))
-                            InfoRow("Desconto", Money.format(s.discount))
-                            if (s.scrapCharge > 0) InfoRow("Sucata faltante", Money.format(s.scrapCharge))
-                            HorizontalDivider(Modifier.padding(vertical = 6.dp))
-                            InfoRow("Valor final", Money.format(s.finalAmount), bold = true)
-                            InfoRow(if (s.scrapCharge > 0) "Custo (inclui o casco)" else "Custo", Money.format(s.totalCost))
-                            if (extras.isNotEmpty()) InfoRow("Extras usadas (custo zero)", "${extras.size} un.")
-                            if (s.cardFee > 0) InfoRow("Taxa da maquininha", "-" + Money.format(s.cardFee))
-                            InfoRow("Lucro bruto", Money.format(s.grossProfit), valueColor = moneyResultColor(s.grossProfit))
+                        PanelCard {
+                            Text("${item.quantity}× ${item.modelSnapshot}", style = MaterialTheme.typography.titleMedium)
+                            InfoRow("Preço", Money.format(item.unitPrice))
+                            InfoRow("Custo", Money.format(item.unitCost))
                         }
                     }
 
-                    SectionTitle("Sucata")
-                    AppCard {
-                        Column(Modifier.padding(16.dp)) {
-                            if (!s.hasScrapInfo) {
-                                Text(
-                                    "Não informada (venda anterior ao controle de sucatas).",
-                                    style = MaterialTheme.typography.bodyMedium,
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                )
-                            } else {
-                                InfoRow(
-                                    "Deixadas pelo cliente",
-                                    if (s.scrapReturned > 0) "${s.scrapReturned} • ${Scrap.format(s.scrapAmperage)}" else "0",
-                                )
-                                InfoRow("Não deixadas", s.scrapMissing.toString())
-                                if (s.scrapMissing > 0) InfoRow("Valor cobrado", Money.format(s.scrapCharge))
-                            }
+                    SectionHeader("Valores")
+                    PanelCard {
+                        InfoRow("Valor", Money.format(s.grossAmount))
+                        if (s.discount > 0) InfoRow("Desconto", "-" + Money.format(s.discount))
+                        if (s.scrapCharge > 0) InfoRow("Casco", "+" + Money.format(s.scrapCharge))
+                        if (s.cardFee > 0) InfoRow("Taxa da maquininha", "-" + Money.format(s.cardFee))
+                        InfoRow("Custo", Money.format(s.totalCost))
+                        if (extras.isNotEmpty()) InfoRow("Extras (custo zero)", "${extras.size} un.")
+                        HorizontalDivider(Modifier.padding(vertical = 6.dp), color = MaterialTheme.colorScheme.outlineVariant)
+                        InfoRow("Lucro", Money.format(s.grossProfit), bold = true, valueColor = moneyResultColor(s.grossProfit))
+                    }
+
+                    if (s.hasScrapInfo) {
+                        SectionHeader("Sucata")
+                        PanelCard {
+                            InfoRow(
+                                "Deixou",
+                                if (s.scrapReturned > 0) "${s.scrapReturned} · ${Scrap.format(s.scrapAmperage)}" else "Nenhuma",
+                            )
+                            if (s.scrapMissing > 0) InfoRow("Faltou", "${s.scrapMissing} · ${Money.format(s.scrapCharge)}")
                         }
                     }
 
+                    Spacer(Modifier.height(8.dp))
                     if (!s.isCanceled) {
-                        Spacer(Modifier.height(20.dp))
-                        PrimaryActionButton(text = "Editar venda", onClick = onEdit)
-                        Spacer(Modifier.height(10.dp))
-                        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.Center) {
-                            OutlinedButton(
-                                onClick = { confirmCancel = true },
-                                colors = ButtonDefaults.outlinedButtonColors(contentColor = dangerColor()),
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .heightIn(min = 52.dp),
-                            ) { Text("Cancelar venda") }
-                        }
+                        OutlinedButton(
+                            onClick = { confirmCancel = true },
+                            colors = ButtonDefaults.outlinedButtonColors(contentColor = dangerColor()),
+                            shape = MaterialTheme.shapes.medium,
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .heightIn(min = 50.dp),
+                        ) { Text("Cancelar venda") }
                     }
-                    Spacer(Modifier.height(10.dp))
                     TextButton(
                         onClick = { confirmDelete = true },
                         modifier = Modifier.fillMaxWidth(),
-                    ) { Text("Excluir venda do histórico", color = dangerColor()) }
-                    Spacer(Modifier.height(32.dp))
+                    ) { Text("Excluir do histórico", color = dangerColor()) }
+                    Spacer(Modifier.height(24.dp))
                 }
             }
         }
@@ -172,9 +154,7 @@ fun SaleDetailScreen(
     if (confirmDelete) {
         ConfirmDialog(
             title = "Excluir venda?",
-            text = "A venda será apagada definitivamente do histórico e dos relatórios, como se nunca tivesse existido. " +
-                "Se ela estava ativa, as baterias voltam para o estoque e a sucata recebida sai do estoque de sucatas. " +
-                "Para apenas desfazer uma venda mantendo o registro, use \"Cancelar venda\".",
+            text = "Ela some do histórico e dos relatórios. Se estava ativa, as baterias voltam ao estoque.",
             confirmLabel = "Excluir",
             destructive = true,
             onConfirm = {
@@ -188,8 +168,7 @@ fun SaleDetailScreen(
     if (confirmCancel) {
         ConfirmDialog(
             title = "Cancelar venda?",
-            text = "O produto volta para o estoque e a venda deixa de contar no faturamento, custo e lucro. " +
-                "Se o cliente deixou sucata, ela sai do estoque de sucatas (devolvida ao cliente).",
+            text = "As baterias voltam ao estoque e a venda deixa de contar no faturamento.",
             confirmLabel = "Cancelar venda",
             destructive = true,
             onConfirm = {

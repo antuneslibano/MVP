@@ -72,9 +72,8 @@ class ReportsViewModel(private val container: AppContainer) : MessageViewModel()
     private val snapshot = combine(
         repo.observeProducts(),
         repo.observeScrapStock(),
-        repo.observeScrapPrices().map { list -> list.associate { it.amperage to it.value } },
         repo.observeStockValues(),
-    ) { products, scrapStock, prices, values -> Snapshot(products, scrapStock, prices, values) }
+    ) { products, scrapStock, values -> Snapshot(products, scrapStock, emptyMap(), values) }
 
     private val services = combine(
         repo.observeCharges(),
@@ -99,7 +98,7 @@ class ReportsViewModel(private val container: AppContainer) : MessageViewModel()
                     label = Periods.label(sel.type, today, sel.offset),
                     full = FullReport.build(
                         sales, stockMoves, scrapMoves, products, scrapStock, prices,
-                        allCharges = charges,
+                        allCharges = charges.filter { it.paid },
                         allWarranties = claims,
                         expenses = expenses,
                         range = range,

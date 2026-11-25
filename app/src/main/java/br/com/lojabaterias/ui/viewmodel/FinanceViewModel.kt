@@ -48,10 +48,9 @@ class FinanceViewModel(container: AppContainer) : MessageViewModel() {
     private val stock = combine(
         repo.observeProducts(),
         repo.observeScrapStock(),
-        repo.observeScrapPrices().map { list -> list.associate { it.amperage to it.value } },
         repo.observeInvoiceBills(),
         repo.observeStockValues(),
-    ) { products, scrapStock, prices, bills, values -> Stock(products, scrapStock, prices, bills, values) }
+    ) { products, scrapStock, bills, values -> Stock(products, scrapStock, emptyMap(), bills, values) }
 
     val state: StateFlow<FinanceState> = combine(selection, currentDateFlow(), money, stock) { sel, today, m, (products, scrapStock, prices, bills, values) ->
         FinanceState(
@@ -63,11 +62,12 @@ class FinanceViewModel(container: AppContainer) : MessageViewModel() {
                 allSales = m.sales,
                 expenses = m.expenses,
                 scrapMovements = m.scrap,
-                charges = m.charges,
+                // Carga de baterias saiu do app: só o que já foi recebido continua no histórico do caixa.
+                charges = m.charges.filter { it.paid },
                 warranties = m.warranties,
                 products = products,
                 scrapStock = scrapStock,
-                scrapPrices = prices,
+                scrapPrices = emptyMap(),
                 invoiceBills = bills,
                 stockValues = values,
             ),

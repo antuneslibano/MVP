@@ -3,7 +3,6 @@ package br.com.lojabaterias.ui.viewmodel
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import br.com.lojabaterias.data.BusinessException
-import br.com.lojabaterias.data.MovementWithModel
 import br.com.lojabaterias.data.Product
 import br.com.lojabaterias.data.StoreRepository
 import br.com.lojabaterias.domain.Scrap
@@ -55,9 +54,6 @@ class ProductDetailViewModel(private val repo: StoreRepository, private val prod
         .map { Loaded(it) }
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), null)
 
-    val movements: StateFlow<List<MovementWithModel>> = repo.observeMovements(productId)
-        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
-
     /** Lotes do estoque (as mais antigas saem primeiro). */
     val layers: StateFlow<List<br.com.lojabaterias.domain.CostLayer>> = kotlinx.coroutines.flow.combine(
         repo.observeProduct(productId),
@@ -78,18 +74,6 @@ class ProductDetailViewModel(private val repo: StoreRepository, private val prod
             try {
                 repo.addStock(productId, quantity, newCost, note)
                 message("Entrada de $quantity registrada")
-                onSuccess()
-            } catch (e: Exception) {
-                message(errorMessage(e))
-            }
-        }
-    }
-
-    fun deleteMovement(id: Long, onSuccess: () -> Unit) {
-        viewModelScope.launch {
-            try {
-                repo.deleteStockMovement(id)
-                message("Registro excluído e estoque corrigido")
                 onSuccess()
             } catch (e: Exception) {
                 message(errorMessage(e))
@@ -217,23 +201,6 @@ class ProductFormViewModel(private val repo: StoreRepository, productId: Long?) 
                 repo.deleteProduct(id)
                 message("Bateria excluída")
                 _state.update { it.copy(done = true, deleted = true) }
-            } catch (e: Exception) {
-                message(errorMessage(e))
-            }
-        }
-    }
-}
-
-class MovementsViewModel(private val repo: StoreRepository) : MessageViewModel() {
-    val movements: StateFlow<List<MovementWithModel>?> = repo.observeRecentMovements()
-        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), null)
-
-    fun deleteMovement(id: Long, onSuccess: () -> Unit) {
-        viewModelScope.launch {
-            try {
-                repo.deleteStockMovement(id)
-                message("Registro excluído e estoque corrigido")
-                onSuccess()
             } catch (e: Exception) {
                 message(errorMessage(e))
             }

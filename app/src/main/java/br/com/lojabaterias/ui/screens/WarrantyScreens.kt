@@ -4,31 +4,18 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.KeyboardArrowLeft
-import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
-import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material3.AlertDialog
-import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.ExtendedFloatingActionButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Scaffold
-import androidx.compose.material3.SegmentedButton
-import androidx.compose.material3.SegmentedButtonDefaults
-import androidx.compose.material3.SingleChoiceSegmentedButtonRow
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
-import androidx.compose.material3.TopAppBar
-import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
@@ -38,32 +25,33 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import br.com.lojabaterias.data.Product
 import br.com.lojabaterias.data.VITOR_DEFAULT_COST
 import br.com.lojabaterias.domain.Money
-import br.com.lojabaterias.ui.components.MoneyField
 import br.com.lojabaterias.domain.Periods
-import br.com.lojabaterias.ui.components.AppCard
 import br.com.lojabaterias.ui.components.ConfirmDialog
 import br.com.lojabaterias.ui.components.EmptyState
-import br.com.lojabaterias.ui.components.FitText
+import br.com.lojabaterias.ui.components.Gaps
+import br.com.lojabaterias.ui.components.HeroCard
+import br.com.lojabaterias.ui.components.HeroStat
+import br.com.lojabaterias.ui.components.Hint
 import br.com.lojabaterias.ui.components.InfoRow
+import br.com.lojabaterias.ui.components.ListRow
+import br.com.lojabaterias.ui.components.MoneyField
+import br.com.lojabaterias.ui.components.PanelCard
+import br.com.lojabaterias.ui.components.PeriodSwitcher
 import br.com.lojabaterias.ui.components.ProductPickerDialog
 import br.com.lojabaterias.ui.components.QuantityStepper
-import br.com.lojabaterias.ui.components.SectionTitle
+import br.com.lojabaterias.ui.components.Segmented
 import br.com.lojabaterias.ui.components.ToastEffect
-import br.com.lojabaterias.ui.theme.profitColor
 import br.com.lojabaterias.ui.viewmodel.WarrantiesViewModel
 import br.com.lojabaterias.ui.viewmodel.WarrantyGroup
 import br.com.lojabaterias.ui.viewmodel.WarrantyTab
 import br.com.lojabaterias.ui.viewmodel.appViewModel
 
 /** Garantias (baterias trocadas), Extras (ganhadas) e Vitor (Heliar compradas do Vitor), por modelo e mês. */
-@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun WarrantiesScreen() {
     val vm = appViewModel { WarrantiesViewModel(it.repository) }
@@ -75,133 +63,60 @@ fun WarrantiesScreen() {
     var chosen by remember { mutableStateOf<Product?>(null) }
     var toDelete by remember { mutableStateOf<WarrantyGroup?>(null) }
 
-    Scaffold(
-        topBar = {
-            TopAppBar(
-                title = { Text("Garantias e extras") },
-                colors = TopAppBarDefaults.topAppBarColors(containerColor = MaterialTheme.colorScheme.background),
-            )
+    MainPage(
+        fabLabel = when (tab) {
+            WarrantyTab.EXTRAS -> "Nova extra"
+            WarrantyTab.VITOR -> "Do Vitor"
+            WarrantyTab.EXCHANGES -> "Nova troca"
         },
-        floatingActionButton = {
-            ExtendedFloatingActionButton(
-                onClick = { picking = true },
-                icon = { Icon(Icons.Filled.Add, contentDescription = null) },
-                text = {
-                    Text(
-                        when (tab) {
-                            WarrantyTab.EXTRAS -> "Registrar extra"
-                            WarrantyTab.VITOR -> "Registrar do Vitor"
-                            WarrantyTab.EXCHANGES -> "Registrar troca"
-                        }
-                    )
-                },
-            )
-        },
-        containerColor = MaterialTheme.colorScheme.background,
-        contentWindowInsets = WindowInsets(0, 0, 0, 0),
+        onFab = { picking = true },
     ) { inner ->
         LazyColumn(
             modifier = Modifier
                 .fillMaxSize()
                 .padding(inner),
-            contentPadding = PaddingValues(start = 16.dp, end = 16.dp, bottom = 96.dp),
+            contentPadding = PaddingValues(start = Gaps.screen, end = Gaps.screen, top = 12.dp, bottom = FabSpace),
             verticalArrangement = Arrangement.spacedBy(8.dp),
         ) {
             item {
-                SingleChoiceSegmentedButtonRow(Modifier.fillMaxWidth()) {
-                    WarrantyTab.entries.forEachIndexed { i, t ->
-                        SegmentedButton(
-                            selected = state.tab == t,
-                            onClick = { vm.setTab(t) },
-                            shape = SegmentedButtonDefaults.itemShape(i, WarrantyTab.entries.size),
-                            icon = {},
-                        ) { FitText(t.label, style = MaterialTheme.typography.labelLarge) }
-                    }
-                }
-            }
-            item {
-                Text(
-                    when (tab) {
-                        WarrantyTab.EXTRAS ->
-                            "Baterias que a loja ganhou (o cliente comprou uma nova e deixou a da garantia). " +
-                                "Entram no estoque com custo zero: na venda, o lucro delas é de 100%."
-                        WarrantyTab.VITOR ->
-                            "Baterias Heliar (modelos com H) do Vitor. Entram no estoque com o custo pago a ele " +
-                                "(R$ 150 por padrão): na venda, o lucro é o preço menos esse valor."
-                        WarrantyTab.EXCHANGES ->
-                            "Baterias trocadas em garantia. Só conta o modelo e a quantidade; o estoque não muda."
-                    },
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                Segmented(
+                    options = WarrantyTab.entries.map { it.label },
+                    selected = tab.ordinal,
+                    onSelect = { vm.setTab(WarrantyTab.entries[it]) },
                 )
             }
             item {
-                Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-                    IconButton(onClick = vm::previousMonth) {
-                        Icon(Icons.AutoMirrored.Filled.KeyboardArrowLeft, contentDescription = "Mês anterior")
-                    }
-                    Text(
-                        state.monthLabel,
-                        style = MaterialTheme.typography.titleMedium,
-                        textAlign = TextAlign.Center,
-                        modifier = Modifier.weight(1f),
-                    )
-                    IconButton(onClick = vm::nextMonth, enabled = state.monthOffset < 0) {
-                        Icon(Icons.AutoMirrored.Filled.KeyboardArrowRight, contentDescription = "Próximo mês")
-                    }
-                }
+                PeriodSwitcher(
+                    label = state.monthLabel,
+                    onPrevious = vm::previousMonth,
+                    onNext = vm::nextMonth,
+                    canNext = state.monthOffset < 0,
+                )
             }
             item {
-                AppCard(containerColor = MaterialTheme.colorScheme.primaryContainer) {
-                    Column(Modifier.padding(16.dp)) {
-                        FitText(
-                            "${state.total} " + when (tab) {
-                                WarrantyTab.EXTRAS -> "extra(s) no mês"
-                                WarrantyTab.VITOR -> "do Vitor no mês"
-                                WarrantyTab.EXCHANGES -> "trocada(s) no mês"
-                            },
-                            style = MaterialTheme.typography.headlineSmall,
-                            fontWeight = FontWeight.Bold,
-                            color = MaterialTheme.colorScheme.onPrimaryContainer,
-                        )
-                        if (state.byModel.isEmpty()) {
-                            Text(
-                                "Nenhum registro neste mês.",
-                                style = MaterialTheme.typography.bodyMedium,
-                                color = MaterialTheme.colorScheme.onPrimaryContainer,
-                            )
-                        }
-                        state.byModel.forEach { InfoRow(it.model, "${it.count}", bold = true) }
-                        if (tab == WarrantyTab.VITOR && state.total > 0) {
-                            Text(
-                                "Pago ao Vitor no mês: ${Money.format(state.vitorPaid)}",
-                                style = MaterialTheme.typography.titleSmall,
-                                color = MaterialTheme.colorScheme.onPrimaryContainer,
-                                modifier = Modifier.padding(top = 8.dp),
-                            )
-                        }
-                        if (tab == WarrantyTab.EXTRAS) {
-                            Text(
-                                "Extras ainda no estoque (todos os meses): ${state.extrasInStock}",
-                                style = MaterialTheme.typography.bodySmall,
-                                color = MaterialTheme.colorScheme.onPrimaryContainer,
-                                modifier = Modifier.padding(top = 8.dp),
-                            )
-                        }
+                HeroCard(
+                    label = when (tab) {
+                        WarrantyTab.EXTRAS -> "Extras ganhadas no mês"
+                        WarrantyTab.VITOR -> "Do Vitor no mês"
+                        WarrantyTab.EXCHANGES -> "Trocas no mês"
+                    },
+                    value = state.total.toString(),
+                ) {
+                    if (tab == WarrantyTab.VITOR && state.total > 0) {
+                        Row(Modifier.padding(top = 8.dp)) { HeroStat("Pago ao Vitor", Money.format(state.vitorPaid)) }
+                    }
+                    if (tab == WarrantyTab.EXTRAS) {
+                        Row(Modifier.padding(top = 8.dp)) { HeroStat("No estoque (todas)", state.extrasInStock.toString()) }
                     }
                 }
             }
-            if (state.list.isNotEmpty()) item { SectionTitle("Registros do mês") }
-            if (!state.loading && state.list.isEmpty()) {
+            if (state.byModel.isNotEmpty()) {
                 item {
-                    EmptyState(
-                        when (tab) {
-                            WarrantyTab.EXTRAS -> "Toque em \"Registrar extra\" para anotar uma bateria ganhada."
-                            WarrantyTab.VITOR -> "Toque em \"Registrar do Vitor\" para anotar baterias Heliar do Vitor."
-                            WarrantyTab.EXCHANGES -> "Toque em \"Registrar troca\" para anotar uma troca."
-                        }
-                    )
+                    PanelCard { state.byModel.forEach { InfoRow(it.model, "${it.count}", bold = true) } }
                 }
+            }
+            if (!state.loading && state.list.isEmpty()) {
+                item { EmptyState("Nada registrado neste mês.") }
             }
             items(state.groups, key = { it.key }) { g -> WarrantyRow(g, onDelete = { toDelete = g }) }
         }
@@ -211,7 +126,7 @@ fun WarrantiesScreen() {
         ProductPickerDialog(
             title = when (tab) {
                 WarrantyTab.EXTRAS -> "Qual bateria a loja ganhou?"
-                WarrantyTab.VITOR -> "Qual bateria Heliar do Vitor?"
+                WarrantyTab.VITOR -> "Qual Heliar do Vitor?"
                 WarrantyTab.EXCHANGES -> "Qual bateria foi trocada?"
             },
             // Vitor: só Heliar (modelos que começam com H)
@@ -236,7 +151,7 @@ fun WarrantiesScreen() {
                 WarrantyTab.EXCHANGES -> "Excluir troca?"
             },
             text = "${g.count}× ${g.model} de ${Periods.formatDate(g.createdAt)}." +
-                if (g.tab != WarrantyTab.EXCHANGES) " As baterias saem do estoque." else "",
+                if (g.tab != WarrantyTab.EXCHANGES) " Sai do estoque." else "",
             confirmLabel = "Excluir",
             destructive = true,
             onConfirm = { vm.delete(g); toDelete = null },
@@ -247,37 +162,23 @@ fun WarrantiesScreen() {
 
 @Composable
 private fun WarrantyRow(g: WarrantyGroup, onDelete: () -> Unit) {
-    AppCard {
-        Row(Modifier.padding(start = 16.dp, top = 4.dp, bottom = 4.dp), verticalAlignment = Alignment.CenterVertically) {
-            Column(Modifier.weight(1f).padding(vertical = 6.dp)) {
-                Text("${g.count}× ${g.model}", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
-                Text(
-                    Periods.formatDate(g.createdAt),
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-                if (g.tab == WarrantyTab.VITOR) {
-                    Text(
-                        "Pago ao Vitor: ${Money.format(g.paid)}",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.primary,
-                    )
-                }
-                if (g.tab == WarrantyTab.EXTRAS) {
-                    val inStock = g.count - g.soldCount
-                    Text(
-                        listOfNotNull(
-                            g.soldCount.takeIf { it > 0 }?.let { "$it vendida(s) (lucro 100%)" },
-                            inStock.takeIf { it > 0 }?.let { "$it no estoque" },
-                        ).joinToString(" • "),
-                        style = MaterialTheme.typography.bodySmall,
-                        color = if (inStock == 0) profitColor() else MaterialTheme.colorScheme.primary,
-                    )
-                }
-            }
-            IconButton(onClick = onDelete) {
-                Icon(Icons.Filled.Delete, contentDescription = "Excluir", tint = MaterialTheme.colorScheme.onSurfaceVariant)
-            }
+    val detail = when (g.tab) {
+        WarrantyTab.VITOR -> "pago ${Money.format(g.paid)}"
+        WarrantyTab.EXTRAS -> {
+            val inStock = g.count - g.soldCount
+            listOfNotNull(
+                g.soldCount.takeIf { it > 0 }?.let { "$it vendida(s)" },
+                inStock.takeIf { it > 0 }?.let { "$it no estoque" },
+            ).joinToString(" · ")
+        }
+        WarrantyTab.EXCHANGES -> null
+    }
+    ListRow(
+        title = "${g.count}× ${g.model}",
+        subtitle = listOfNotNull(Periods.formatDate(g.createdAt), detail?.takeIf { it.isNotBlank() }).joinToString(" · "),
+    ) {
+        IconButton(onClick = onDelete) {
+            Icon(Icons.Filled.Delete, contentDescription = "Excluir", tint = MaterialTheme.colorScheme.onSurfaceVariant)
         }
     }
 }
@@ -290,27 +191,12 @@ private fun QuantityDialog(product: Product, tab: WarrantyTab, onConfirm: (Int, 
         onDismissRequest = onDismiss,
         title = { Text(product.model) },
         text = {
-            Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                Text(
-                    when (tab) {
-                        WarrantyTab.EXTRAS -> "Quantas a loja ganhou?"
-                        WarrantyTab.VITOR -> "Quantas vieram do Vitor?"
-                        WarrantyTab.EXCHANGES -> "Quantas foram trocadas?"
-                    }
-                )
+            Column(verticalArrangement = Arrangement.spacedBy(12.dp), horizontalAlignment = Alignment.Start) {
                 QuantityStepper(value = quantity, onValueChange = { quantity = it }, min = 1, max = 50)
                 if (tab == WarrantyTab.VITOR) {
-                    MoneyField(value = cost, onValueChange = { cost = it }, label = "Pago ao Vitor por bateria")
+                    MoneyField(value = cost, onValueChange = { cost = it }, label = "Pago por bateria")
+                    Hint("Total ${Money.format(cost * quantity)}")
                 }
-                Text(
-                    when (tab) {
-                        WarrantyTab.EXTRAS -> "Entra no estoque com custo zero."
-                        WarrantyTab.VITOR -> "Entra no estoque com custo de ${Money.format(cost)} cada. Total: ${Money.format(cost * quantity)}."
-                        WarrantyTab.EXCHANGES -> "O estoque não muda."
-                    },
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
             }
         },
         confirmButton = { TextButton(onClick = { onConfirm(quantity, cost) }) { Text("Registrar") } },

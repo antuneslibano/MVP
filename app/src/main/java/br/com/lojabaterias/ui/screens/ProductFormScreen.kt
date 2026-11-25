@@ -11,12 +11,11 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -31,9 +30,11 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import br.com.lojabaterias.domain.Money
 import br.com.lojabaterias.ui.components.ConfirmDialog
+import br.com.lojabaterias.ui.components.EqualRow
+import br.com.lojabaterias.ui.components.Gaps
 import br.com.lojabaterias.ui.components.IntField
 import br.com.lojabaterias.ui.components.MoneyField
-import br.com.lojabaterias.ui.components.SectionTitle
+import br.com.lojabaterias.ui.components.SectionHeader
 import br.com.lojabaterias.ui.components.ToastEffect
 import br.com.lojabaterias.ui.theme.dangerColor
 import br.com.lojabaterias.ui.viewmodel.ProductFormViewModel
@@ -53,8 +54,13 @@ fun ProductFormScreen(productId: Long?, onDone: () -> Unit, onDeleted: () -> Uni
     }
 
     SubScreen(
-        title = if (productId == null) "Cadastrar bateria" else "Editar bateria",
+        title = if (productId == null) "Nova bateria" else "Editar bateria",
         onBack = onBack,
+        actions = {
+            if (s.isEdit) {
+                TextButton(onClick = { confirmDelete = true }) { Text("Excluir", color = dangerColor()) }
+            }
+        },
         bottomBar = {
             if (!s.loading) {
                 BottomActionBar {
@@ -76,76 +82,71 @@ fun ProductFormScreen(productId: Long?, onDone: () -> Unit, onDeleted: () -> Uni
                 .fillMaxSize()
                 .padding(inner)
                 .verticalScroll(rememberScrollState())
-                .padding(horizontal = 16.dp),
+                .padding(horizontal = Gaps.screen),
             verticalArrangement = Arrangement.spacedBy(8.dp),
         ) {
-            OutlinedTextField(
-                value = s.model,
-                onValueChange = vm::setModel,
-                label = { Text("Modelo (ex.: M60GD)") },
-                singleLine = true,
-                keyboardOptions = KeyboardOptions(
-                    capitalization = KeyboardCapitalization.Characters,
-                    imeAction = ImeAction.Next,
-                ),
-                modifier = Modifier.fillMaxWidth(),
-            )
+            EqualRow {
+                OutlinedTextField(
+                    value = s.model,
+                    onValueChange = vm::setModel,
+                    label = { Text("Modelo") },
+                    placeholder = { Text("M60GD") },
+                    singleLine = true,
+                    shape = MaterialTheme.shapes.medium,
+                    keyboardOptions = KeyboardOptions(
+                        capitalization = KeyboardCapitalization.Characters,
+                        imeAction = ImeAction.Next,
+                    ),
+                    modifier = Modifier.weight(1.6f),
+                )
+                IntField(
+                    value = s.amperage,
+                    onValueChange = vm::setAmperage,
+                    label = "Ah",
+                    modifier = Modifier.weight(1f),
+                )
+            }
 
-            IntField(
-                value = s.amperage,
-                onValueChange = vm::setAmperage,
-                label = "Amperagem (Ah)",
-                supportingText = "Usada para sugerir a sucata e o valor cobrado quando o cliente não deixa sucata",
-            )
-
-            SectionTitle("Custo e preços")
+            SectionHeader("Preços")
             MoneyField(value = s.cost, onValueChange = { v -> vm.update { it.copy(cost = v) } }, label = "Custo de compra")
             MoneyField(
                 value = s.pricePix,
                 onValueChange = { v -> vm.update { it.copy(pricePix = v) } },
-                label = "Preço PIX (também usado no dinheiro)",
-                supportingText = if (s.pricePix > 0) "Lucro no PIX: ${Money.format(s.pricePix - s.cost)}" else null,
+                label = "PIX / dinheiro",
+                supportingText = if (s.pricePix > 0 && s.cost > 0) "Lucro ${Money.format(s.pricePix - s.cost)}" else null,
             )
-            MoneyField(
-                value = s.priceDebit,
-                onValueChange = { v -> vm.update { it.copy(priceDebit = v) } },
-                label = "Preço débito",
-            )
-            MoneyField(
-                value = s.priceCredit,
-                onValueChange = { v -> vm.update { it.copy(priceCredit = v) } },
-                label = "Preço crédito",
-            )
-
-            SectionTitle("Estoque")
-            if (!s.isEdit) {
-                IntField(
-                    value = s.stock,
-                    onValueChange = { v -> vm.update { it.copy(stock = v) } },
-                    label = "Quantidade inicial em estoque",
+            EqualRow {
+                MoneyField(
+                    value = s.priceDebit,
+                    onValueChange = { v -> vm.update { it.copy(priceDebit = v) } },
+                    label = "Débito",
+                    modifier = Modifier.weight(1f),
                 )
-            } else {
-                Text(
-                    "Estoque atual: ${s.stock}. Para alterar, use \"Entrada\" ou \"Ajustar estoque\" na tela da bateria.",
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                MoneyField(
+                    value = s.priceCredit,
+                    onValueChange = { v -> vm.update { it.copy(priceCredit = v) } },
+                    label = "Crédito",
+                    modifier = Modifier.weight(1f),
                 )
             }
-            IntField(
-                value = s.minStock,
-                onValueChange = { v -> vm.update { it.copy(minStock = v) } },
-                label = "Alerta de estoque baixo (até)",
-                imeAction = ImeAction.Done,
-                supportingText = "Destaca o modelo quando o estoque chegar a essa quantidade",
-            )
 
-            if (s.isEdit) {
-                Spacer(Modifier.height(16.dp))
-                OutlinedButton(
-                    onClick = { confirmDelete = true },
-                    colors = ButtonDefaults.outlinedButtonColors(contentColor = dangerColor()),
-                    modifier = Modifier.fillMaxWidth(),
-                ) { Text("Excluir bateria") }
+            SectionHeader("Estoque")
+            EqualRow {
+                if (!s.isEdit) {
+                    IntField(
+                        value = s.stock,
+                        onValueChange = { v -> vm.update { it.copy(stock = v) } },
+                        label = "Quantidade inicial",
+                        modifier = Modifier.weight(1f),
+                    )
+                }
+                IntField(
+                    value = s.minStock,
+                    onValueChange = { v -> vm.update { it.copy(minStock = v) } },
+                    label = "Alerta de baixo",
+                    imeAction = ImeAction.Done,
+                    modifier = Modifier.weight(1f),
+                )
             }
             Spacer(Modifier.height(24.dp))
         }
@@ -154,7 +155,7 @@ fun ProductFormScreen(productId: Long?, onDone: () -> Unit, onDeleted: () -> Uni
     if (confirmDelete) {
         ConfirmDialog(
             title = "Excluir ${s.model}?",
-            text = "A bateria e seu histórico de movimentações serão removidos. As vendas já registradas continuam nos relatórios.",
+            text = "As vendas já registradas continuam nos relatórios.",
             confirmLabel = "Excluir",
             destructive = true,
             onConfirm = {

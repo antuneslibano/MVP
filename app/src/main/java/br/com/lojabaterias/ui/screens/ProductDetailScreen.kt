@@ -3,27 +3,20 @@ package br.com.lojabaterias.ui.screens
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.items
-import androidx.compose.foundation.text.KeyboardOptions
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Delete
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.FilledTonalButton
-import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -34,27 +27,24 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.input.KeyboardCapitalization
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
-import br.com.lojabaterias.data.MovementType
-import br.com.lojabaterias.data.MovementWithModel
 import br.com.lojabaterias.data.Product
 import br.com.lojabaterias.domain.CostLayer
 import br.com.lojabaterias.domain.Money
-import br.com.lojabaterias.domain.Periods
-import br.com.lojabaterias.ui.components.AppCard
-import br.com.lojabaterias.ui.components.ConfirmDialog
 import br.com.lojabaterias.ui.components.EmptyState
+import br.com.lojabaterias.ui.components.EqualRow
+import br.com.lojabaterias.ui.components.Gaps
 import br.com.lojabaterias.ui.components.InfoRow
 import br.com.lojabaterias.ui.components.IntField
 import br.com.lojabaterias.ui.components.MoneyField
-import br.com.lojabaterias.ui.components.SectionTitle
+import br.com.lojabaterias.ui.components.PanelCard
+import br.com.lojabaterias.ui.components.SectionHeader
+import br.com.lojabaterias.ui.components.StatTile
 import br.com.lojabaterias.ui.components.StockBadge
+import br.com.lojabaterias.ui.components.TextInput
 import br.com.lojabaterias.ui.components.ToastEffect
-import br.com.lojabaterias.ui.theme.dangerColor
-import br.com.lojabaterias.ui.theme.profitColor
+import br.com.lojabaterias.ui.theme.moneyResultColor
 import br.com.lojabaterias.ui.viewmodel.ProductDetailViewModel
 import br.com.lojabaterias.ui.viewmodel.appViewModel
 
@@ -62,18 +52,24 @@ import br.com.lojabaterias.ui.viewmodel.appViewModel
 fun ProductDetailScreen(productId: Long, onEdit: () -> Unit, onSell: () -> Unit, onBack: () -> Unit) {
     val vm = appViewModel(key = "product-$productId") { ProductDetailViewModel(it.repository, productId) }
     val loaded by vm.product.collectAsStateWithLifecycle()
-    val movements by vm.movements.collectAsStateWithLifecycle()
     val layers by vm.layers.collectAsStateWithLifecycle()
     ToastEffect(vm.messages)
 
     var showEntry by remember { mutableStateOf(false) }
     var showAdjust by remember { mutableStateOf(false) }
-    var toDelete by remember { mutableStateOf<MovementWithModel?>(null) }
 
     SubScreen(
-        title = "Bateria",
+        title = loaded?.value?.model ?: "Bateria",
         onBack = onBack,
         actions = { TextButton(onClick = onEdit) { Text("Editar") } },
+        bottomBar = {
+            val product = loaded?.value
+            if (product != null) {
+                BottomActionBar {
+                    PrimaryActionButton(text = "Vender", onClick = onSell, enabled = !product.isOutOfStock)
+                }
+            }
+        },
     ) { inner ->
         val data = loaded
         val product = data?.value
@@ -82,55 +78,31 @@ fun ProductDetailScreen(productId: Long, onEdit: () -> Unit, onSell: () -> Unit,
                 CircularProgressIndicator()
             }
             product == null -> Box(Modifier.padding(inner)) { EmptyState("Bateria não encontrada.") }
-            else -> LazyColumn(
-                modifier = Modifier
+            else -> Column(
+                Modifier
                     .fillMaxSize()
-                    .padding(inner),
-                contentPadding = PaddingValues(start = 16.dp, end = 16.dp, bottom = 32.dp),
-                verticalArrangement = Arrangement.spacedBy(8.dp),
+                    .padding(inner)
+                    .verticalScroll(rememberScrollState())
+                    .padding(horizontal = Gaps.screen),
+                verticalArrangement = Arrangement.spacedBy(Gaps.item),
             ) {
-                item { ProductHeader(product, layers) }
-                item {
-                    PrimaryActionButton(
-                        text = "Vender esta bateria",
-                        onClick = onSell,
-                        enabled = !product.isOutOfStock,
-                        modifier = Modifier.padding(top = 8.dp),
-                    )
+                StockCard(product)
+                EqualRow {
+                    FilledTonalButton(
+                        onClick = { showEntry = true },
+                        shape = MaterialTheme.shapes.medium,
+                        modifier = Modifier.weight(1f).heightIn(min = 48.dp),
+                    ) { Text("+ Entrada") }
+                    FilledTonalButton(
+                        onClick = { showAdjust = true },
+                        shape = MaterialTheme.shapes.medium,
+                        modifier = Modifier.weight(1f).heightIn(min = 48.dp),
+                    ) { Text("Ajustar") }
                 }
-                item {
-                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                        FilledTonalButton(
-                            onClick = { showEntry = true },
-                            modifier = Modifier
-                                .weight(1f)
-                                .heightIn(min = 52.dp),
-                        ) { Text("+ Entrada") }
-                        FilledTonalButton(
-                            onClick = { showAdjust = true },
-                            modifier = Modifier
-                                .weight(1f)
-                                .heightIn(min = 52.dp),
-                        ) { Text("Ajustar estoque") }
-                    }
-                }
-                item { SectionTitle("Histórico de movimentações") }
-                if (movements.isEmpty()) {
-                    item { EmptyState("Sem movimentações.") }
-                }
-                items(movements, key = { it.movement.id }) { m ->
-                    MovementRow(
-                        m,
-                        showModel = false,
-                        onDelete = if (MovementType.isDeletable(m.movement.type)) ({ toDelete = m }) else null,
-                    )
-                }
+                PricesSection(product, layers)
+                Spacer(Modifier.height(16.dp))
             }
         }
-    }
-
-    toDelete?.let { m ->
-        DeleteMovementDialog(m, onConfirm = { vm.deleteMovement(m.movement.id) { toDelete = null } }, onDismiss = { toDelete = null })
     }
 
     val product = loaded?.value
@@ -151,114 +123,45 @@ fun ProductDetailScreen(productId: Long, onEdit: () -> Unit, onSell: () -> Unit,
 }
 
 @Composable
-private fun ProductHeader(product: Product, layers: List<CostLayer>) {
-    AppCard {
-        Column(Modifier.padding(16.dp)) {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Column(Modifier.weight(1f)) {
-                    Text(product.model, style = MaterialTheme.typography.headlineMedium)
-                    Text(
-                        (if (product.amperage > 0) "${product.amperage}Ah • " else "") +
-                            "Estoque mínimo: ${product.minStock}",
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
-                }
-                Spacer(Modifier.width(8.dp))
-                StockBadge(product, large = true)
-            }
-            Spacer(Modifier.height(12.dp))
-            // Custo pelos lotes: a próxima bateria a sair é a do lote mais antigo
-            val nextCost = layers.firstOrNull()?.unitCost ?: product.cost
-            InfoRow(if (layers.size > 1) "Custo (próxima a sair)" else "Custo", Money.format(nextCost))
-            if (layers.size > 1) {
+private fun StockCard(product: Product) {
+    PanelCard {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Column(Modifier.weight(1f)) {
+                Text(product.model, style = MaterialTheme.typography.headlineSmall)
                 Text(
-                    "Lotes no estoque (os de cima saem primeiro):",
+                    listOfNotNull(
+                        product.amperage.takeIf { it > 0 }?.let { "${it}Ah" },
+                        "alerta em ${product.minStock}",
+                    ).joinToString(" · "),
                     style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    modifier = Modifier.padding(top = 4.dp),
                 )
-                layers.forEach { l -> InfoRow("${l.quantity} × ${Money.format(l.unitCost)}", Money.format(l.total)) }
             }
-            InfoRow("Preço PIX / Dinheiro", Money.format(product.pricePix))
-            InfoRow("Preço débito", Money.format(product.priceDebit))
-            InfoRow("Preço crédito", Money.format(product.priceCredit))
-            InfoRow(
-                "Lucro no PIX",
-                Money.format(product.pricePix - nextCost),
-                valueColor = if (product.pricePix >= nextCost) profitColor() else dangerColor(),
-            )
+            Spacer(Modifier.width(8.dp))
+            StockBadge(product, large = true)
         }
     }
 }
 
 @Composable
-fun DeleteMovementDialog(item: MovementWithModel, onConfirm: () -> Unit, onDismiss: () -> Unit) {
-    val m = item.movement
-    ConfirmDialog(
-        title = "Excluir registro?",
-        text = "${MovementType.label(m.type)} de ${if (m.quantity > 0) "+" else ""}${m.quantity} " +
-            "(${item.model ?: "bateria excluída"}) em ${Periods.formatDateTime(m.dateTime)}. " +
-            "O estoque será corrigido desfazendo esta movimentação.",
-        confirmLabel = "Excluir",
-        destructive = true,
-        onConfirm = onConfirm,
-        onDismiss = onDismiss,
-    )
-}
-
-@Composable
-fun MovementRow(item: MovementWithModel, showModel: Boolean, onDelete: (() -> Unit)? = null) {
-    val m = item.movement
-    AppCard {
-        Row(Modifier.padding(horizontal = 16.dp, vertical = 10.dp), verticalAlignment = Alignment.CenterVertically) {
-            Column(Modifier.weight(1f)) {
-                Text(
-                    if (showModel) "${item.model ?: "(excluído)"} • ${MovementType.label(m.type)}"
-                    else MovementType.label(m.type),
-                    style = MaterialTheme.typography.titleSmall,
-                )
-                Text(
-                    Periods.formatDateTime(m.dateTime) + (m.saleId?.let { " • Venda #$it" } ?: ""),
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-                m.note?.let {
-                    Text(it, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                }
-            }
-            Column(horizontalAlignment = Alignment.End) {
-                Text(
-                    (if (m.quantity > 0) "+" else "") + m.quantity,
-                    style = MaterialTheme.typography.titleMedium,
-                    fontWeight = FontWeight.Bold,
-                    color = if (m.quantity >= 0) profitColor() else dangerColor(),
-                )
-                Text(
-                    "saldo ${m.stockAfter}",
-                    style = MaterialTheme.typography.labelSmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-            }
-            if (onDelete != null) {
-                IconButton(onClick = onDelete) {
-                    Icon(Icons.Filled.Delete, contentDescription = "Excluir", tint = MaterialTheme.colorScheme.onSurfaceVariant)
-                }
-            }
+private fun PricesSection(product: Product, layers: List<CostLayer>) {
+    SectionHeader("Preços")
+    EqualRow {
+        StatTile("PIX / dinheiro", Money.format(product.pricePix), Modifier.weight(1f))
+        StatTile("Débito", Money.format(product.priceDebit), Modifier.weight(1f))
+        StatTile("Crédito", Money.format(product.priceCredit), Modifier.weight(1f))
+    }
+    // Custo pelos lotes: a próxima bateria a sair é a do lote mais antigo
+    val nextCost = layers.firstOrNull()?.unitCost ?: product.cost
+    PanelCard {
+        InfoRow(if (layers.size > 1) "Custo (próxima a sair)" else "Custo", Money.format(nextCost))
+        InfoRow("Lucro no PIX", Money.format(product.pricePix - nextCost), valueColor = moneyResultColor(product.pricePix - nextCost))
+        if (layers.size > 1) {
+            HorizontalDivider(Modifier.padding(vertical = 6.dp), color = MaterialTheme.colorScheme.outlineVariant)
+            Text("Lotes (saem de cima para baixo)", style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            layers.forEach { l -> InfoRow("${l.quantity} × ${Money.format(l.unitCost)}", Money.format(l.total)) }
         }
     }
-}
-
-@Composable
-private fun NoteField(value: String, onValueChange: (String) -> Unit) {
-    OutlinedTextField(
-        value = value,
-        onValueChange = { onValueChange(it.take(120)) },
-        label = { Text("Observação (opcional)") },
-        singleLine = true,
-        keyboardOptions = KeyboardOptions(capitalization = KeyboardCapitalization.Sentences),
-        modifier = Modifier.fillMaxWidth(),
-    )
 }
 
 @Composable
@@ -268,25 +171,19 @@ private fun EntryDialog(product: Product, onConfirm: (Int, Long?, String) -> Uni
     var note by remember { mutableStateOf("") }
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text("Entrada de estoque — ${product.model}") },
+        title = { Text("Entrada · ${product.model}") },
         text = {
             Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                Text("Estoque atual: ${product.stock}")
-                IntField(value = qty, onValueChange = { qty = it }, label = "Quantidade recebida")
-                MoneyField(
-                    value = cost,
-                    onValueChange = { cost = it },
-                    label = "Custo unitário",
-                    supportingText = "Altere se o custo de compra mudou",
-                )
-                NoteField(note) { note = it }
+                IntField(value = qty, onValueChange = { qty = it }, label = "Quantidade", supportingText = "Em estoque: ${product.stock}")
+                MoneyField(value = cost, onValueChange = { cost = it }, label = "Custo unitário")
+                TextInput(note, { note = it }, "Observação (opcional)")
             }
         },
         confirmButton = {
             TextButton(onClick = {
                 val q = qty.toIntOrNull() ?: 0
                 onConfirm(q, if (cost != product.cost && cost > 0) cost else null, note)
-            }) { Text("Registrar entrada") }
+            }) { Text("Registrar") }
         },
         dismissButton = { TextButton(onClick = onDismiss) { Text("Cancelar") } },
     )
@@ -298,19 +195,18 @@ private fun AdjustDialog(product: Product, onConfirm: (Int, String) -> Unit, onD
     var note by remember { mutableStateOf("") }
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text("Ajuste de estoque — ${product.model}") },
+        title = { Text("Ajustar · ${product.model}") },
         text = {
             Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                Text("Informe a quantidade real contada na loja. Estoque atual no sistema: ${product.stock}.")
-                IntField(value = stock, onValueChange = { stock = it }, label = "Quantidade real")
-                NoteField(note) { note = it }
+                IntField(value = stock, onValueChange = { stock = it }, label = "Quantidade contada", supportingText = "No sistema: ${product.stock}")
+                TextInput(note, { note = it }, "Observação (opcional)")
             }
         },
         confirmButton = {
             TextButton(onClick = {
                 val s = stock.toIntOrNull()
                 if (s != null) onConfirm(s, note)
-            }) { Text("Salvar ajuste") }
+            }) { Text("Salvar") }
         },
         dismissButton = { TextButton(onClick = onDismiss) { Text("Cancelar") } },
     )

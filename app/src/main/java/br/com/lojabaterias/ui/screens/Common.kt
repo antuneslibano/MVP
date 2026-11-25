@@ -1,5 +1,6 @@
 package br.com.lojabaterias.ui.screens
 
+import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.RowScope
@@ -13,8 +14,11 @@ import androidx.compose.foundation.layout.union
 import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.filled.Add
 import androidx.compose.material3.Button
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.ExtendedFloatingActionButton
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -26,9 +30,10 @@ import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 
-/** Scaffold padrão das telas secundárias (com botão voltar). */
+/** Scaffold das telas secundárias (com botão voltar). */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun SubScreen(
@@ -41,7 +46,7 @@ fun SubScreen(
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text(title) },
+                title = { Text(title, maxLines = 1, overflow = TextOverflow.Ellipsis) },
                 navigationIcon = {
                     IconButton(onClick = onBack) {
                         Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Voltar")
@@ -57,17 +62,53 @@ fun SubScreen(
     )
 }
 
-/** Barra inferior com botão de ação principal que acompanha o teclado. */
+/**
+ * Tela principal (aberta pela barra de baixo). O cabeçalho é opcional: nas áreas com abas,
+ * o título e as abas já ficam no topo.
+ */
+@Composable
+fun MainPage(
+    header: (@Composable () -> Unit)? = null,
+    fabLabel: String? = null,
+    onFab: () -> Unit = {},
+    content: @Composable (PaddingValues) -> Unit,
+) {
+    Scaffold(
+        topBar = { header?.invoke() },
+        floatingActionButton = {
+            if (fabLabel != null) {
+                ExtendedFloatingActionButton(
+                    onClick = onFab,
+                    icon = { Icon(Icons.Filled.Add, contentDescription = null) },
+                    text = { Text(fabLabel) },
+                    containerColor = MaterialTheme.colorScheme.primary,
+                    contentColor = MaterialTheme.colorScheme.onPrimary,
+                )
+            }
+        },
+        containerColor = MaterialTheme.colorScheme.background,
+        contentWindowInsets = WindowInsets(0, 0, 0, 0),
+        content = content,
+    )
+}
+
+/** Espaço no fim das listas para o botão flutuante não cobrir o último item. */
+val FabSpace = 96.dp
+
+/** Barra inferior com o botão principal, que acompanha o teclado. */
 @Composable
 fun BottomActionBar(content: @Composable ColumnScope.() -> Unit) {
-    Surface(tonalElevation = 3.dp, shadowElevation = 8.dp) {
-        androidx.compose.foundation.layout.Column(
-            modifier = Modifier
-                .fillMaxWidth()
-                .windowInsetsPadding(WindowInsets.navigationBars.union(WindowInsets.ime))
-                .padding(horizontal = 16.dp, vertical = 12.dp),
-            content = content,
-        )
+    Surface(color = MaterialTheme.colorScheme.surface) {
+        Column {
+            HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .windowInsetsPadding(WindowInsets.navigationBars.union(WindowInsets.ime))
+                    .padding(horizontal = 16.dp, vertical = 12.dp),
+                content = content,
+            )
+        }
     }
 }
 
@@ -76,9 +117,10 @@ fun PrimaryActionButton(text: String, onClick: () -> Unit, enabled: Boolean = tr
     Button(
         onClick = onClick,
         enabled = enabled,
+        shape = MaterialTheme.shapes.medium,
         modifier = modifier
             .fillMaxWidth()
-            .heightIn(min = 56.dp),
+            .heightIn(min = 54.dp),
     ) {
         Text(text, style = MaterialTheme.typography.titleMedium, textAlign = TextAlign.Center)
     }

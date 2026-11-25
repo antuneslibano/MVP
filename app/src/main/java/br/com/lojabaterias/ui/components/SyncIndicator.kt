@@ -36,7 +36,7 @@ fun syncLabel(s: SyncStatus): String {
         SyncState.OK -> "Sincronizado" + (s.lastSuccessAt?.let { " às ${Periods.formatTime(it)}" } ?: "") + pending
         SyncState.OFFLINE -> "Sem internet$pending"
         SyncState.ERROR -> "Erro na sincronização$pending"
-        SyncState.CONFLICT -> "Conflito de dados — veja em Backup e sincronização"
+        SyncState.CONFLICT -> "Conflito de dados — veja em Ajustes"
     }
 }
 

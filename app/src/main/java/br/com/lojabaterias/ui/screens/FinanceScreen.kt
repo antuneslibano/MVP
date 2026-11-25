@@ -1,84 +1,85 @@
 package br.com.lojabaterias.ui.screens
 
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.FlowRow
+import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material.icons.filled.Info
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.FilterChip
-import androidx.compose.material3.OutlinedButton
-import androidx.compose.material3.OutlinedTextField
-import androidx.compose.material3.TextButton
-import androidx.compose.runtime.mutableLongStateOf
-import androidx.compose.ui.text.input.KeyboardCapitalization
-import br.com.lojabaterias.data.CashPosition
-import br.com.lojabaterias.data.Expense
-import br.com.lojabaterias.domain.Periods
-import br.com.lojabaterias.ui.components.ConfirmDialog
-import br.com.lojabaterias.ui.components.DateButton
-import br.com.lojabaterias.ui.components.MoneyField
-import br.com.lojabaterias.ui.components.ToastEffect
-import java.time.LocalDate
-import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.PaddingValues
-import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.WindowInsets
-import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.KeyboardArrowLeft
-import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
-import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Scaffold
-import androidx.compose.material3.SegmentedButton
-import androidx.compose.material3.SegmentedButtonDefaults
-import androidx.compose.material3.SingleChoiceSegmentedButtonRow
+import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
-import androidx.compose.material3.TopAppBar
-import androidx.compose.material3.TopAppBarDefaults
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
-import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.verticalScroll
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.input.KeyboardCapitalization
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import br.com.lojabaterias.data.CashPosition
+import br.com.lojabaterias.data.Expense
 import br.com.lojabaterias.data.FinancePeriod
 import br.com.lojabaterias.data.FinanceReport
 import br.com.lojabaterias.data.FinanceSummary
 import br.com.lojabaterias.domain.Money
-import br.com.lojabaterias.ui.components.AppCard
+import br.com.lojabaterias.domain.Periods
 import br.com.lojabaterias.ui.components.BarGroup
 import br.com.lojabaterias.ui.components.ChartColors
-import br.com.lojabaterias.ui.components.FitText
+import br.com.lojabaterias.ui.components.ConfirmDialog
+import br.com.lojabaterias.ui.components.DateButton
+import br.com.lojabaterias.ui.components.EqualRow
+import br.com.lojabaterias.ui.components.Gaps
 import br.com.lojabaterias.ui.components.HBarList
 import br.com.lojabaterias.ui.components.HBarRow
+import br.com.lojabaterias.ui.components.HeroCard
+import br.com.lojabaterias.ui.components.HeroStat
+import br.com.lojabaterias.ui.components.Hint
 import br.com.lojabaterias.ui.components.InfoRow
 import br.com.lojabaterias.ui.components.LegendDot
+import br.com.lojabaterias.ui.components.MoneyField
 import br.com.lojabaterias.ui.components.PairedBarChart
-import br.com.lojabaterias.ui.components.SectionTitle
+import br.com.lojabaterias.ui.components.PanelCard
+import br.com.lojabaterias.ui.components.PeriodSwitcher
+import br.com.lojabaterias.ui.components.SectionHeader
+import br.com.lojabaterias.ui.components.Segmented
 import br.com.lojabaterias.ui.components.StackedShareBar
+import br.com.lojabaterias.ui.components.StatTile
+import br.com.lojabaterias.ui.components.ToastEffect
 import br.com.lojabaterias.ui.theme.dangerColor
 import br.com.lojabaterias.ui.theme.moneyResultColor
 import br.com.lojabaterias.ui.viewmodel.FinanceViewModel
 import br.com.lojabaterias.ui.viewmodel.appViewModel
+import java.time.LocalDate
 
-@OptIn(ExperimentalMaterial3Api::class)
+/** As três partes do Financeiro. */
+private enum class FinanceSection(val label: String) { PROFIT("Lucro"), CASH("Caixa"), EXTRAS("Extras") }
+
 @Composable
 fun FinanceScreen() {
     val vm = appViewModel { FinanceViewModel(it) }
@@ -92,90 +93,62 @@ fun FinanceScreen() {
     var showHelp by remember { mutableStateOf(false) }
     val c = f.current
 
-    Scaffold(
-        topBar = {
-            TopAppBar(
-                title = { Text("Financeiro") },
-                actions = {
-                    TextButton(onClick = { showHelp = true }) { Text("? Entenda") }
-                },
-                colors = TopAppBarDefaults.topAppBarColors(containerColor = MaterialTheme.colorScheme.background),
-            )
-        },
-        containerColor = MaterialTheme.colorScheme.background,
-        contentWindowInsets = WindowInsets(0, 0, 0, 0),
-    ) { inner ->
+    MainPage { inner ->
         LazyColumn(
             modifier = Modifier
                 .fillMaxSize()
                 .padding(inner),
-            contentPadding = PaddingValues(start = 16.dp, end = 16.dp, bottom = 32.dp),
+            contentPadding = PaddingValues(start = Gaps.screen, end = Gaps.screen, top = 12.dp, bottom = 32.dp),
             verticalArrangement = Arrangement.spacedBy(8.dp),
         ) {
             item {
-                SingleChoiceSegmentedButtonRow(Modifier.fillMaxWidth()) {
-                    FinancePeriod.entries.forEachIndexed { index, p ->
-                        SegmentedButton(
-                            selected = state.selection.period == p,
-                            onClick = { vm.setPeriod(p) },
-                            shape = SegmentedButtonDefaults.itemShape(index, FinancePeriod.entries.size),
-                            icon = {},
-                        ) { FitText(p.label, style = MaterialTheme.typography.labelLarge) }
-                    }
-                }
+                Segmented(
+                    options = FinancePeriod.entries.map { it.label },
+                    selected = state.selection.period.ordinal,
+                    onSelect = { vm.setPeriod(FinancePeriod.entries[it]) },
+                )
             }
             item {
-                Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-                    val canMove = state.selection.period != FinancePeriod.ALL
-                    IconButton(onClick = vm::previous, enabled = canMove) {
-                        if (canMove) Icon(Icons.AutoMirrored.Filled.KeyboardArrowLeft, contentDescription = "Período anterior")
-                    }
-                    Text(f.label, style = MaterialTheme.typography.titleMedium, textAlign = TextAlign.Center, modifier = Modifier.weight(1f))
-                    IconButton(onClick = vm::next, enabled = canMove && state.selection.offset < 0) {
-                        if (canMove) Icon(Icons.AutoMirrored.Filled.KeyboardArrowRight, contentDescription = "Próximo período")
-                    }
-                }
-            }
-
-            item {
-                SingleChoiceSegmentedButtonRow(Modifier.fillMaxWidth().padding(top = 4.dp)) {
-                    FinanceSection.entries.forEachIndexed { index, sec ->
-                        SegmentedButton(
-                            selected = section == sec,
-                            onClick = { section = sec },
-                            shape = SegmentedButtonDefaults.itemShape(index, FinanceSection.entries.size),
-                            icon = {},
-                        ) { FitText(sec.label, style = MaterialTheme.typography.labelLarge) }
-                    }
-                }
+                val canMove = state.selection.period != FinancePeriod.ALL
+                PeriodSwitcher(
+                    label = f.label,
+                    onPrevious = vm::previous,
+                    onNext = vm::next,
+                    canPrevious = canMove,
+                    canNext = canMove && state.selection.offset < 0,
+                    trailing = {
+                        IconButton(onClick = { showHelp = true }) {
+                            Icon(Icons.Filled.Info, contentDescription = "Entenda os termos", tint = MaterialTheme.colorScheme.onSurfaceVariant)
+                        }
+                    },
+                )
             }
             item {
-                Text(
-                    section.hint,
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    modifier = Modifier.padding(horizontal = 4.dp),
+                Segmented(
+                    options = FinanceSection.entries.map { it.label },
+                    selected = section.ordinal,
+                    onSelect = { section = FinanceSection.entries[it] },
                 )
             }
             when (section) {
                 FinanceSection.PROFIT -> {
-                    item { HeroCard(f) }
-                    item { WhereMoneyWentCard(c) }
+                    item { ProfitHero(f) }
                     item {
-                        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                            Metric("Vendas", c.salesCount.toString(), Modifier.weight(1f))
-                            Metric("Baterias", c.units.toString(), Modifier.weight(1f))
-                            Metric("Ticket médio", Money.format(c.averageTicket), Modifier.weight(1.4f))
+                        EqualRow {
+                            StatTile("Vendas", c.salesCount.toString(), Modifier.weight(1f))
+                            StatTile("Baterias", c.units.toString(), Modifier.weight(1f))
+                            StatTile("Ticket médio", Money.format(c.averageTicket), Modifier.weight(1.3f))
                         }
                     }
+                    item { WhereMoneyWentCard(c) }
 
-                    item { SectionTitle(evolutionTitle(f.period)) }
+                    item { SectionHeader(evolutionTitle(f.period)) }
                     item { EvolutionCard(f) }
 
-                    item { SectionTitle("A conta completa") }
+                    item { SectionHeader("Conta completa") }
                     item { StatementCard(c) }
 
-                    item { SectionTitle("Como os clientes pagaram") }
+                    item { SectionHeader("Formas de pagamento") }
                     item {
                         ChartCard {
                             if (c.byPayment.isEmpty()) Empty("Sem vendas no período.")
@@ -186,7 +159,7 @@ fun FinanceScreen() {
                                         value = it.revenue,
                                         valueText = Money.format(it.revenue),
                                         detail = "${it.salesCount} ${if (it.salesCount == 1) "venda" else "vendas"}" +
-                                        if (c.revenue > 0) " • ${it.revenue * 100 / c.revenue}% do que entrou" else "",
+                                            if (c.revenue > 0) " · ${it.revenue * 100 / c.revenue}%" else "",
                                     )
                                 },
                                 color = ChartColors.slot(0),
@@ -194,25 +167,26 @@ fun FinanceScreen() {
                         }
                     }
 
-                    item { SectionTitle("Despesas por categoria") }
-                    item {
-                        ChartCard {
-                            if (c.expensesByCategory.isEmpty()) Empty("Nenhuma despesa paga no período.")
-                            HBarList(
-                                rows = c.expensesByCategory.map { (cat, total) ->
-                                    HBarRow(
-                                        label = cat,
-                                        value = total,
-                                        valueText = Money.format(total),
-                                        detail = if (c.expenses > 0) "${total * 100 / c.expenses}% das despesas" else null,
-                                    )
-                                },
-                                color = ChartColors.slot(1),
-                            )
+                    if (c.expensesByCategory.isNotEmpty()) {
+                        item { SectionHeader("Despesas por categoria") }
+                        item {
+                            ChartCard {
+                                HBarList(
+                                    rows = c.expensesByCategory.map { (cat, total) ->
+                                        HBarRow(
+                                            label = cat,
+                                            value = total,
+                                            valueText = Money.format(total),
+                                            detail = if (c.expenses > 0) "${total * 100 / c.expenses}%" else null,
+                                        )
+                                    },
+                                    color = ChartColors.slot(1),
+                                )
+                            }
                         }
                     }
 
-                    item { SectionTitle("Modelos que mais deram lucro") }
+                    item { SectionHeader("Modelos que mais lucraram") }
                     item {
                         ChartCard {
                             if (c.topModels.isEmpty()) Empty("Sem vendas no período.")
@@ -222,7 +196,7 @@ fun FinanceScreen() {
                                         label = it.model,
                                         value = it.profit,
                                         valueText = Money.format(it.profit),
-                                        detail = "${it.quantity} vendida${if (it.quantity == 1) "" else "s"} • faturou ${Money.format(it.revenue)}",
+                                        detail = "${it.quantity} vendida${if (it.quantity == 1) "" else "s"} · ${Money.format(it.revenue)}",
                                     )
                                 },
                                 color = ChartColors.slot(2),
@@ -231,27 +205,21 @@ fun FinanceScreen() {
                     }
                 }
                 FinanceSection.CASH -> {
-                    item { SectionTitle("Caixa agora (gaveta + banco)") }
                     item { CashNowCard(f.cash, onSetOpening = { askOpening = true }) }
-                    item { SectionTitle("Entrou e saiu no período") }
-                    item { CashFlowCard(c, f.period) }
+                    item { SectionHeader("Entrou e saiu") }
+                    item { CashFlowCard(c) }
 
-                    item { SectionTitle("Retiradas dos sócios") }
+                    item { SectionHeader("Retiradas dos sócios") }
                     item { WithdrawalsCard(c, onAdd = { askWithdrawal = true }, onDelete = { deleting = it }) }
 
-                    item { SectionTitle("O que a loja tem agora") }
+                    item { SectionHeader("A loja tem hoje") }
                     item {
                         ChartCard {
-                            Text(
-                                "Não depende do período escolhido: é a foto de hoje.",
-                                style = MaterialTheme.typography.bodySmall,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            )
-                            InfoRow("Baterias no estoque (pelo custo)", Money.format(f.stockAtCost))
-                            InfoRow("Baterias no estoque (se vender no PIX)", Money.format(f.stockAtPix))
-                            InfoRow("Sucatas no estoque (tabela)", Money.format(f.scrapStockValue))
-                            InfoRow("A receber da carga (não pago)", Money.format(f.toReceive))
-                            InfoRow("Devemos aos fornecedores (boletos)", Money.format(f.supplierDebt.open))
+                            InfoRow("Estoque pelo custo", Money.format(f.stockAtCost))
+                            InfoRow("Estoque no preço PIX", Money.format(f.stockAtPix))
+                            if (f.scrapStockValue > 0) InfoRow("Sucatas", Money.format(f.scrapStockValue))
+                            if (f.toReceive > 0) InfoRow("A receber", Money.format(f.toReceive))
+                            InfoRow("Devemos (boletos)", Money.format(f.supplierDebt.open))
                             if (f.supplierDebt.overdue > 0) {
                                 InfoRow("Boletos vencidos", Money.format(f.supplierDebt.overdue), valueColor = dangerColor())
                             }
@@ -259,8 +227,7 @@ fun FinanceScreen() {
                     }
                 }
                 FinanceSection.EXTRAS -> {
-                    item { SectionTitle("Baterias extras (ganhadas)") }
-                    item { ExtrasCard(f) }
+                    item { ExtrasCards(f) }
                 }
             }
         }
@@ -296,7 +263,7 @@ fun FinanceScreen() {
     deleting?.let { w ->
         ConfirmDialog(
             title = "Excluir retirada?",
-            text = "${w.category} • ${Money.format(w.amount)} em ${Periods.formatDate(w.date)}",
+            text = "${w.category} · ${Money.format(w.amount)} · ${Periods.formatDate(w.date)}",
             confirmLabel = "Excluir",
             destructive = true,
             onConfirm = {
@@ -308,79 +275,57 @@ fun FinanceScreen() {
     }
 }
 
-/** As três partes do Financeiro. */
-private enum class FinanceSection(val label: String, val hint: String) {
-    PROFIT("Lucro", "Quanto a loja ganhou com o que vendeu (o custo das baterias sai no dia da venda)."),
-    CASH("Caixa", "O dinheiro de verdade: o que entrou, o que saiu, as retiradas e quanto dá para retirar."),
-    EXTRAS("Extras", "Quanto as baterias extras (ganhadas) já renderam."),
-}
-
 private fun evolutionTitle(p: FinancePeriod) = when (p) {
-    FinancePeriod.MONTH -> "Dia a dia do mês"
+    FinancePeriod.MONTH -> "Dia a dia"
     FinancePeriod.YEAR -> "Mês a mês"
     FinancePeriod.ALL -> "Últimos 12 meses"
 }
 
 @Composable
-private fun HeroCard(f: FinanceReport) {
+private fun ProfitHero(f: FinanceReport) {
     val c = f.current
-    AppCard(containerColor = MaterialTheme.colorScheme.primary) {
-        Column(Modifier.padding(20.dp)) {
-            val on = MaterialTheme.colorScheme.onPrimary
-            val soft = on.copy(alpha = 0.8f)
-            Text(if (c.netProfit >= 0) "Sobrou (lucro líquido)" else "Faltou (prejuízo)", style = MaterialTheme.typography.bodyMedium, color = soft)
-            FitText(Money.format(c.netProfit), style = MaterialTheme.typography.headlineMedium, color = on, fontWeight = FontWeight.Bold)
-            Row(Modifier.padding(top = 12.dp)) {
-                Column(Modifier.weight(1f).padding(end = 8.dp)) {
-                    Text("Entrou", style = MaterialTheme.typography.bodyMedium, color = soft)
-                    FitText(Money.format(c.revenue), style = MaterialTheme.typography.titleMedium, color = on)
-                }
-                Column(Modifier.weight(1f)) {
-                    Text("Saiu", style = MaterialTheme.typography.bodyMedium, color = soft)
-                    FitText(Money.format(c.totalOut), style = MaterialTheme.typography.titleMedium, color = on)
-                }
-            }
-            c.marginPercent?.let {
+    HeroCard(label = if (c.netProfit >= 0) "Lucro líquido" else "Prejuízo", value = Money.format(c.netProfit)) {
+        Row(Modifier.padding(top = 12.dp)) {
+            HeroStat("Entrou", Money.format(c.revenue), Modifier.weight(1f))
+            HeroStat("Saiu", Money.format(c.totalOut), Modifier.weight(1f))
+            c.marginPercent?.let { HeroStat("Margem", "$it%", Modifier.weight(0.7f)) }
+        }
+        f.previous?.let { prev ->
+            comparison(c, prev, f.previousLabel)?.let {
                 Text(
-                    "De cada R$ 100 vendidos, sobraram R$ $it.",
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = on,
-                    modifier = Modifier.padding(top = 12.dp),
+                    it,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onPrimary.copy(alpha = 0.8f),
+                    modifier = Modifier.padding(top = 10.dp),
                 )
             }
-            f.previous?.let { prev -> comparison(c, prev, f.previousLabel)?.let {
-                Text(it, style = MaterialTheme.typography.bodyMedium, color = soft, modifier = Modifier.padding(top = 4.dp))
-            } }
         }
     }
 }
 
-/** "Lucro 12% maior que em agosto" (ou menor). */
+/** "▲ 12% vs agosto" (ou menor). */
 private fun comparison(c: FinanceSummary, prev: FinanceSummary, prevLabel: String): String? {
     if (prev.revenue == 0L && prev.expenses == 0L) return null
     val base = kotlin.math.abs(prev.netProfit)
     if (base == 0L) return null
     val pct = (c.netProfit - prev.netProfit) * 100 / base
     return when {
-        pct > 0 -> "▲ Lucro $pct% maior que em $prevLabel (${Money.format(prev.netProfit)})"
-        pct < 0 -> "▼ Lucro ${-pct}% menor que em $prevLabel (${Money.format(prev.netProfit)})"
-        else -> "Lucro igual ao de $prevLabel"
+        pct > 0 -> "▲ $pct% vs $prevLabel"
+        pct < 0 -> "▼ ${-pct}% vs $prevLabel"
+        else -> "Igual a $prevLabel"
     }
 }
 
 @Composable
 private fun WhereMoneyWentCard(c: FinanceSummary) {
+    if (c.revenue <= 0) return
     ChartCard {
-        Text("Para onde foi o dinheiro que entrou", style = MaterialTheme.typography.titleSmall)
-        if (c.revenue <= 0) {
-            Empty("Sem vendas no período.")
-            return@ChartCard
-        }
+        Text("Para onde foi cada R$ 100", style = MaterialTheme.typography.titleSmall)
         val parts = listOf(
-            Triple("Sobrou (lucro)", c.netProfit.coerceAtLeast(0), ChartColors.slot(0)),
-            Triple("Custo das baterias e cascos", c.batteryCost + c.cascoCost, ChartColors.slot(1)),
+            Triple("Lucro", c.netProfit.coerceAtLeast(0), ChartColors.slot(0)),
+            Triple("Custo", c.batteryCost + c.cascoCost, ChartColors.slot(1)),
             Triple("Despesas", c.expenses, ChartColors.slot(2)),
-            Triple("Taxas das maquininhas", c.fees, ChartColors.slot(3)),
+            Triple("Taxas", c.fees, ChartColors.slot(3)),
         )
         val total = parts.sumOf { it.second }.coerceAtLeast(1)
         StackedShareBar(
@@ -391,23 +336,14 @@ private fun WhereMoneyWentCard(c: FinanceSummary) {
         parts.forEach { (label, value, color) ->
             Row(Modifier.fillMaxWidth().padding(vertical = 3.dp), verticalAlignment = Alignment.CenterVertically) {
                 LegendDot(color, label, Modifier.weight(1f))
-                Column(horizontalAlignment = Alignment.End) {
-                    Text(Money.format(value), style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold)
-                    Text(
-                        "R$ ${value * 100 / total} de cada R$ 100",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
-                }
+                Text(
+                    "R$ ${value * 100 / total}",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.padding(end = 12.dp),
+                )
+                Text(Money.format(value), style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold)
             }
-        }
-        if (c.netProfit < 0) {
-            Text(
-                "As saídas passaram do que entrou: prejuízo de ${Money.format(-c.netProfit)}.",
-                style = MaterialTheme.typography.bodyMedium,
-                color = dangerColor(),
-                modifier = Modifier.padding(top = 8.dp),
-            )
         }
     }
 }
@@ -421,21 +357,17 @@ private fun EvolutionCard(f: FinanceReport) {
     val colorA = ChartColors.slot(0)
     val colorB = ChartColors.slot(2)
     ChartCard {
-        Row(horizontalArrangement = Arrangement.spacedBy(16.dp)) {
-            LegendDot(colorA, "Faturamento")
-            LegendDot(colorB, profitLabel)
-        }
         val sel = selected?.let { buckets.getOrNull(it) }
-        Column(Modifier.padding(top = 8.dp)) {
-            if (sel != null) {
-                Text(sel.fullLabel, style = MaterialTheme.typography.titleSmall)
-                Text(
-                    "Faturou ${Money.format(sel.revenue)} • ${profitLabel.lowercase()} ${Money.format(sel.profit)}",
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-            } else {
-                Text("Nenhum movimento no período.", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        if (sel != null) {
+            Text(sel.fullLabel, style = MaterialTheme.typography.titleSmall)
+            Row(Modifier.padding(top = 4.dp), horizontalArrangement = Arrangement.spacedBy(16.dp)) {
+                LegendDot(colorA, Money.format(sel.revenue))
+                LegendDot(colorB, Money.format(sel.profit))
+            }
+        } else {
+            Row(horizontalArrangement = Arrangement.spacedBy(16.dp)) {
+                LegendDot(colorA, "Faturamento")
+                LegendDot(colorB, profitLabel)
             }
         }
         PairedBarChart(
@@ -448,19 +380,9 @@ private fun EvolutionCard(f: FinanceReport) {
             description = "Gráfico de faturamento e lucro. " + buckets.filter { it.revenue != 0L }
                 .joinToString { "${it.fullLabel}: ${Money.format(it.revenue)}" },
         )
-        Text(
-            "Toque numa barra para ver os valores.",
-            style = MaterialTheme.typography.bodySmall,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-            modifier = Modifier.padding(top = 4.dp),
-        )
-        val best = buckets.maxByOrNull { it.revenue }?.takeIf { it.revenue > 0 }
-        if (best != null) {
-            Text(
-                "Melhor: ${best.fullLabel.replaceFirstChar { it.lowercase() }}, com ${Money.format(best.revenue)} de faturamento.",
-                style = MaterialTheme.typography.bodyMedium,
-                modifier = Modifier.padding(top = 8.dp),
-            )
+        Row(Modifier.padding(top = 8.dp), horizontalArrangement = Arrangement.spacedBy(16.dp)) {
+            LegendDot(colorA, "Faturamento")
+            LegendDot(colorB, profitLabel)
         }
     }
 }
@@ -468,103 +390,64 @@ private fun EvolutionCard(f: FinanceReport) {
 @Composable
 private fun StatementCard(c: FinanceSummary) {
     ChartCard {
-        Text("Vendas", style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.primary)
-        InfoRow("Entrou com as vendas", Money.format(c.revenue))
-        InfoRow("(−) Custo das baterias", minus(c.batteryCost))
-        if (c.cascoCost > 0) InfoRow("(−) Casco cobrado (para repor o casco)", minus(c.cascoCost))
-        InfoRow("(−) Taxas das maquininhas", minus(c.fees))
-        HorizontalDivider(Modifier.padding(vertical = 6.dp))
-        InfoRow("= Lucro das vendas", Money.format(c.grossProfit), valueColor = moneyResultColor(c.grossProfit))
-        InfoRow("(−) Despesas pagas", minus(c.expenses))
-        HorizontalDivider(Modifier.padding(vertical = 6.dp))
-        InfoRow("= Lucro líquido", Money.format(c.netProfit), bold = true, valueColor = moneyResultColor(c.netProfit))
+        InfoRow("Vendas", Money.format(c.revenue))
+        InfoRow("Custo das baterias", minus(c.batteryCost))
+        if (c.cascoCost > 0) InfoRow("Casco cobrado", minus(c.cascoCost))
+        InfoRow("Taxas das maquininhas", minus(c.fees))
+        Divider()
+        InfoRow("Lucro das vendas", Money.format(c.grossProfit), bold = true, valueColor = moneyResultColor(c.grossProfit))
+        InfoRow("Despesas", minus(c.expenses))
+        Divider()
+        InfoRow("Lucro líquido", Money.format(c.netProfit), bold = true, valueColor = moneyResultColor(c.netProfit))
 
-        Text(
-            "Outras entradas e saídas",
-            style = MaterialTheme.typography.labelLarge,
-            color = MaterialTheme.colorScheme.primary,
-            modifier = Modifier.padding(top = 12.dp),
-        )
-        InfoRow("(+) Carga de baterias (recebido)", Money.format(c.chargesPaid))
-        InfoRow("(+) Sucatas vendidas", Money.format(c.scrapSold))
-        InfoRow("(−) Sucatas compradas", minus(c.scrapPurchased))
-        HorizontalDivider(Modifier.padding(vertical = 6.dp))
-        InfoRow("= Resultado geral", Money.format(c.generalResult), bold = true, valueColor = moneyResultColor(c.generalResult))
-
-        Text(
-            buildString {
-                append("Descontos dados nas vendas: ${Money.format(c.discounts)} (já estão fora do que entrou).")
-                if (c.supplierPaid > 0) {
-                    append(" Boletos de fornecedor pagos: ${Money.format(c.supplierPaid)} (não entram na conta: o custo das baterias já sai do lucro quando elas são vendidas).")
-                }
-                if (c.vouchersPaid > 0) {
-                    append(" Vales de casco devolvidos: ${Money.format(c.vouchersPaid)} (não entram na conta: o valor já foi contado como custo na venda).")
-                }
-            },
-            style = MaterialTheme.typography.bodySmall,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-            modifier = Modifier.padding(top = 8.dp),
-        )
+        if (c.chargesPaid > 0 || c.scrapSold > 0 || c.scrapPurchased > 0) {
+            Divider()
+            if (c.chargesPaid > 0) InfoRow("Carga de baterias", Money.format(c.chargesPaid))
+            if (c.scrapSold > 0) InfoRow("Sucatas vendidas", Money.format(c.scrapSold))
+            if (c.scrapPurchased > 0) InfoRow("Sucatas compradas", minus(c.scrapPurchased))
+            InfoRow("Resultado geral", Money.format(c.generalResult), bold = true, valueColor = moneyResultColor(c.generalResult))
+        }
+        if (c.discounts > 0) Hint("Descontos dados: ${Money.format(c.discounts)}", Modifier.padding(top = 6.dp))
     }
 }
+
+@Composable
+private fun Divider() = HorizontalDivider(Modifier.padding(vertical = 6.dp), color = MaterialTheme.colorScheme.outlineVariant)
 
 private fun minus(value: Long) = if (value == 0L) Money.format(0) else "-" + Money.format(value)
 
 @Composable
-private fun ExtrasCard(f: FinanceReport) {
+private fun ExtrasCards(f: FinanceReport) {
     val all = f.extrasAllTime
     val p = f.extrasPeriod
-    val showPeriod = f.period != FinancePeriod.ALL
-    AppCard(containerColor = MaterialTheme.colorScheme.secondaryContainer) {
-        Column(Modifier.padding(20.dp)) {
-            val on = MaterialTheme.colorScheme.onSecondaryContainer
-            Text("Desde o começo, as extras deram de lucro", style = MaterialTheme.typography.bodyMedium, color = on)
-            FitText(Money.format(all.profit), style = MaterialTheme.typography.headlineMedium, color = on, fontWeight = FontWeight.Bold)
-            Text(
-                "${all.sold} extra${if (all.sold == 1) "" else "s"} vendida${if (all.sold == 1) "" else "s"}, " +
-                    "somando ${Money.format(all.saleValue)} em vendas.",
-                style = MaterialTheme.typography.bodyMedium,
-                color = on,
-            )
+    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        HeroCard(label = "Lucro das extras (desde o começo)", value = Money.format(all.profit)) {
+            Row(Modifier.padding(top = 12.dp)) {
+                HeroStat("Vendidas", all.sold.toString(), Modifier.weight(1f))
+                HeroStat("No estoque", f.extrasInStock.toString(), Modifier.weight(1f))
+                HeroStat("Valem (PIX)", Money.format(f.extrasInStockValue), Modifier.weight(1.3f))
+            }
         }
-    }
-    ChartCard {
-        if (showPeriod) {
-            Text("Neste período (${f.label.lowercase()})", style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.primary)
-            InfoRow("Extras ganhadas", p.received.toString())
-            InfoRow("Extras vendidas", p.sold.toString())
-            InfoRow("Valor de venda", Money.format(p.saleValue))
-            InfoRow("Lucro", Money.format(p.profit), valueColor = moneyResultColor(p.profit))
-            HorizontalDivider(Modifier.padding(vertical = 6.dp))
+        if (f.period != FinancePeriod.ALL) {
+            SectionHeader(f.label.replaceFirstChar { it.uppercase() })
+            ChartCard {
+                InfoRow("Ganhadas", p.received.toString())
+                InfoRow("Vendidas", p.sold.toString())
+                InfoRow("Valor de venda", Money.format(p.saleValue))
+                InfoRow("Lucro", Money.format(p.profit), bold = true, valueColor = moneyResultColor(p.profit))
+            }
         }
-        Text("Desde o começo", style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.primary)
-        InfoRow("Extras ganhadas", all.received.toString())
-        InfoRow("Extras vendidas", all.sold.toString())
-        InfoRow("Valor de venda", Money.format(all.saleValue))
-        InfoRow("Lucro", Money.format(all.profit), bold = true, valueColor = moneyResultColor(all.profit))
-        HorizontalDivider(Modifier.padding(vertical = 6.dp))
-        InfoRow("Ainda no estoque", f.extrasInStock.toString())
-        InfoRow("Valem (se vender no PIX)", Money.format(f.extrasInStockValue))
         if (all.byModel.isNotEmpty()) {
-            Text(
-                "Lucro das extras por modelo (desde o começo)",
-                style = MaterialTheme.typography.labelLarge,
-                color = MaterialTheme.colorScheme.primary,
-                modifier = Modifier.padding(top = 12.dp, bottom = 8.dp),
-            )
-            HBarList(
-                rows = all.byModel.map {
-                    HBarRow(it.model, it.profit, Money.format(it.profit), "${it.sold} vendida${if (it.sold == 1) "" else "s"} • vendeu ${Money.format(it.saleValue)}")
-                },
-                color = ChartColors.slot(0),
-            )
+            SectionHeader("Por modelo")
+            ChartCard {
+                HBarList(
+                    rows = all.byModel.map {
+                        HBarRow(it.model, it.profit, Money.format(it.profit), "${it.sold} vendida${if (it.sold == 1) "" else "s"}")
+                    },
+                    color = ChartColors.slot(0),
+                )
+            }
         }
-        Text(
-            "Extra tem custo zero, então o lucro é o valor da venda (sem o casco) menos a taxa da maquininha.",
-            style = MaterialTheme.typography.bodySmall,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-            modifier = Modifier.padding(top = 8.dp),
-        )
     }
 }
 
@@ -572,20 +455,17 @@ private fun ExtrasCard(f: FinanceReport) {
 private fun GlossaryContent() {
     Column {
         listOf(
-            "Entrou (faturamento)" to "Tudo o que os clientes pagaram nas vendas, já com os descontos.",
-            "Custo das baterias" to "Quanto a loja pagou pelas baterias que vendeu.",
-            "Casco cobrado" to "Entra no faturamento, mas também como custo, porque serve para repor o casco. Não vira lucro.",
-            "Taxas das maquininhas" to "O que a maquininha desconta nas vendas no débito e no crédito.",
+            "Entrou" to "Tudo o que os clientes pagaram nas vendas, já com desconto.",
+            "Custo" to "Quanto a loja pagou pelas baterias vendidas.",
+            "Casco cobrado" to "Entra no faturamento e também como custo: serve para repor o casco.",
+            "Taxas" to "O que a maquininha desconta no débito e no crédito.",
             "Lucro das vendas" to "Entrou − custo − casco − taxas.",
-            "Despesas" to "Despesas da loja pagas no período (aluguel, água, luz...).",
-            "Lucro líquido" to "O que sobrou de verdade: lucro das vendas − despesas.",
-            "Resultado geral" to "Lucro líquido + carga recebida + sucatas vendidas − sucatas compradas.",
-            "Ticket médio" to "Quanto, em média, cada venda rendeu.",
-            "Caixa" to "O dinheiro de verdade da loja (gaveta + banco). É diferente do lucro: o dinheiro do custo das baterias fica no caixa até pagar os boletos.",
-            "Retirada" to "Dinheiro que um sócio tira para si. Não é despesa (não muda o lucro), mas sai do caixa.",
-            "Pode retirar com segurança" to "Caixa menos os boletos vencidos e os que vencem nos próximos 30 dias.",
+            "Lucro líquido" to "Lucro das vendas − despesas.",
+            "Caixa" to "O dinheiro de verdade (gaveta + banco). O custo das baterias só sai quando o boleto é pago.",
+            "Retirada" to "Dinheiro que um sócio tira. Não muda o lucro, mas sai do caixa.",
+            "Pode retirar" to "Caixa menos os boletos vencidos e os dos próximos 30 dias.",
         ).forEachIndexed { i, (term, meaning) ->
-            if (i > 0) HorizontalDivider(Modifier.padding(vertical = 6.dp))
+            if (i > 0) HorizontalDivider(Modifier.padding(vertical = 6.dp), color = MaterialTheme.colorScheme.outlineVariant)
             Text(term, style = MaterialTheme.typography.titleSmall)
             Text(meaning, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
         }
@@ -593,127 +473,66 @@ private fun GlossaryContent() {
 }
 
 @Composable
-private fun ChartCard(content: @Composable () -> Unit) {
-    AppCard {
-        Column(Modifier.padding(16.dp)) { content() }
-    }
-}
+private fun ChartCard(content: @Composable ColumnScope.() -> Unit) = PanelCard(content = content)
 
 @Composable
-private fun Metric(label: String, value: String, modifier: Modifier = Modifier) {
-    AppCard(modifier = modifier) {
-        Column(Modifier.padding(12.dp)) {
-            FitText(label, style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
-            FitText(value, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
-        }
-    }
-}
-
-@Composable
-private fun Empty(text: String) {
-    Text(
-        text,
-        style = MaterialTheme.typography.bodyMedium,
-        color = MaterialTheme.colorScheme.onSurfaceVariant,
-        modifier = Modifier.padding(vertical = 8.dp),
-    )
-}
+private fun Empty(text: String) = Hint(text, Modifier.padding(vertical = 8.dp))
 
 // ------------------------------------------------------------------ Caixa
 
 @Composable
-private fun CashFlowCard(c: FinanceSummary, period: FinancePeriod) {
+private fun CashFlowCard(c: FinanceSummary) {
     ChartCard {
-        Text(
-            "Aqui não é lucro: é o dinheiro que entrou e saiu de verdade" +
-                if (period == FinancePeriod.ALL) "." else " no período.",
-            style = MaterialTheme.typography.bodySmall,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-        )
-        Text("Entrou", style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.primary, modifier = Modifier.padding(top = 8.dp))
-        InfoRow("Vendas (já sem a taxa da maquininha)", Money.format(c.salesCashIn))
+        InfoRow("Vendas (sem as taxas)", Money.format(c.salesCashIn))
         if (c.chargesPaid > 0) InfoRow("Carga de baterias", Money.format(c.chargesPaid))
         if (c.scrapSold > 0) InfoRow("Sucatas vendidas", Money.format(c.scrapSold))
-        InfoRow("Total que entrou", Money.format(c.cashIn), bold = true)
-
-        Text("Saiu", style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.primary, modifier = Modifier.padding(top = 12.dp))
-        InfoRow("Boletos de fornecedor pagos", minus(c.supplierPaid))
-        InfoRow("Despesas pagas", minus(c.expenses))
+        InfoRow("Entrou", Money.format(c.cashIn), bold = true)
+        Divider()
+        InfoRow("Boletos pagos", minus(c.supplierPaid))
+        InfoRow("Despesas", minus(c.expenses))
         if (c.scrapPurchased > 0) InfoRow("Sucatas compradas", minus(c.scrapPurchased))
-        if (c.vouchersPaid > 0) InfoRow("Vales de casco devolvidos", minus(c.vouchersPaid))
-        InfoRow("Total que saiu", minus(c.cashOut), bold = true)
-
-        HorizontalDivider(Modifier.padding(vertical = 8.dp))
-        InfoRow("Sobrou antes das retiradas", Money.format(c.cashBeforeWithdrawals), valueColor = moneyResultColor(c.cashBeforeWithdrawals))
-        InfoRow("(−) Retiradas dos sócios", minus(c.withdrawals))
-        InfoRow("= Ficou na loja", Money.format(c.cashResult), bold = true, valueColor = moneyResultColor(c.cashResult))
-        Text(
-            "Por que é diferente do lucro? O lucro desconta o custo das baterias no dia da venda; o caixa só " +
-                "desconta quando o boleto é pago. Vendas no cartão contam no dia da venda, mesmo que a maquininha deposite depois.",
-            style = MaterialTheme.typography.bodySmall,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-            modifier = Modifier.padding(top = 8.dp),
-        )
+        if (c.vouchersPaid > 0) InfoRow("Vales de casco", minus(c.vouchersPaid))
+        InfoRow("Saiu", minus(c.cashOut), bold = true)
+        Divider()
+        InfoRow("Sobrou", Money.format(c.cashBeforeWithdrawals), valueColor = moneyResultColor(c.cashBeforeWithdrawals))
+        InfoRow("Retiradas", minus(c.withdrawals))
+        InfoRow("Ficou na loja", Money.format(c.cashResult), bold = true, valueColor = moneyResultColor(c.cashResult))
     }
 }
 
 @Composable
 private fun CashNowCard(cash: CashPosition, onSetOpening: () -> Unit) {
     val safe = cash.safeToWithdraw
-    AppCard(containerColor = MaterialTheme.colorScheme.secondaryContainer) {
-        Column(Modifier.padding(20.dp)) {
-            val on = MaterialTheme.colorScheme.onSecondaryContainer
-            Text("Caixa agora (gaveta + banco)", style = MaterialTheme.typography.bodyMedium, color = on)
-            FitText(Money.format(cash.now), style = MaterialTheme.typography.headlineMedium, color = on, fontWeight = FontWeight.Bold)
-            Text(
-                if (cash.hasOpening) {
-                    "Saldo inicial de ${Money.format(cash.openingAmount)} em ${cash.openingDate?.let { Periods.formatDate(it) }}, mais tudo o que entrou e saiu depois."
-                } else {
-                    "Ainda sem saldo inicial: a conta começa do zero. Conte o dinheiro da loja e informe abaixo para ficar exato."
-                },
-                style = MaterialTheme.typography.bodySmall,
-                color = on,
-            )
-            HorizontalDivider(Modifier.padding(vertical = 10.dp), color = on.copy(alpha = 0.2f))
-            CashLine("Boletos vencidos e dos próximos 30 dias (${cash.upcomingBillsCount})", "-" + Money.format(cash.upcomingBills), on)
-            HorizontalDivider(Modifier.padding(vertical = 10.dp), color = on.copy(alpha = 0.2f))
-            if (safe >= 0) {
-                Text("✅ Pode retirar com segurança", style = MaterialTheme.typography.titleSmall, color = on)
-                FitText(Money.format(safe), style = MaterialTheme.typography.headlineSmall, color = on, fontWeight = FontWeight.Bold)
-            } else {
-                Text("⚠️ Falta dinheiro para os compromissos", style = MaterialTheme.typography.titleSmall, color = dangerColor())
-                FitText(Money.format(-safe), style = MaterialTheme.typography.headlineSmall, color = dangerColor(), fontWeight = FontWeight.Bold)
-                Text("Segure as retiradas até vender mais ou pagar menos.", style = MaterialTheme.typography.bodySmall, color = on)
-            }
-            OutlinedButton(onClick = onSetOpening, modifier = Modifier.fillMaxWidth().padding(top = 12.dp)) {
-                Text(if (cash.hasOpening) "Conferir / corrigir o saldo do caixa" else "Informar o saldo do caixa")
-            }
+    HeroCard(label = "Caixa agora", value = Money.format(cash.now)) {
+        val on = MaterialTheme.colorScheme.onPrimary
+        if (!cash.hasOpening) {
+            Text("Saldo inicial não informado", style = MaterialTheme.typography.bodySmall, color = on.copy(alpha = 0.8f))
         }
-    }
-}
-
-@Composable
-private fun CashLine(label: String, value: String, color: androidx.compose.ui.graphics.Color) {
-    Row(Modifier.fillMaxWidth().padding(vertical = 2.dp), verticalAlignment = Alignment.CenterVertically) {
-        Text(label, style = MaterialTheme.typography.bodyMedium, color = color, modifier = Modifier.weight(1f).padding(end = 8.dp))
-        Text(value, style = MaterialTheme.typography.bodyLarge, color = color, fontWeight = FontWeight.SemiBold)
+        Row(Modifier.padding(top = 12.dp)) {
+            HeroStat("Boletos 30 dias", "-" + Money.format(cash.upcomingBills), Modifier.weight(1f))
+            HeroStat(if (safe >= 0) "Pode retirar" else "Falta", Money.format(kotlin.math.abs(safe)), Modifier.weight(1f))
+        }
+        OutlinedButton(
+            onClick = onSetOpening,
+            shape = MaterialTheme.shapes.medium,
+            colors = androidx.compose.material3.ButtonDefaults.outlinedButtonColors(contentColor = on),
+            border = androidx.compose.foundation.BorderStroke(1.dp, on.copy(alpha = 0.5f)),
+            modifier = Modifier.fillMaxWidth().padding(top = 12.dp),
+        ) {
+            Text(if (cash.hasOpening) "Corrigir saldo" else "Informar saldo")
+        }
     }
 }
 
 @Composable
 private fun WithdrawalsCard(c: FinanceSummary, onAdd: () -> Unit, onDelete: (Expense) -> Unit) {
     ChartCard {
-        Text(
-            "Dinheiro que os sócios tiraram para si. Não muda o lucro, mas sai do caixa.",
-            style = MaterialTheme.typography.bodySmall,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-        )
         if (c.withdrawalList.isEmpty()) Empty("Nenhuma retirada no período.")
         c.withdrawalList.forEach { w ->
-            Row(Modifier.fillMaxWidth().padding(vertical = 4.dp), verticalAlignment = Alignment.CenterVertically) {
+            Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
                 Column(Modifier.weight(1f)) {
                     Text(w.category, style = MaterialTheme.typography.titleSmall)
-                    Text(Periods.formatDate(w.date), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    Hint(Periods.formatDate(w.date))
                 }
                 Text(Money.format(w.amount), style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold)
                 IconButton(onClick = { onDelete(w) }) {
@@ -722,20 +541,18 @@ private fun WithdrawalsCard(c: FinanceSummary, onAdd: () -> Unit, onDelete: (Exp
             }
         }
         if (c.withdrawalList.isNotEmpty()) {
-            HorizontalDivider(Modifier.padding(vertical = 6.dp))
+            Divider()
             val byPartner = c.withdrawalList.groupBy { it.category }.mapValues { (_, l) -> l.sumOf { it.amount } }
             if (byPartner.size > 1) byPartner.forEach { (name, total) -> InfoRow(name, Money.format(total)) }
-            InfoRow("Total retirado", Money.format(c.withdrawals), bold = true)
+            InfoRow("Total", Money.format(c.withdrawals), bold = true)
             val over = c.withdrawals - c.netProfit.coerceAtLeast(0)
-            Text(
-                if (over > 0) "⚠️ Retiraram ${Money.format(over)} a mais que o lucro líquido do período (${Money.format(c.netProfit)})."
-                else "Retiraram ${Money.format(c.withdrawals)} de um lucro líquido de ${Money.format(c.netProfit)}.",
-                style = MaterialTheme.typography.bodyMedium,
-                color = if (over > 0) dangerColor() else MaterialTheme.colorScheme.onSurface,
-                modifier = Modifier.padding(top = 4.dp),
-            )
+            if (over > 0) Hint("${Money.format(over)} acima do lucro líquido", color = dangerColor())
         }
-        FilledTonalButton(onClick = onAdd, modifier = Modifier.fillMaxWidth().padding(top = 8.dp)) { Text("Registrar retirada") }
+        FilledTonalButton(
+            onClick = onAdd,
+            shape = MaterialTheme.shapes.medium,
+            modifier = Modifier.fillMaxWidth().padding(top = 8.dp).heightIn(min = 48.dp),
+        ) { Text("Registrar retirada") }
     }
 }
 
@@ -747,7 +564,7 @@ private fun WithdrawalDialog(partners: List<String>, onConfirm: (String, Long, L
     var date by remember { mutableStateOf(LocalDate.now()) }
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text("Retirada de sócio") },
+        title = { Text("Retirada") },
         text = {
             Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 OutlinedTextField(
@@ -755,6 +572,7 @@ private fun WithdrawalDialog(partners: List<String>, onConfirm: (String, Long, L
                     onValueChange = { name = it.take(40) },
                     label = { Text("Quem retirou") },
                     singleLine = true,
+                    shape = MaterialTheme.shapes.medium,
                     keyboardOptions = KeyboardOptions(capitalization = KeyboardCapitalization.Words),
                     modifier = Modifier.fillMaxWidth(),
                 )
@@ -781,13 +599,9 @@ private fun OpeningDialog(current: CashPosition, onConfirm: (Long, LocalDate) ->
         title = { Text("Saldo do caixa") },
         text = {
             Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                Text(
-                    "Conte todo o dinheiro da loja (gaveta + conta do banco) no começo do dia escolhido e informe aqui. " +
-                        "A partir desse dia o app soma o que entra e tira o que sai. Pode corrigir sempre que conferir o caixa.",
-                    style = MaterialTheme.typography.bodyMedium,
-                )
-                MoneyField(value = amount, onValueChange = { amount = it }, label = "Dinheiro da loja")
-                DateButton("No começo do dia", date) { date = it }
+                Hint("Gaveta + banco no começo do dia escolhido.")
+                MoneyField(value = amount, onValueChange = { amount = it }, label = "Valor")
+                DateButton("Dia", date) { date = it }
             }
         },
         confirmButton = { TextButton(onClick = { onConfirm(amount, date) }) { Text("Salvar") } },
