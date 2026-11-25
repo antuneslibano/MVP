@@ -66,7 +66,7 @@ fun WarrantiesScreen() {
     MainPage(
         fabLabel = when (tab) {
             WarrantyTab.EXTRAS -> "Nova extra"
-            WarrantyTab.VITOR -> "Do Vitor"
+            WarrantyTab.VITOR -> "Nova do Vitor"
             WarrantyTab.EXCHANGES -> "Nova troca"
         },
         onFab = { picking = true },
