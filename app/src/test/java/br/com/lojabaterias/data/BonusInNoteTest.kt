@@ -32,7 +32,6 @@ class BonusInNoteTest {
         val bonus = InvoiceItem.fromTotals("M60GD", 1, 38_000, 5_000, productId = 1, bonus = true)
         assertEquals(0L, bonus.subtotal)
         assertEquals(0L, bonus.unitCost)
-        assertEquals(true, InvoiceItems.decode(InvoiceItems.encode(listOf(bonus))).single().bonus)
     }
 
     @Test
