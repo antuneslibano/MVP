@@ -91,7 +91,7 @@ private enum class NoteStep(val label: String, val question: String, val help: S
         "Para cada modelo: quantidade, valor da linha e desconto. Se alguma veio de brinde na mesma nota, marque \"Bonificação\".",
     ),
     PAYMENT("Pagamento", "Como esta nota vai ser paga?", "Boletos aparecem na aba Notas, com aviso perto do vencimento."),
-    ARRIVAL("Chegada", "As baterias já chegaram na loja?", "Quando chegarem, elas entram no estoque com o custo desta nota."),
+    ARRIVAL("Chegada", "As baterias foram recebidas?", "As recebidas entram no estoque com o custo desta nota."),
     REVIEW("Conferir", "Está tudo certo?", "Toque em Alterar para corrigir qualquer parte."),
 }
 
@@ -570,16 +570,16 @@ private fun PaymentStep(
 @Composable
 private fun ArrivalStep(s: InvoiceFormState, vm: InvoiceFormViewModel) {
     ChoiceCard(
-        title = "Ainda não chegaram",
-        description = "Quando chegarem, abra a nota e toque em \"As baterias chegaram\". Elas entram no estoque.",
-        selected = !s.received,
-        onClick = { vm.update { it.copy(received = false) } },
-    )
-    ChoiceCard(
-        title = "Já estão no estoque",
-        description = "Nota antiga: as baterias já foram contadas. O estoque não muda.",
+        title = "Recebidas",
+        description = "Todas as baterias entram no estoque agora.",
         selected = s.received,
         onClick = { vm.update { it.copy(received = true) } },
+    )
+    ChoiceCard(
+        title = "Não recebidas",
+        description = "Ainda não chegaram. A nota fica pendente até você marcar a chegada.",
+        selected = !s.received,
+        onClick = { vm.update { it.copy(received = false) } },
     )
 }
 
@@ -639,7 +639,7 @@ private fun ReviewStep(
     if (showArrival) {
         ReviewSection("Chegada", onEdit = { onEdit(NoteStep.ARRIVAL) }) {
             Text(
-                if (s.received) "Já estão no estoque (não mexe no estoque)" else "Ainda não chegaram",
+                if (s.received) "Recebidas: entram no estoque ao lançar" else "Não recebidas: nota pendente",
                 style = MaterialTheme.typography.bodyLarge,
             )
         }

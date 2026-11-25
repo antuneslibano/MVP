@@ -173,7 +173,8 @@ data class InvoiceFormState(
 data class ImportResult(val source: String, val found: List<String>, val warnings: List<String>)
 
 class InvoiceFormViewModel(private val repo: StoreRepository, private val invoiceId: Long?) : MessageViewModel() {
-    private val _state = MutableStateFlow(InvoiceFormState(id = invoiceId, loading = invoiceId != null))
+    // Nota nova: "Recebidas" é o padrão (as baterias entram no estoque ao lançar).
+    private val _state = MutableStateFlow(InvoiceFormState(id = invoiceId, loading = invoiceId != null, received = invoiceId == null))
     val state: StateFlow<InvoiceFormState> = _state.asStateFlow()
     private var nextKey = 1L
     private fun key() = nextKey++
@@ -388,7 +389,7 @@ class InvoiceFormViewModel(private val repo: StoreRepository, private val invoic
         _state.update { it.copy(saving = true) }
         viewModelScope.launch {
             try {
-                repo.saveInvoice(
+                val savedId = repo.saveInvoice(
                     id = s.id,
                     number = s.number,
                     supplier = s.supplier,
@@ -396,11 +397,19 @@ class InvoiceFormViewModel(private val repo: StoreRepository, private val invoic
                     items = s.items.map { (if (s.isBonus) it.copy(bonus = false) else it).toInvoiceItem() },
                     total = s.total,
                     bills = s.bills.sortedBy { it.dueDate }.map { BillDraft(it.id, Periods.toMillis(it.dueDate), it.amount, it.paidAt) },
-                    alreadyReceived = s.received,
+                    // Nota nova recebida: lança como pendente e já dá a chegada (entrada no estoque) logo abaixo.
+                    alreadyReceived = if (s.isEdit) s.received else false,
                     note = s.note,
                     bonusFor = if (s.isBonus) s.bonusFor ?: suggestedPurchase(s, allInvoices.value)?.invoice?.id else null,
                 )
-                message(if (s.isEdit) "Nota atualizada" else "Nota lançada")
+                if (!s.isEdit && s.received) repo.markInvoiceReceived(savedId, note = null)
+                message(
+                    when {
+                        s.isEdit -> "Nota atualizada"
+                        s.received -> "Nota lançada e baterias no estoque"
+                        else -> "Nota lançada: aguardando as baterias"
+                    }
+                )
                 _state.update { it.copy(saving = false, done = true) }
             } catch (e: Exception) {
                 message(errorMessage(e))
