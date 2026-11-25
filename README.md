@@ -75,6 +75,8 @@ O app é dividido em **áreas**. Cada área tem um botão na barra de baixo; as 
 ### Geral
 - **Senha** ao abrir e após 2 minutos fora; bloqueio após tentativas erradas; "Esqueci a senha" com pergunta secreta.
   Opção **"Entrar sem apertar OK"** (fica salva no celular).
+  Opção **"Entrar com a digital"** (desligada por padrão; Android 10+ com digital cadastrada): ao ligar, a digital
+  é pedida na próxima senha correta. A senha fica cifrada no Android Keystore e só a digital a libera.
 - **Puxar a tela para baixo** sincroniza com a nuvem.
 - **Atualização automática** (Menu ☰ > Ajustes) e **backup** em arquivo JSON.
 

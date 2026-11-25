@@ -50,7 +50,10 @@ import androidx.compose.ui.text.input.KeyboardCapitalization
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import android.widget.Toast
+import androidx.compose.material3.OutlinedButton
 import br.com.lojabaterias.security.AccessControl
+import br.com.lojabaterias.security.BiometricLock
 import br.com.lojabaterias.security.Lockout
 import kotlinx.coroutines.delay
 import br.com.lojabaterias.ui.components.AppIcons
@@ -131,6 +134,43 @@ private fun PinEntry(onUnlock: (String) -> Unit, onForgot: () -> Unit) {
     // Preferência guardada no celular: entrar sozinho ao completar a senha (ligada por padrão).
     val prefs = remember { context.getSharedPreferences("lock_prefs", android.content.Context.MODE_PRIVATE) }
     var autoSubmit by remember { mutableStateOf(prefs.getBoolean("auto_submit", true)) }
+    // Digital: opcional e desligada por padrão. Ao ligar, a digital é pedida na próxima senha correta.
+    val activity = context as? Activity
+    val bioSupported = remember { BiometricLock.isSupported(context) }
+    var bioWanted by remember { mutableStateOf(bioSupported && BiometricLock.isWanted(context)) }
+    var bioReady by remember { mutableStateOf(bioSupported && BiometricLock.isReady(context)) }
+    var bioBusy by remember { mutableStateOf(false) }
+
+    fun toast(msg: String) = Toast.makeText(context, msg, Toast.LENGTH_LONG).show()
+
+    fun askFingerprint() {
+        if (activity == null || bioBusy) return
+        bioBusy = true
+        BiometricLock.unlock(
+            activity,
+            onPin = { saved ->
+                bioBusy = false
+                if (AccessControl.checkPin(saved)) {
+                    lockout.reset()
+                    onUnlock(saved)
+                } else {
+                    BiometricLock.disable(context)
+                    bioWanted = false
+                    bioReady = false
+                    toast("A senha mudou. Entre com a senha e ative a digital de novo.")
+                }
+            },
+            onError = { msg ->
+                bioBusy = false
+                bioReady = BiometricLock.isReady(context)
+                bioWanted = BiometricLock.isWanted(context)
+                msg?.let { toast(it) }
+            },
+        )
+    }
+
+    // Com a digital ativada, ela já é pedida ao abrir a tela de senha.
+    LaunchedEffect(Unit) { if (bioReady) askFingerprint() }
 
     fun submit() {
         if (lockout.remainingMillis() > 0) return
@@ -139,7 +179,21 @@ private fun PinEntry(onUnlock: (String) -> Unit, onForgot: () -> Unit) {
             pin = ""
             error = false
             lockout.reset()
-            onUnlock(ok)
+            if (bioWanted && !bioReady && activity != null) {
+                // Primeira vez depois de ligar a opção: confirma a digital e guarda a senha.
+                BiometricLock.enroll(activity, ok) { done, msg ->
+                    if (done) {
+                        toast("Digital ativada")
+                    } else {
+                        BiometricLock.disable(context)
+                        bioWanted = false
+                        toast(msg ?: "Digital não ativada")
+                    }
+                    onUnlock(ok)
+                }
+            } else {
+                onUnlock(ok)
+            }
         } else {
             error = true
             pin = ""
@@ -235,6 +289,43 @@ private fun PinEntry(onUnlock: (String) -> Unit, onForgot: () -> Unit) {
                 modifier = Modifier.weight(1f).padding(end = 12.dp),
             )
             Switch(checked = autoSubmit, onCheckedChange = null)
+        }
+        if (bioSupported) {
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                modifier = Modifier
+                    .widthIn(max = 320.dp)
+                    .fillMaxWidth()
+                    .toggleable(
+                        value = bioWanted,
+                        role = Role.Switch,
+                        onValueChange = { on ->
+                            BiometricLock.setWanted(context, on)
+                            bioWanted = on
+                            bioReady = on && BiometricLock.isReady(context)
+                        },
+                    )
+                    .padding(vertical = 8.dp),
+            ) {
+                Column(Modifier.weight(1f).padding(end = 12.dp)) {
+                    Text("Entrar com a digital", style = MaterialTheme.typography.bodyLarge)
+                    if (bioWanted && !bioReady) {
+                        Text(
+                            "Digite a senha para ativar",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.primary,
+                        )
+                    }
+                }
+                Switch(checked = bioWanted, onCheckedChange = null)
+            }
+            if (bioReady) {
+                OutlinedButton(
+                    onClick = { askFingerprint() },
+                    enabled = !bioBusy,
+                    modifier = Modifier.widthIn(max = 320.dp).fillMaxWidth().heightIn(min = 52.dp),
+                ) { Text("Usar a digital") }
+            }
         }
         TextButton(onClick = onForgot) { Text("Esqueci a senha") }
     }
