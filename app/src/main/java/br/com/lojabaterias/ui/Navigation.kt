@@ -400,6 +400,7 @@ fun LojaNavHost() {
 }
 
 /** Título da área + abas que ligam as telas dela. */
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun AreaHeader(area: Area, currentRoute: String?, onSelect: (String) -> Unit) {
     Column(Modifier.fillMaxWidth()) {
