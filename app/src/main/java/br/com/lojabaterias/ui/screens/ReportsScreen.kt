@@ -170,11 +170,10 @@ private fun SummaryCard(f: FullReport) {
         InfoRow("Sucatas agora", f.scrapStockQuantity.toString())
         InfoRow("Sucatas vendidas", "${f.scrap.soldQuantity} · ${Money.format(f.scrap.soldAmount)}")
 
-        Group("Garantias e extras")
+        Group("Extras e garantias")
         InfoRow("Trocas", f.warranty.exchangedTotal.toString())
         InfoRow("Extras ganhas / vendidas", "${f.warranty.extrasTotal} / ${f.extrasSold.sold}")
         InfoRow("Lucro das extras", Money.format(f.extrasSold.profit))
-        InfoRow("Do Vitor", "${f.warranty.vitorTotal} · ${Money.format(f.warranty.vitorPaid)}")
 
         Group("Notas e boletos")
         InfoRow("Boletos pagos", "${f.invoices.paid.size} · ${Money.format(f.invoices.paidTotal)}")

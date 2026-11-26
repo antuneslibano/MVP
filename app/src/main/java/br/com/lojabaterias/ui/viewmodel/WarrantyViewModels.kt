@@ -5,7 +5,6 @@ import br.com.lojabaterias.data.ModelCount
 import br.com.lojabaterias.data.Product
 import br.com.lojabaterias.data.StoreRepository
 import br.com.lojabaterias.data.WarrantyClaim
-import br.com.lojabaterias.data.VITOR_DEFAULT_COST
 import br.com.lojabaterias.data.WarrantyPeriodSummary
 import br.com.lojabaterias.data.WarrantyStatus
 import br.com.lojabaterias.domain.Money
@@ -19,14 +18,14 @@ import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 
+/** Abas da tela (a do Vitor saiu do app; os registros antigos continuam guardados). */
 enum class WarrantyTab(val label: String, val status: String) {
-    EXCHANGES("Garantias", WarrantyStatus.EXCHANGE),
     EXTRAS("Extras", WarrantyStatus.EXTRA),
-    VITOR("Vitor", WarrantyStatus.VITOR),
+    EXCHANGES("Garantias", WarrantyStatus.EXCHANGE),
 }
 
 data class WarrantiesState(
-    val tab: WarrantyTab = WarrantyTab.EXCHANGES,
+    val tab: WarrantyTab = WarrantyTab.EXTRAS,
     /** 0 = mês atual, -1 = mês passado... */
     val monthOffset: Int = 0,
     val monthLabel: String = "",
@@ -38,8 +37,6 @@ data class WarrantiesState(
     val groups: List<WarrantyGroup> = emptyList(),
     /** Extras ainda no estoque (não vendidas), considerando todos os meses. */
     val extrasInStock: Int = 0,
-    /** Vitor: total pago a ele pelas baterias do mês. */
-    val vitorPaid: Long = 0,
     val loading: Boolean = true,
 ) {
     val total: Int get() = list.size
@@ -49,13 +46,11 @@ data class WarrantiesState(
 data class WarrantyGroup(val model: String, val createdAt: Long, val tab: WarrantyTab, val items: List<WarrantyClaim>) {
     val count: Int get() = items.size
     val soldCount: Int get() = items.count { it.saleId != null }
-    /** Vitor: quanto foi pago a ele por este grupo. */
-    val paid: Long get() = items.sumOf { it.replacementCost }
     val key: String get() = "${tab.name}-${items.first().id}"
 }
 
 class WarrantiesViewModel(private val repo: StoreRepository) : MessageViewModel() {
-    private val tab = MutableStateFlow(WarrantyTab.EXCHANGES)
+    private val tab = MutableStateFlow(WarrantyTab.EXTRAS)
     private val offset = MutableStateFlow(0)
 
     val products: StateFlow<List<Product>> = repo.observeProducts()
@@ -76,7 +71,6 @@ class WarrantiesViewModel(private val repo: StoreRepository) : MessageViewModel(
                     .map { (key, items) -> WarrantyGroup(key.first, items.maxOf { it.createdAt }, t, items) }
                     .sortedByDescending { it.createdAt },
                 extrasInStock = all.count { it.isExtra && it.saleId == null },
-                vitorPaid = if (t == WarrantyTab.VITOR) inMonth.sumOf { it.replacementCost } else 0,
                 loading = false,
             )
         }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), WarrantiesState())
@@ -89,20 +83,18 @@ class WarrantiesViewModel(private val repo: StoreRepository) : MessageViewModel(
     fun previousMonth() = offset.update { it - 1 }
     fun nextMonth() = offset.update { if (it < 0) it + 1 else it }
 
-    fun register(product: Product, quantity: Int, vitorCost: Long = VITOR_DEFAULT_COST) {
+    fun register(product: Product, quantity: Int) {
         val t = tab.value
         viewModelScope.launch {
             try {
                 when (t) {
                     WarrantyTab.EXTRAS -> repo.registerExtra(product.id, quantity)
-                    WarrantyTab.VITOR -> repo.registerVitor(product.id, quantity, vitorCost)
                     WarrantyTab.EXCHANGES -> repo.registerExchange(product.id, quantity)
                 }
                 offset.value = 0
                 message(
                     when (t) {
                         WarrantyTab.EXTRAS -> "$quantity× ${product.model} extra: entrou no estoque com custo zero"
-                        WarrantyTab.VITOR -> "$quantity× ${product.model} do Vitor: entrou no estoque com custo de ${Money.format(vitorCost)} cada"
                         WarrantyTab.EXCHANGES -> "$quantity× ${product.model} trocada(s) em garantia"
                     }
                 )
@@ -119,7 +111,6 @@ class WarrantiesViewModel(private val repo: StoreRepository) : MessageViewModel(
                 message(
                     when (g.tab) {
                         WarrantyTab.EXTRAS -> "Extra excluída e retirada do estoque"
-                        WarrantyTab.VITOR -> "Bateria do Vitor excluída e retirada do estoque"
                         WarrantyTab.EXCHANGES -> "Troca excluída"
                     }
                 )

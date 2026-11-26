@@ -123,7 +123,7 @@ private enum class Area(val label: String, val icon: ImageVector, val tabs: List
     SALES("Vendas", Icons.Filled.ShoppingCart, listOf(AreaTab(Routes.SALES, "Vendas"))),
     STOCK(
         "Estoque", AppIcons.Battery,
-        listOf(AreaTab(Routes.STOCK, "Baterias"), AreaTab(Routes.SCRAPS, "Sucatas"), AreaTab(Routes.WARRANTIES, "Garantias")),
+        listOf(AreaTab(Routes.STOCK, "Baterias"), AreaTab(Routes.SCRAPS, "Sucatas"), AreaTab(Routes.WARRANTIES, "Extras")),
     ),
     MONEY(
         "Dinheiro", AppIcons.BarChart,
@@ -148,7 +148,7 @@ private val menuGroups = listOf(
     "Estoque" to listOf(
         MenuEntry("Baterias", AppIcons.Battery, Routes.STOCK),
         MenuEntry("Sucatas", Icons.Filled.Refresh, Routes.SCRAPS),
-        MenuEntry("Garantias, extras e Vitor", Icons.Filled.CheckCircle, Routes.WARRANTIES),
+        MenuEntry("Extras e garantias", Icons.Filled.CheckCircle, Routes.WARRANTIES),
     ),
     "Dinheiro" to listOf(
         MenuEntry("Resumo financeiro", Icons.Filled.Info, Routes.FINANCE),

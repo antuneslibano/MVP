@@ -28,7 +28,7 @@ O app é dividido em **áreas**. Cada área tem um botão na barra de baixo; as 
 |---|---|
 | **Início** | vendido hoje, semana e mês, avisos de boletos, vendas recentes e **+ Nova venda** |
 | **Vendas** | histórico com filtros |
-| **Estoque** | Baterias · Sucatas · Garantias |
+| **Estoque** | Baterias · Sucatas · Extras |
 | **Dinheiro** | Resumo · Notas · Despesas · Relatórios |
 
 ### Vendas
@@ -46,10 +46,8 @@ O app é dividido em **áreas**. Cada área tem um botão na barra de baixo; as 
     Ex.: 5 M100QD a R$ 672 + 5 a R$ 650 → as 5 primeiras vendas custam R$ 672. A tela da bateria mostra os lotes,
     e o valor do estoque (Financeiro, Relatórios e PDF) é a soma dos lotes.
 - **Sucatas**: estoque por amperagem, entrada, compra, venda (ao reciclador) e ajuste.
-- **Garantias e extras**: *Garantias* conta as trocas por modelo (não mexe no estoque); *Extras* são baterias
-  ganhadas: entram com custo zero e saem com lucro de 100% (a venda usa primeiro as extras do modelo).
-  *Vitor*: baterias Heliar (modelos que começam com H) do Vitor; entram no estoque como um lote com o custo pago a
-  ele (R$ 150 por padrão, editável), então na venda o lucro é o preço menos esse valor. O pagamento não entra no caixa.
+- **Extras e garantias**: *Extras* são baterias ganhadas: entram com custo zero e saem com lucro de 100% (a venda
+  usa primeiro as extras do modelo); *Garantias* conta as trocas por modelo (não mexe no estoque).
 
 ### Dinheiro
 - **Resumo** (mês, ano ou tudo), em três partes:
@@ -69,7 +67,7 @@ O app é dividido em **áreas**. Cada área tem um botão na barra de baixo; as 
 - **Despesas**: despesas pagas no mês, por categoria.
 - **Relatórios e PDF** (diário, semanal e mensal): faturamento, lucro, baterias vendidas, **média por dia**
   (contando só os dias com venda), **baterias vendidas por dia** (cada dia com uma tabela de modelos, iguais somados),
-  total por modelo e um **resumo curto** do resto (estoque, sucatas, garantias/extras/Vitor, notas e caixa).
+  total por modelo e um **resumo curto** do resto (estoque, sucatas, extras/garantias, notas e caixa).
   Sem listas de cada venda ou movimentação.
 
 ### Geral
@@ -80,7 +78,7 @@ O app é dividido em **áreas**. Cada área tem um botão na barra de baixo; as 
 - **Puxar a tela para baixo** sincroniza com a nuvem.
 - **Atualização automática** (Menu ☰ > Ajustes) e **backup** em arquivo JSON.
 
-> Baterias na carga, vales de casco, tabela de sucatas e a tela de movimentações de estoque foram retiradas.
+> Baterias na carga, vales de casco, tabela de sucatas, a tela de movimentações de estoque e a aba Vitor foram retiradas.
 > Os dados antigos dessas funções continuam guardados (no celular, na nuvem e no backup); o dinheiro já
 > recebido da carga continua no histórico do caixa.
 

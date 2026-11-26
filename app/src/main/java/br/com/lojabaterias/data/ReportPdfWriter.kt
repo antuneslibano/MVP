@@ -284,7 +284,6 @@ object ReportPdfWriter {
                     "Sucatas vendidas no período" to "${f.scrap.soldQuantity} • ${Money.format(f.scrap.soldAmount)}",
                     "Trocas em garantia" to f.warranty.exchangedTotal.toString(),
                     "Extras ganhas / vendidas" to "${f.warranty.extrasTotal} / ${f.extrasSold.sold} • lucro ${Money.format(f.extrasSold.profit)}",
-                    "Do Vitor registradas" to "${f.warranty.vitorTotal} • pago ${Money.format(f.warranty.vitorPaid)}",
                     "Boletos pagos no período" to "${f.invoices.paid.size} • ${Money.format(f.invoices.paidTotal)}",
                     "Bonificações recebidas" to "${f.invoices.bonusUnits} baterias • nota ${Money.format(f.invoices.bonusValue)}",
                     "Devemos aos fornecedores (hoje)" to Money.format(f.invoices.debt.open),
@@ -292,7 +291,7 @@ object ReportPdfWriter {
                     "Retiradas dos sócios" to Money.format(f.withdrawalsTotal),
                     "Ficou na loja" to Money.format(left),
                 ),
-                colors = mapOf(1 to if (f.netProfit < 0) RED else GREEN, 15 to if (left < 0) RED else GREEN),
+                colors = mapOf(1 to if (f.netProfit < 0) RED else GREEN, 14 to if (left < 0) RED else GREEN),
             )
         }
     }

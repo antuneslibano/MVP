@@ -28,7 +28,6 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import br.com.lojabaterias.data.Product
-import br.com.lojabaterias.data.VITOR_DEFAULT_COST
 import br.com.lojabaterias.domain.Money
 import br.com.lojabaterias.domain.Periods
 import br.com.lojabaterias.ui.components.ConfirmDialog
@@ -51,7 +50,7 @@ import br.com.lojabaterias.ui.viewmodel.WarrantyGroup
 import br.com.lojabaterias.ui.viewmodel.WarrantyTab
 import br.com.lojabaterias.ui.viewmodel.appViewModel
 
-/** Garantias (baterias trocadas), Extras (ganhadas) e Vitor (Heliar compradas do Vitor), por modelo e mês. */
+/** Extras (baterias ganhadas) e Garantias (baterias trocadas), por modelo e mês. */
 @Composable
 fun WarrantiesScreen() {
     val vm = appViewModel { WarrantiesViewModel(it.repository) }
@@ -66,7 +65,6 @@ fun WarrantiesScreen() {
     MainPage(
         fabLabel = when (tab) {
             WarrantyTab.EXTRAS -> "Nova extra"
-            WarrantyTab.VITOR -> "Nova do Vitor"
             WarrantyTab.EXCHANGES -> "Nova troca"
         },
         onFab = { picking = true },
@@ -97,14 +95,10 @@ fun WarrantiesScreen() {
                 HeroCard(
                     label = when (tab) {
                         WarrantyTab.EXTRAS -> "Extras ganhadas no mês"
-                        WarrantyTab.VITOR -> "Do Vitor no mês"
                         WarrantyTab.EXCHANGES -> "Trocas no mês"
                     },
                     value = state.total.toString(),
                 ) {
-                    if (tab == WarrantyTab.VITOR && state.total > 0) {
-                        Row(Modifier.padding(top = 8.dp)) { HeroStat("Pago ao Vitor", Money.format(state.vitorPaid)) }
-                    }
                     if (tab == WarrantyTab.EXTRAS) {
                         Row(Modifier.padding(top = 8.dp)) { HeroStat("No estoque (todas)", state.extrasInStock.toString()) }
                     }
@@ -126,11 +120,9 @@ fun WarrantiesScreen() {
         ProductPickerDialog(
             title = when (tab) {
                 WarrantyTab.EXTRAS -> "Qual bateria a loja ganhou?"
-                WarrantyTab.VITOR -> "Qual Heliar do Vitor?"
                 WarrantyTab.EXCHANGES -> "Qual bateria foi trocada?"
             },
-            // Vitor: só Heliar (modelos que começam com H)
-            products = if (tab == WarrantyTab.VITOR) products.filter { it.model.trim().startsWith("H", ignoreCase = true) } else products,
+            products = products,
             onPick = { chosen = it; picking = false },
             onDismiss = { picking = false },
         )
@@ -138,8 +130,7 @@ fun WarrantiesScreen() {
     chosen?.let { p ->
         QuantityDialog(
             product = p,
-            tab = tab,
-            onConfirm = { q, cost -> vm.register(p, q, cost); chosen = null },
+            onConfirm = { q -> vm.register(p, q); chosen = null },
             onDismiss = { chosen = null },
         )
     }
@@ -147,11 +138,10 @@ fun WarrantiesScreen() {
         ConfirmDialog(
             title = when (g.tab) {
                 WarrantyTab.EXTRAS -> "Excluir extra?"
-                WarrantyTab.VITOR -> "Excluir bateria do Vitor?"
                 WarrantyTab.EXCHANGES -> "Excluir troca?"
             },
             text = "${g.count}× ${g.model} de ${Periods.formatDate(g.createdAt)}." +
-                if (g.tab != WarrantyTab.EXCHANGES) " Sai do estoque." else "",
+                if (g.tab == WarrantyTab.EXTRAS) " Sai do estoque." else "",
             confirmLabel = "Excluir",
             destructive = true,
             onConfirm = { vm.delete(g); toDelete = null },
@@ -163,7 +153,6 @@ fun WarrantiesScreen() {
 @Composable
 private fun WarrantyRow(g: WarrantyGroup, onDelete: () -> Unit) {
     val detail = when (g.tab) {
-        WarrantyTab.VITOR -> "pago ${Money.format(g.paid)}"
         WarrantyTab.EXTRAS -> {
             val inStock = g.count - g.soldCount
             listOfNotNull(
@@ -184,22 +173,13 @@ private fun WarrantyRow(g: WarrantyGroup, onDelete: () -> Unit) {
 }
 
 @Composable
-private fun QuantityDialog(product: Product, tab: WarrantyTab, onConfirm: (Int, Long) -> Unit, onDismiss: () -> Unit) {
+private fun QuantityDialog(product: Product, onConfirm: (Int) -> Unit, onDismiss: () -> Unit) {
     var quantity by remember { mutableIntStateOf(1) }
-    var cost by remember { mutableLongStateOf(VITOR_DEFAULT_COST) }
     AlertDialog(
         onDismissRequest = onDismiss,
         title = { Text(product.model) },
-        text = {
-            Column(verticalArrangement = Arrangement.spacedBy(12.dp), horizontalAlignment = Alignment.Start) {
-                QuantityStepper(value = quantity, onValueChange = { quantity = it }, min = 1, max = 50)
-                if (tab == WarrantyTab.VITOR) {
-                    MoneyField(value = cost, onValueChange = { cost = it }, label = "Pago por bateria")
-                    Hint("Total ${Money.format(cost * quantity)}")
-                }
-            }
-        },
-        confirmButton = { TextButton(onClick = { onConfirm(quantity, cost) }) { Text("Registrar") } },
+        text = { QuantityStepper(value = quantity, onValueChange = { quantity = it }, min = 1, max = 50) },
+        confirmButton = { TextButton(onClick = { onConfirm(quantity) }) { Text("Registrar") } },
         dismissButton = { TextButton(onClick = onDismiss) { Text("Cancelar") } },
     )
 }
